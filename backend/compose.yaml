@@ -1,0 +1,51 @@
+services:
+    # +++++ NGINX Reverse Proxy (The Front Door) +++++++++++++++++++++++++++++++++++++++++
+    proxy:
+        image: nginx:1.25-alpine
+        container_name: nginx-proxy
+        ports:
+            # ONLY NGINX exposes ports to the outside world
+            # - "443:443" # Uncomment if you add SSL certificates
+            - "8000:80" # Use this for Development
+        volumes:
+            - ./nginx-config/nginx-backend-only.conf:/etc/nginx/nginx.conf:ro
+        depends_on:
+            - api
+        restart: unless-stopped
+
+    # +++++ PostgreSQL Database +++++++++++++++++++++++++++++++++++++++++
+    db:
+        image: postgres:17-alpine
+        container_name: earnIt_db
+        ports:
+            - "5432:5432"
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+            - ./ops/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+        env_file:
+            - .env
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}",
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+
+    # +++++ FastAPI +++++++++++++++++++++++++++++++++++++++++
+    api:
+        container_name: earnIt_api
+        build:
+            context: .
+            dockerfile: ops/Dockerfile
+
+        volumes:
+            - .:/app
+        depends_on:
+            db:
+                condition: service_healthy
+
+volumes:
+    postgres_data:
