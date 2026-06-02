@@ -1,0 +1,8 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: ops/Dockerfile
+    ports:
+      - "3000:3000"
+    command: ["bun", "dev", "--host", "0.0.0.0", "--port", "3000"]
