@@ -6,11 +6,12 @@ services:
         ports:
             # ONLY NGINX exposes ports to the outside world
             # - "443:443" # Uncomment if you add SSL certificates
-            - "8000:80" # Use this for Development
+            - "80:80" # Use this for Development
         volumes:
-            - ./nginx-config/nginx-backend-only.conf:/etc/nginx/nginx.conf:ro
+            - ./nginx-config/nginx-getaway.conf:/etc/nginx/nginx.conf:ro
         depends_on:
             - api
+            - frontend
         restart: unless-stopped
 
     # +++++ PostgreSQL Database +++++++++++++++++++++++++++++++++++++++++
@@ -21,15 +22,12 @@ services:
             - "5432:5432"
         volumes:
             - postgres_data:/var/lib/postgresql/data
-            - ./ops/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+            #- ./ops/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
         env_file:
-            - .env
+            - ./backend/.env
         healthcheck:
             test:
-                [
-                    "CMD-SHELL",
-                    "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}",
-                ]
+                ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
             interval: 5s
             timeout: 5s
             retries: 5
@@ -38,13 +36,27 @@ services:
     api:
         container_name: earnIt_api
         build:
-            context: .
-            dockerfile: backend/ops/Dockerfile
+            context: ./backend
+            dockerfile: ops/Dockerfile
         volumes:
-            - .:/app
+            - ./backend:/app
         depends_on:
             db:
                 condition: service_healthy
+
+    # +++++ React (Bun + Vite) +++++++++++++++++++++++++++++++++++++++++
+    frontend:
+        build:
+            context: ./frontend
+            dockerfile: ops/Dockerfile
+            args:
+                UID: ${UID:-1000}
+                GID: ${GID:-1000}
+        command: ["bun", "run", "dev", "--host", "0.0.0.0"]
+        user: "${UID:-1000}:${GID:-1000}"
+        volumes:
+            - ./frontend:/app
+            - /app/node_modules
 
 volumes:
     postgres_data:
