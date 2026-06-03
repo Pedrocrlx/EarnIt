@@ -1,12 +1,5 @@
 # EarnIt
 
-# AI Usage section
-
-## Phase 1
-- **Gemini** helped in all documentation (deliverables of Phase 1).
-- **Google Stich** is being used to generate the wireframes and low-fidelity prototypes of the application.
-- **Gemini** helped configure the project folder structure and create compose-yaml with the servicos defined by the Product Owner.
-- **NootbookLM** is being used for its sources to be the source of truth, for any question about the current state of the project, stack, which epic is being attacked...etc.
 
 # Architecture
 
@@ -104,3 +97,18 @@ graph TD
     style Browser fill:#f9f,stroke:#333,stroke-width:2px
     style Frontend fill:#bbf,stroke:#333,stroke-width:2px
 ```
+
+# Contribution Guide
+
+See [docs/contribute_guide.md](docs/contribute_guide.md).
+
+# AI Usage section
+
+## Phase 1
+- **Gemini** helped in all documentation (deliverables of Phase 1).
+- **Google Stich** is being used to generate the wireframes and low-fidelity prototypes of the application.
+- **Gemini** helped configure the project folder structure and create compose-yaml with the servicos defined by the Product Owner.
+- **NootbookLM** is being used for its sources to be the source of truth, for any question about the current state of the project, stack, which epic is being attacked...etc.
+
+## Phase 2
+- **GPT-5.2-Codex** helps build the CI pipelines, documentation, and compose services to run the full stack, following my guides.
