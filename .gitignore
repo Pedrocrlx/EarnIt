@@ -22,7 +22,6 @@ venv/
 
 # Environment files
 .env
-.env.*
 
 # Dependency caches/tools
 .uv/

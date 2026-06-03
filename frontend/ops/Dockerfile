@@ -2,7 +2,7 @@ FROM node:24.16-slim
 
 # Install tools required by bun installer
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates unzip \
+    && apt-get install -y --no-install-recommends curl ca-certificates unzip gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Install bun to a global location readable by everyone
@@ -27,8 +27,12 @@ USER appuser
 
 # Copy the rest of the source code as the non-root user
 COPY --chown=appuser:appgroup . .
+
 RUN bun install
 
 EXPOSE 5173
 
+USER root
+COPY --chown=root:root --chmod=755 ops/entrypoint.sh /usr/local/bin/entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["bun", "run", "dev", "--host", "0.0.0.0"]

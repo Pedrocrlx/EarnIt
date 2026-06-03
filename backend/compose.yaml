@@ -1,18 +1,4 @@
 services:
-    # +++++ NGINX Reverse Proxy (The Front Door) +++++++++++++++++++++++++++++++++++++++++
-    proxy:
-        image: nginx:1.25-alpine
-        container_name: nginx-proxy
-        ports:
-            # ONLY NGINX exposes ports to the outside world
-            # - "443:443" # Uncomment if you add SSL certificates
-            - "8000:80" # Use this for Development
-        volumes:
-            - ./nginx-config/nginx-backend-only.conf:/etc/nginx/nginx.conf:ro
-        depends_on:
-            - api
-        restart: unless-stopped
-
     # +++++ PostgreSQL Database +++++++++++++++++++++++++++++++++++++++++
     db:
         image: postgres:17-alpine
@@ -37,7 +23,8 @@ services:
         build:
             context: .
             dockerfile: ops/Dockerfile
-
+        ports:
+            - "8000:8000"
         volumes:
             - .:/app
         depends_on:

@@ -53,7 +53,6 @@ services:
                 UID: ${UID:-1000}
                 GID: ${GID:-1000}
         command: ["bun", "run", "dev", "--host", "0.0.0.0"]
-        user: "${UID:-1000}:${GID:-1000}"
         volumes:
             - ./frontend:/app
             - /app/node_modules
