@@ -7,3 +7,13 @@ requires-python = ">=3.14"
 dependencies = [
     "fastapi[standard]>=0.136.3",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.format]
+quote-style = "double"
