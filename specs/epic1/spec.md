@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-EarnIt is an allowance management and gamification web application designed as an educational tool for children aged 7 to 10 and their parents. This specification covers the complete backend architectural design, database schemas, API endpoints, and security infrastructure required for **Epic 1: Authentication & Profiles**.
+EarnIt is an allowance management and gamification web application designed as an educational tool primarily for children aged 7 to 10 and their parents. This specification covers the complete backend architectural design, database schemas, API endpoints, and security infrastructure required for **Epic 1: Authentication & Profiles**.
 
 **Goal:** Deliver a secure, high-performance asynchronous identity and profile management engine. This includes parent registration, session management, secure dashboard cross-switching via parental PIN authentication, and independent multi-profile management for children sharing a single physical device.
 
@@ -18,6 +18,7 @@ All backend systems must strictly conform to the technical boundaries outlined b
 * **Database infrastructure:** PostgreSQL 17.
 * **Database Migrations:** Alembic (for evolutionary, programmatic schema state changes).
 * **Code Verification:** Pytest (for asynchronous unit and integration testing), Ruff (for linting and formatting compliance).
+* **Email Dispatch:** `fastapi-mail` (async SMTP wrapper) for transactional emails such as verification code delivery.
 
 ---
 
@@ -26,15 +27,16 @@ All backend systems must strictly conform to the technical boundaries outlined b
 ### 3.1 Database Strategy & Multi-Profile Hierarchy
 
 * **Engine Connection:** PostgreSQL 17 using `asyncpg` as the async database dialect driver.
-* **Data Layer Isolation:** One `ParentAccount` can host multiple `ChildProfile` records.
-* **Scalability Design:** This 1-to-N layout is explicitly isolated at the schema boundary to support structured multi-profile tiers or parent packages in future iterations without data refactoring.
+* **Data Layer Isolation:** One `User` (parent) record can host multiple `Child` records, linked through the `children.user_id` foreign key — mirroring a Netflix-style account where the parent profile gates access to the control panel via PIN while children get their own lightweight profiles.
+* **Verification Ledger:** Each `User` also owns a 1-to-N history of issued codes via `email_verifications`, keeping expiry tracking, resend-cooldown enforcement, and audit trails isolated from the core identity record rather than overwriting a single column in place.
 
 ### 3.2 Authentication, Cryptography & Session Strategy
 
-* **Password and PIN Sealing:** Passwords and operational PIN strings must never exist as plaintext within the database. They must be salted and hashed asynchronously using a cryptographic library configuration (e.g., `passlib` with `bcrypt` or `argon2-cffi`).
-* **Session Management:** Stateless, cryptographically signed JSON Web Tokens (JWT) using a strong, environment-injected SHA-256 secret key.
-* **Token Distribution Engine:** Access tokens must be transmitted to the frontend via an HTTP-only, Secure cookie context. This systematically eliminates Cross-Site Scripting (XSS) extraction vectors.
-* **Cross-Dashboard Security:** While children access their dashboard directly without credentials, elevating the context back to the parent dashboard requires state verification against the parent account's hashed secret PIN.
+* **Secrets Sealing:** Passwords, PINs, and email verification codes must never exist as plaintext in the database. All are salted and hashed asynchronously (e.g., `passlib` with `bcrypt` or `argon2-cffi`); verification codes are additionally never logged or echoed back by the API after issuance.
+* **Session Management:** Stateless, cryptographically signed JWTs using a strong, environment-injected secret key.
+* **Token Distribution:** All tokens are delivered via HTTP-only, Secure cookies, eliminating XSS extraction vectors. Full sessions use `Path=/`; pending-verification sessions use a narrowly-scoped `Path=/api/v1/auth/verify` cookie so they cannot authenticate any other route.
+* **Cross-Dashboard Security:** Elevating from a child's view back to the parent dashboard requires verification against `parent_pin_hash` — children access their own view without credentials.
+* **Pending-Verification Sessions:** Registration issues a short-lived `pending_verification_token` cookie instead of a full session. The real `access_token` session is only issued once `users.email_verified_at` is stamped.
 
 ---
 
@@ -43,39 +45,70 @@ All backend systems must strictly conform to the technical boundaries outlined b
 ### 4.1 Database Schemas (SQLModel models)
 
 ```python
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID, uuid4
-from pydantic import EmailStr
 from sqlmodel import Field, SQLModel, Relationship
 
 
-class ParentAccount(SQLModel, table=True):
-    __tablename__: str = "parent_accounts"
+class User(SQLModel, table=True):
+    __tablename__: str = "users"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, index=True, nullable=False)
-    email: EmailStr = Field(unique=True, index=True, nullable=False)
-    hashed_password: str = Field(nullable=False)
-    parent_pin_hashed: str | None = Field(default=None, nullable=True)
+    email: str = Field(max_length=320, unique=True, index=True, nullable=False)
+    password_hash: str = Field(max_length=255, nullable=False)
+    parent_pin_hash: str | None = Field(default=None, max_length=255, nullable=True)
+    pin_set_at: datetime | None = Field(default=None, nullable=True)
+    full_name: str | None = Field(default=None, max_length=150, nullable=True)
+    is_active: bool = Field(default=True, nullable=False)
+    onboarding_completed: bool = Field(default=False, nullable=False)
+    # null while account is in "limbo"; stamped on successful code redemption — login is refused until set
+    email_verified_at: datetime | None = Field(default=None, nullable=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
-    children: list["ChildProfile"] = Relationship(back_populates="parent")
+    children: list["Child"] = Relationship(back_populates="user")
+    # 1-to-N issued code history — enables expiry checks, resend cooldowns, and audit trails
+    verification_codes: list["EmailVerification"] = Relationship(back_populates="user")
 
 
-class ChildProfile(SQLModel, table=True):
-    __tablename__: str = "child_profiles"
+class Child(SQLModel, table=True):
+    __tablename__: str = "children"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, index=True, nullable=False)
-    parent_id: UUID = Field(foreign_key="parent_accounts.id", index=True, nullable=False)
-    name: str = Field(nullable=False)
-    avatar_placeholder: str = Field(nullable=False)
-    balance: float = Field(default=0.0, nullable=False)
+    user_id: UUID = Field(foreign_key="users.id", index=True, nullable=False)
+    name: str = Field(max_length=100, nullable=False)
+    birth_date: date | None = Field(default=None, nullable=True)
+    avatar_url: str | None = Field(default=None, nullable=True)
+    is_active: bool = Field(default=True, nullable=False)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
-    parent: ParentAccount = Relationship(back_populates="children")
+    user: User = Relationship(back_populates="children")
+
+
+# one row per issued verification code; backs the registration "limbo" flow
+class EmailVerification(SQLModel, table=True):
+    __tablename__: str = "email_verifications"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True, nullable=False)
+    user_id: UUID = Field(foreign_key="users.id", index=True, nullable=False)
+    code_hash: str = Field(max_length=255, nullable=False)  # salted hash only — plaintext exists solely in the outbound email, mirrors password/PIN sealing
+    expires_at: datetime = Field(nullable=False)  # serves as both the entry deadline and the earliest moment a resend becomes eligible
+    consumed_at: datetime | None = Field(default=None, nullable=True)  # stamped on successful redemption; prevents the same code from being replayed
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+    user: User = Relationship(back_populates="verification_codes")
 
 ```
+
+> **Schema notes:**
+>
+> * `id` and `user_id` columns are implemented as `UUID` primary/foreign keys (generated client-side via `uuid4`) rather than the `bigserial` integers shown in the diagram — this keeps identifiers non-sequential and non-enumerable across the public API surface, matching the platform's existing convention. Request/response payloads below carry UUID strings.
+> * `parent_pin_hash` and `pin_set_at` together back the parental gate: both are `NULL` until the parent configures their PIN during onboarding. `pin_set_at` records when the PIN was last set and updates on any subsequent change.
+> * `is_active` on both `users` and `children` enables soft-deactivation without destructive deletes.
+> * `onboarding_completed` is flipped to `true` automatically by the server — not by a client call — once `parent_pin_hash IS NOT NULL` **and** at least one `children` row exists for the user (see §4.4 Onboarding Completion Rule).
+> * `children` intentionally has no `balance` column — balance is derived from a transaction ledger outside this epic's scope.
+> * `email_verified_at` and `email_verifications` jointly implement the "limbo" flow; inline comments on those fields carry the field-level rationale.
 
 ---
 
@@ -91,31 +124,107 @@ class ChildProfile(SQLModel, table=True):
 ```json
 {
   "email": "parent@example.com",
-  "password": "SuperSecurePassword123!"
+  "password": "SuperSecurePassword123!",
+  "full_name": "Jordan Parent"
 }
 
 ```
 
+> `full_name` is optional at registration (nullable on `users.full_name`). Profile editing is out of MVP scope — what is set here is what persists.
+
 **Responses:**
 
-* **`201 Created`** (Sets cookie: `access_token=JWT_STRING; HttpOnly; Secure; SameSite=Lax; Path=/`)
+* **`201 Created`** (Sets cookie: `pending_verification_token=JWT_STRING; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/verify` — a narrowly-scoped, short-lived token; **not** a full session)
 
 ```json
 {
-  "status": "success",
-  "message": "Account created successfully.",
+  "status": "pending_verification",
+  "message": "Account created. Check your email for a verification code.",
   "user": {
     "id": "e3b0c442-98fc-1c14-9c83-0242ac120002",
-    "email": "parent@example.com"
+    "email": "parent@example.com",
+    "full_name": "Jordan Parent",
+    "email_verified_at": null,
+    "onboarding_completed": false
+  },
+  "verification": {
+    "expires_at": "2026-06-08T12:44:56Z"
   }
 }
 
 ```
 
 * **`422 Unprocessable Entity`** (Validation failure on email structure or password strength rules).
-* **`409 Conflict`** (Email identifier already active inside the system).
+* **`409 Conflict`** (Email is already registered — this includes accounts still in the unverified limbo state. The address is not freed until the scheduled sweep purges the expired record after `ACCOUNT_LIMBO_PURGE_HOURS`).
 
-#### 4.2.2 Parent Login
+#### 4.2.2 Verify Account (Email Verification)
+
+* **Endpoint:** `POST /api/v1/auth/verify`
+* **Security:** Required Pending-Verification Session (`pending_verification_token` cookie issued at registration).
+* **Content-Type:** `application/json`
+
+**Request Body:**
+
+```json
+{
+  "code": "K7H29XQF"
+}
+
+```
+
+**Responses:**
+
+* **`200 OK`** (Consumes the code, stamps `email_verified_at`, and replaces the `pending_verification_token` cookie with a full `access_token=JWT_STRING; HttpOnly; Secure; SameSite=Lax; Path=/` session)
+
+```json
+{
+  "status": "success",
+  "message": "Account verified successfully.",
+  "user": {
+    "id": "e3b0c442-98fc-1c14-9c83-0242ac120002",
+    "email": "parent@example.com",
+    "full_name": "Jordan Parent",
+    "email_verified_at": "2026-06-08T12:34:56Z",
+    "onboarding_completed": false
+  }
+}
+
+```
+
+* **`400 Bad Request`** (Submitted code does not match the active hashed record).
+* **`410 Gone`** (Code has expired — client should call the resend endpoint instead).
+* **`409 Conflict`** (Account is already verified).
+
+#### 4.2.3 Resend Verification Code
+
+* **Endpoint:** `POST /api/v1/auth/verify/resend`
+* **Security:** Required Pending-Verification Session.
+
+**Responses:**
+
+* **`200 OK`** (Issued only once the previous code's `expires_at` has elapsed; invalidates the prior row and starts a fresh expiry window)
+
+```json
+{
+  "status": "success",
+  "message": "A new verification code has been sent.",
+  "expires_at": "2026-06-08T12:44:56Z"
+}
+
+```
+
+* **`429 Too Many Requests`** (Current code is still within its validity window)
+
+```json
+{
+  "status": "error",
+  "message": "A verification code is still active. Please wait before requesting another.",
+  "retry_after_seconds": 312
+}
+
+```
+
+#### 4.2.4 Parent Login
 
 * **Endpoint:** `POST /api/v1/auth/login`
 * **Content-Type:** `application/json`
@@ -132,7 +241,7 @@ class ChildProfile(SQLModel, table=True):
 
 **Responses:**
 
-* **`200 OK`** (Sets HTTP-only authentication cookie matching the structure above).
+* **`200 OK`** (Sets cookie: `access_token=JWT_STRING; HttpOnly; Secure; SameSite=Lax; Path=/`)
 
 ```json
 {
@@ -143,12 +252,44 @@ class ChildProfile(SQLModel, table=True):
 ```
 
 * **`401 Unauthorized`** (Invalid login credentials provided).
+* **`403 Forbidden`** (Credentials valid but `email_verified_at` is still `NULL` — re-issues a fresh `pending_verification_token` cookie and routes the client back into the verification flow instead of granting a full session)
 
-#### 4.2.3 Setup Parental PIN
+```json
+{
+  "error": "account_unverified",
+  "message": "Please verify your account before continuing."
+}
+
+```
+
+> Exiting the verification flow does not alter account state. Every subsequent login re-evaluates `email_verified_at` and is redirected back to `/auth/verify` until a valid code is redeemed.
+
+#### 4.2.5 Logout
+
+* **Endpoint:** `POST /api/v1/auth/logout`
+* **Security:** Required Active Parent Session.
+
+**Responses:**
+
+* **`200 OK`** (Clears the `access_token` cookie by setting it with `Max-Age=0`; the client is effectively unauthenticated)
+
+```json
+{
+  "status": "success",
+  "message": "Logged out successfully."
+}
+
+```
+
+* **`401 Unauthorized`** (No valid session present).
+
+#### 4.2.6 Setup Parental PIN
 
 * **Endpoint:** `POST /api/v1/auth/pin`
-* **Security:** Required Active Parent Bearer/Cookie Session.
+* **Security:** Required Active Parent Session.
 * **Content-Type:** `application/json`
+
+> This endpoint is create-or-update (upsert): if a PIN is already configured it is replaced. This covers both the initial onboarding setup and any subsequent PIN change.
 
 **Request Body:**
 
@@ -173,7 +314,7 @@ class ChildProfile(SQLModel, table=True):
 
 * **`400 Bad Request`** (PIN fails format constraints such as length or character validation).
 
-#### 4.2.4 Verify Parental PIN (Dashboard Cross-Switching)
+#### 4.2.7 Verify Parental PIN (Dashboard Cross-Switching)
 
 * **Endpoint:** `POST /api/v1/auth/pin/verify`
 * **Content-Type:** `application/json`
@@ -201,7 +342,7 @@ class ChildProfile(SQLModel, table=True):
 
 * **`401 Unauthorized`** (Invalid PIN payload sequence).
 
-#### 4.2.5 Child Profile Creation
+#### 4.2.8 Child Profile Creation
 
 * **Endpoint:** `POST /api/v1/profiles/children`
 * **Security:** Required Active Parent Session.
@@ -212,10 +353,13 @@ class ChildProfile(SQLModel, table=True):
 ```json
 {
   "name": "Leo",
-  "avatar_placeholder": "avatar_blue_monster"
+  "birth_date": "2017-04-12",
+  "avatar_url": "https://cdn.earnit.app/avatars/blue_monster.png"
 }
 
 ```
+
+> `birth_date` and `avatar_url` are optional (nullable on `children`); the placeholder-avatar concept is replaced by a stored asset URL.
 
 **Responses:**
 
@@ -224,15 +368,16 @@ class ChildProfile(SQLModel, table=True):
 ```json
 {
   "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-  "parent_id": "e3b0c442-98fc-1c14-9c83-0242ac120002",
+  "user_id": "e3b0c442-98fc-1c14-9c83-0242ac120002",
   "name": "Leo",
-  "avatar_placeholder": "avatar_blue_monster",
-  "balance": 0.0
+  "birth_date": "2017-04-12",
+  "avatar_url": "https://cdn.earnit.app/avatars/blue_monster.png",
+  "is_active": true
 }
 
 ```
 
-#### 4.2.6 Get Family Profiles
+#### 4.2.9 Get Family Profiles
 
 * **Endpoint:** `GET /api/v1/profiles/family`
 * **Security:** Required Active Parent Session.
@@ -243,13 +388,14 @@ class ChildProfile(SQLModel, table=True):
 
 ```json
 {
-  "parent_id": "e3b0c442-98fc-1c14-9c83-0242ac120002",
+  "user_id": "e3b0c442-98fc-1c14-9c83-0242ac120002",
   "children": [
     {
       "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
       "name": "Leo",
-      "avatar_placeholder": "avatar_blue_monster",
-      "balance": 0.0
+      "birth_date": "2017-04-12",
+      "avatar_url": "https://cdn.earnit.app/avatars/blue_monster.png",
+      "is_active": true
     }
   ]
 }
@@ -258,24 +404,71 @@ class ChildProfile(SQLModel, table=True):
 
 ---
 
-### 4.3 Business Rules & Boundary Limits
+### 4.3 Configuration & Defaults
+
+All tuneable values live in a central `config.py` module and may be overridden via environment variables. §4.4 references these names instead of raw literals so that a single-line change propagates everywhere.
+
+```python
+# config.py
+
+# --- Password ---
+PASSWORD_MIN_LENGTH: int = 8                  # minimum character count for account passwords
+
+# --- Email Verification ---
+VERIFICATION_CODE_CHARSET: str = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # alphanumeric, ambiguous chars excluded (0/O, 1/I/L)
+VERIFICATION_CODE_LENGTH: int = 8             # character count of the generated code
+VERIFICATION_CODE_EXPIRY_MINUTES: int = 10    # validity window; also the resend cooldown floor
+ACCOUNT_LIMBO_PURGE_HOURS: int = 24           # hours from users.created_at after which unverified accounts are purged
+
+# --- Session Lifetimes ---
+ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30         # full authenticated session (30 days)
+PENDING_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # scoped token lifetime — matches the limbo window
+
+# --- Profiles ---
+MAX_CHILDREN_PER_USER: int = 10               # hard cap on child profiles per parent account
+
+# --- Parental PIN ---
+PARENT_PIN_LENGTH: int = 4                    # digit count; validation pattern: ^[0-9]{PARENT_PIN_LENGTH}$
+```
+
+---
+
+### 4.4 Business Rules & Boundary Limits
 
 #### Password Complexity Constraints
 
-* Must span at least 8 individual characters.
+* Must span at least `PASSWORD_MIN_LENGTH` (default: `8`) characters.
 * Must feature at least one uppercase alphabetic character `[A-Z]`.
 * Must feature at least one lowercase alphabetic character `[a-z]`.
 * Must feature at least one numerical digit `[0-9]`.
 
 #### Parental PIN Rules
 
-* Must measure exactly 4 characters in length.
-* Must strictly consist of numerical sequences matching `^[0-9]{4}$`.
+* Must measure exactly `PARENT_PIN_LENGTH` (default: `4`) characters in length.
+* Must strictly consist of numerical sequences matching `^[0-9]{PARENT_PIN_LENGTH}$`.
 
 #### Child Profile Scope Constraints
 
 * Minimum: 1 child profile creation encouraged for core application interactions.
-* Maximum: Enforced maximum of 10 children profiles per parent entity to bound resource abuse on the sharing layer.
+* Maximum: Enforced maximum of `MAX_CHILDREN_PER_USER` (default: `10`) children profiles per parent entity to bound resource abuse on the sharing layer.
+
+#### Onboarding Completion Rule
+
+`onboarding_completed` is set to `true` automatically by the server — never via a dedicated client endpoint. The trigger fires after `POST /auth/pin` and `POST /profiles/children` complete successfully, and evaluates:
+
+> `parent_pin_hash IS NOT NULL` **AND** `COUNT(children WHERE user_id = current_user) >= 1`
+
+Once both conditions are satisfied the flag is flipped and never reverts. Onboarding is a one-time flow; subsequent profile or PIN changes do not affect it.
+
+#### Email Verification Rules
+
+* **Code composition:** Generated from `VERIFICATION_CODE_CHARSET` — an alphanumeric set with visually ambiguous characters removed (no `0`/`O`, `1`/`I`/`L`).
+* **Code length:** Fixed at `VERIFICATION_CODE_LENGTH` (default: `8`) characters, balancing brute-force resistance against manual entry ergonomics.
+* **Storage:** Persisted only as a salted hash (`email_verifications.code_hash`) — plaintext exists solely in the outbound email; never logged or returned by the API.
+* **Entry window:** A code is valid for `VERIFICATION_CODE_EXPIRY_MINUTES` (default: `10`) minutes from issuance (`expires_at`); expired codes are rejected with `410 Gone`.
+* **Resend cooldown:** `POST /auth/verify/resend` is rejected with `429 Too Many Requests` while the current code's `expires_at` has not yet elapsed — at most one live code exists per account at any time.
+* **Limbo purge window:** Accounts where `email_verified_at IS NULL` for more than `ACCOUNT_LIMBO_PURGE_HOURS` (default: `24`) hours past `users.created_at` are purged by a scheduled sweep, freeing the email address for re-registration.
+* **Login gate:** Valid credentials against an unverified account never establish a full session — every login attempt re-checks `email_verified_at` and re-enters the verification flow regardless of how many times the user previously exited it.
 
 ---
 
@@ -286,26 +479,29 @@ class ChildProfile(SQLModel, table=True):
 * Establish FastAPI boilerplate configuration using safe CORS definitions.
 * Configure database driver layer via `SQLModel` engines using async execution wrappers.
 * Initialize Alembic configuration folders mapping environment setups to target PostgreSQL databases.
+* Wire up a scheduled background task runner (e.g., APScheduler or Celery beat) for periodic maintenance jobs such as purging unverified accounts past their `ACCOUNT_LIMBO_PURGE_HOURS`-hour limbo window.
 
 ### **Chunk 1: Authentication Engine & Cryptographic Foundation**
 
 * Build modular token encoding components using PyJWT.
 * Write operational password security hashing utility components with non-blocking properties.
 * Write runtime Pydantic schema validation wrappers checking entry rules for emails, passwords, and security PIN strings.
+* Implement a cryptographically secure verification-code generator drawing from `VERIFICATION_CODE_CHARSET`, plus its salted-hash and comparison utilities — mirroring password/PIN sealing.
 
 ### **Chunk 2: Registration & Core Sign-in Endpoints**
 
-* Code the `/api/v1/auth/register` controller layer evaluating email constraints and schema integrity.
+* Code the `/api/v1/auth/register` controller layer evaluating email constraints and schema integrity; create accounts in an unverified ("limbo") state, dispatch a hashed verification code via `fastapi-mail`, and issue a narrowly-scoped `pending_verification_token` cookie instead of a full session.
+* Build the `/api/v1/auth/verify` and `/api/v1/auth/verify/resend` endpoints, enforcing code expiry, single-use redemption via `consumed_at`, and resend cooldowns.
 * Implement custom exception handlers mapping model data layer execution failures directly into `409 Conflict` structures.
-* Construct the `/api/v1/auth/login` pipeline checking credentials and setting cookie values.
+* Construct the `/api/v1/auth/login` pipeline checking credentials, detecting `email_verified_at IS NULL`, and routing unverified accounts back into the verification flow with a `403 account_unverified` response.
 
 ### **Chunk 3: Profiles Management & Switch Gateways**
 
-* Write CRUD pathways processing child creation operations checking target threshold boundaries (Max 10 profiles check).
+* Write CRUD pathways processing child creation operations checking target threshold boundaries (`MAX_CHILDREN_PER_USER`).
 * Code security configuration endpoints accepting parental protection PIN strings.
 * Build verification components protecting the parent dashboard context from unauthorized child access switches.
 
 ### **Chunk 4: Integration Testing & Verification Pipeline**
 
-* Author automated API scenario sweeps inside `pytest` simulating user signups, structural failures, boundary overflows, and token access restrictions.
+* Author automated API scenario sweeps inside `pytest` simulating user signups, verification-code lifecycles (issuance, expiry, resend cooldowns, limbo purges), structural failures, boundary overflows, and token access restrictions.
 * Run internal Ruff passes ensuring strict architectural styling conformity.
