@@ -1,10 +1,26 @@
 # EarnIt
 
-
 # Architecture
 
 The app is a React SPA served by Vite, talking to a FastAPI backend. FastAPI persists data in PostgreSQL. In the full stack setup, Nginx is the single public entrypoint on port 80: it routes `/` to the Vite dev server for the SPA, and `/api`, `/docs`, and `/openapi.json` to FastAPI. FastAPI then reads/writes to PostgreSQL on the internal Docker network, while the browser only ever talks to Nginx.
 
+# Tech Stack
+
+- **Backend:** FastAPI, SQLModel, PostgreSQL (see [backend/README.md](backend/README.md))
+- **Frontend:** React, Vite, Bun, Tailwind CSS
+
+# Getting Started
+
+For detailed instructions on how to run each part of the stack, refer to:
+- [Backend Documentation](backend/README.md)
+- [Frontend Documentation](frontend/README.md)
+
+### Quick Start (Full Stack with Docker)
+```bash
+docker compose up --build
+```
+
+# Development Architecture Backend
 For development, you can run the full stack or run the backend and frontend separately (as shown below). Backend-only runs expose the API directly on port 8000 for `/docs`, while frontend-only runs expose the Vite dev server on port 3000.
 
 ```mermaid
