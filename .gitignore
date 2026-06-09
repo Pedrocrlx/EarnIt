@@ -61,9 +61,3 @@ coverage.xml
 # OS
 .DS_Store
 Thumbs.db
-
-# TEMP — Chunk 1 (remove before committing Chunk 1)
-backend/app/security/
-backend/app/schemas/
-backend/app/dependencies/
-backend/tests/test_chunk1_security.py

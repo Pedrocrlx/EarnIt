@@ -1,0 +1,233 @@
+from datetime import datetime, timezone
+from uuid import uuid4
+
+import jwt
+import pytest
+from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.schemas.auth import PinRequest, RegisterRequest
+from app.security.codes import generate_verification_code
+from app.security.hashing import hash_secret, verify_secret
+from app.security.tokens import (
+    create_access_token,
+    create_pending_verification_token,
+    decode_token,
+)
+
+# ---------------------------------------------------------------------------
+# Verification code generation
+# ---------------------------------------------------------------------------
+
+
+def test_code_has_correct_length():
+    assert len(generate_verification_code()) == settings.VERIFICATION_CODE_LENGTH
+
+
+def test_code_uses_only_charset_chars():
+    charset = set(settings.VERIFICATION_CODE_CHARSET)
+    for _ in range(20):
+        assert all(c in charset for c in generate_verification_code())
+
+
+def test_codes_are_not_trivially_equal():
+    codes = {generate_verification_code() for _ in range(50)}
+    assert len(codes) > 1  # 32^8 space — duplicates in 50 draws are astronomically unlikely
+
+
+# ---------------------------------------------------------------------------
+# Hashing
+# ---------------------------------------------------------------------------
+
+
+async def test_hash_verify_roundtrip():
+    hashed = await hash_secret("Password1!")
+    assert await verify_secret("Password1!", hashed)
+
+
+async def test_wrong_secret_does_not_verify():
+    hashed = await hash_secret("Password1!")
+    assert not await verify_secret("WrongSecret", hashed)
+
+
+async def test_two_hashes_of_same_secret_differ():
+    h1 = await hash_secret("same")
+    h2 = await hash_secret("same")
+    assert h1 != h2  # bcrypt embeds a unique salt per call
+
+
+# ---------------------------------------------------------------------------
+# JWT tokens
+# ---------------------------------------------------------------------------
+
+
+def test_access_token_has_full_scope():
+    uid = uuid4()
+    payload = decode_token(create_access_token(uid))
+    assert payload["scope"] == "full"
+    assert payload["sub"] == str(uid)
+
+
+def test_pending_verification_token_has_verify_scope():
+    uid = uuid4()
+    payload = decode_token(create_pending_verification_token(uid))
+    assert payload["scope"] == "verify"
+    assert payload["sub"] == str(uid)
+
+
+def test_expired_token_raises():
+    expired = jwt.encode(
+        {"sub": str(uuid4()), "scope": "full", "exp": 1},
+        settings.SECRET_KEY,
+        algorithm="HS256",
+    )
+    with pytest.raises(jwt.ExpiredSignatureError):
+        decode_token(expired)
+
+
+def test_tampered_token_raises():
+    token = create_access_token(uuid4()) + "x"
+    with pytest.raises(jwt.PyJWTError):
+        decode_token(token)
+
+
+# ---------------------------------------------------------------------------
+# RegisterRequest — password validation
+# ---------------------------------------------------------------------------
+
+
+def test_register_valid_minimal():
+    req = RegisterRequest(email="user@example.com", password="Password1")
+    assert req.family_name is None
+
+
+def test_register_valid_with_family_name():
+    req = RegisterRequest(email="user@example.com", password="Password1", family_name="Silva")
+    assert req.family_name == "Silva"
+
+
+def test_password_too_short_raises():
+    with pytest.raises(ValidationError, match="characters"):
+        RegisterRequest(email="u@e.com", password="Ab1")
+
+
+def test_password_no_uppercase_raises():
+    with pytest.raises(ValidationError, match="uppercase"):
+        RegisterRequest(email="u@e.com", password="password123")
+
+
+def test_password_no_lowercase_raises():
+    with pytest.raises(ValidationError, match="lowercase"):
+        RegisterRequest(email="u@e.com", password="PASSWORD123")
+
+
+def test_password_no_digit_raises():
+    with pytest.raises(ValidationError, match="digit"):
+        RegisterRequest(email="u@e.com", password="PasswordNoDigit")
+
+
+def test_invalid_email_raises():
+    with pytest.raises(ValidationError):
+        RegisterRequest(email="not-an-email", password="Password1")
+
+
+# ---------------------------------------------------------------------------
+# PinRequest — PIN validation
+# ---------------------------------------------------------------------------
+
+
+def test_pin_valid():
+    assert PinRequest(pin="1234").pin == "1234"
+
+
+def test_pin_too_short_raises():
+    with pytest.raises(ValidationError, match="digits"):
+        PinRequest(pin="123")
+
+
+def test_pin_too_long_raises():
+    with pytest.raises(ValidationError, match="digits"):
+        PinRequest(pin="12345")
+
+
+def test_pin_non_digit_raises():
+    with pytest.raises(ValidationError, match="digits"):
+        PinRequest(pin="12a4")
+
+
+# ---------------------------------------------------------------------------
+# Auth dependency — get_current_user
+# ---------------------------------------------------------------------------
+
+
+async def test_get_current_user_valid(db_session: AsyncSession):
+    from app.dependencies.auth import get_current_user
+    from app.models.models import User
+
+    user = User(
+        id=uuid4(),
+        email=f"dep-{uuid4()}@example.com",
+        password_hash="hash",
+        email_verified_at=datetime.now(timezone.utc),
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    result = await get_current_user(access_token=create_access_token(user.id), session=db_session)
+    assert result.id == user.id
+
+
+async def test_get_current_user_no_cookie_raises():
+    from fastapi import HTTPException
+
+    from app.dependencies.auth import get_current_user
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_user(access_token=None, session=None)  # type: ignore[arg-type]
+    assert exc_info.value.status_code == 401
+
+
+async def test_get_current_user_purged_account_raises(db_session: AsyncSession):
+    from fastapi import HTTPException
+
+    from app.dependencies.auth import get_current_user
+
+    token = create_access_token(uuid4())  # user does not exist in DB
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_user(access_token=token, session=db_session)
+    assert exc_info.value.status_code == 401
+
+
+async def test_get_current_user_disabled_account_raises(db_session: AsyncSession):
+    from fastapi import HTTPException
+
+    from app.dependencies.auth import get_current_user
+    from app.models.models import User
+
+    user = User(
+        id=uuid4(),
+        email=f"disabled-{uuid4()}@example.com",
+        password_hash="hash",
+        is_active=False,
+        email_verified_at=datetime.now(timezone.utc),
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_user(access_token=create_access_token(user.id), session=db_session)
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["error"] == "account_disabled"
+
+
+async def test_get_current_user_wrong_scope_raises(db_session: AsyncSession):
+    from fastapi import HTTPException
+
+    from app.dependencies.auth import get_current_user
+
+    # A pending_verification_token (scope=verify) must NOT pass the full-session guard
+    token = create_pending_verification_token(uuid4())
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_user(access_token=token, session=db_session)
+    assert exc_info.value.status_code == 401
