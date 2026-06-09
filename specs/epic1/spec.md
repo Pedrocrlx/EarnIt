@@ -546,8 +546,9 @@ Once both conditions are satisfied the flag is flipped and never reverts. Onboar
 * Initialize Alembic configuration folders mapping environment setups to target PostgreSQL databases; generate and review the initial migration for `users`, `children`, and `email_verifications` — confirm the diff matches the SQLModel definitions before applying.
 * Configure `fastapi-mail` connection (SMTP credentials via environment variables, connection pool, and base email template for the verification code email).
 * Wire up a scheduled background task runner (e.g., APScheduler or Celery beat) and implement the limbo purge job — a recurring sweep that hard-deletes `users` rows where `email_verified_at IS NULL` and `created_at < NOW() - ACCOUNT_LIMBO_PURGE_HOURS`; also hard-deletes orphaned `email_verifications` rows where `expires_at < NOW()` and either `consumed_at IS NULL` (abandoned codes) or the parent `users` row no longer exists.
+* **Tests:** purge sweep deletes accounts past `ACCOUNT_LIMBO_PURGE_HOURS`; accounts within the window are untouched; orphaned `email_verifications` rows past `expires_at` are deleted; rows still within their window are untouched.
 
-### **Chunk 1: Authentication Engine & Cryptographic Foundation**
+### **Chunk 1: Cryptographic & Auth Utilities**
 
 * Build modular token encoding components using PyJWT.
 * Write operational password security hashing utility components with non-blocking properties.
@@ -555,31 +556,33 @@ Once both conditions are satisfied the flag is flipped and never reverts. Onboar
 * Implement a cryptographically secure verification-code generator drawing from `VERIFICATION_CODE_CHARSET`, plus its salted-hash and comparison utilities — mirroring password/PIN sealing.
 * Write account existence and activity guard middleware — applied to all authenticated routes — that returns `401` when the `users` row is missing (purged account) and `403 account_disabled` when `is_active = false`.
 
-### **Chunk 2: Registration & Core Sign-in Endpoints**
+### **Chunk 2: Registration & Email Verification**
 
-* Code the `/api/v1/auth/register` controller layer evaluating email constraints and schema integrity; create accounts in an unverified ("limbo") state, dispatch a hashed verification code via `fastapi-mail`, and issue a narrowly-scoped `pending_verification_token` cookie instead of a full session.
-* Build the `/api/v1/auth/verify` and `/api/v1/auth/verify/resend` endpoints, enforcing code expiry, single-use redemption via `consumed_at`, and resend cooldowns.
-* Implement custom exception handlers mapping model data layer execution failures directly into `409 Conflict` structures.
-* Construct the `/api/v1/auth/login` pipeline checking credentials, detecting `email_verified_at IS NULL`, and routing unverified accounts back into the verification flow with a `403 account_unverified` response.
+* Code the `POST /api/v1/auth/register` controller — evaluate email constraints and schema integrity, create the account in an unverified ("limbo") state, dispatch a hashed verification code via `fastapi-mail`, and issue a narrowly-scoped `pending_verification_token` cookie.
+* Implement custom exception handlers mapping database uniqueness failures to `409 Conflict` responses.
+* Build `POST /api/v1/auth/verify` — look up the active code filtered by `purpose = 'account_verification'`, compare the hash, stamp `email_verified_at` on success, and replace the `pending_verification_token` cookie with a full `access_token` session.
+* Build `POST /api/v1/auth/verify/resend` — reject with `429` while the current code's `expires_at` has not elapsed; otherwise insert a new code row and dispatch a fresh email.
+* **Tests:** duplicate email (active) → `409`; duplicate email (limbo) → `409`; valid registration → `201` + `pending_verification_token`; correct code → `200` + `access_token`; wrong code → `400`; expired code → `410`; already-verified account → `409`; resend before `expires_at` → `429` with `retry_after_seconds`; resend after expiry → `200` with fresh `expires_at`; code replay after `consumed_at` stamped → `400`.
+
+### **Chunk 3: Login & Logout**
+
+* Construct `POST /api/v1/auth/login` — verify credentials, check `is_active` before `email_verified_at`, route disabled accounts to `403 account_disabled`, route unverified accounts to `403 account_unverified` with a fresh `pending_verification_token` cookie, and issue a full `access_token` session on success.
 * Implement `POST /api/v1/auth/logout` — clear the `access_token` cookie by responding with `Max-Age=0`.
+* **Tests:** wrong password → `401`; valid credentials, `is_active = false` → `403 account_disabled`; valid credentials, `email_verified_at IS NULL` → `403 account_unverified` + fresh `pending_verification_token`; valid verified credentials → `200` + `access_token`; valid session logout → `200`, cookie cleared; no session logout → `401`; authenticated request with purged `users` row → `401`; authenticated request with `is_active = false` → `403 account_disabled`.
 
-### **Chunk 3: Profiles Management & Switch Gateways**
+### **Chunk 4: Parental PIN**
 
-* Implement `POST /api/v1/profiles/children` — validate the `MAX_CHILDREN_PER_USER` cap, create the `Child` record, and evaluate the onboarding completion trigger (`parent_pin_hash IS NOT NULL AND children count >= 1`); flip `users.onboarding_completed` to `true` if both conditions are met.
-* Implement `GET /api/v1/profiles/family` — return the authenticated user's profile alongside all associated `children` rows.
-* Implement `POST /api/v1/auth/pin` — upsert `parent_pin_hash` and stamp `pin_set_at`; evaluate and apply the onboarding completion trigger after a successful write.
-* Implement `POST /api/v1/auth/pin/verify` — compare the submitted PIN against `parent_pin_hash` and return a scoped confirmation response used by the frontend to unlock the parent dashboard.
+* Implement `POST /api/v1/auth/pin` — upsert `parent_pin_hash`, stamp `pin_set_at`, and evaluate the onboarding completion trigger (`parent_pin_hash IS NOT NULL AND children count >= 1`); flip `users.onboarding_completed` if both conditions are met.
+* Implement `POST /api/v1/auth/pin/verify` — compare the submitted PIN against `parent_pin_hash` and return the scoped confirmation response used by the frontend to unlock the parent dashboard.
+* **Tests:** setup with no prior PIN → `200`; update existing PIN → `200`; invalid PIN format → `400`; verify correct PIN → `200`; verify wrong PIN → `401`; verify before PIN is set → `428`.
+
+### **Chunk 5: Child Profiles & Family View**
+
+* Implement `POST /api/v1/profiles/children` — validate the `MAX_CHILDREN_PER_USER` cap (all rows, regardless of `is_active`), create the `Child` record, and evaluate the onboarding completion trigger; flip `users.onboarding_completed` if both conditions are met.
 * Implement `PATCH /api/v1/profiles/children/{child_id}` — validate ownership, confirm the child is not already inactive, and set `is_active = false`.
+* Implement `GET /api/v1/profiles/family` — return the authenticated user's profile alongside all associated `children` rows.
+* **Tests:** child creation up to `MAX_CHILDREN_PER_USER` → `201`; exceeding cap → `409 children_cap_reached`; `onboarding_completed` flips to `true` only after both PIN and first child exist; `GET /profiles/family` returns correct parent fields and children list; deactivate active child → `200 is_active: false`; deactivate already-inactive child → `409`; deactivate child belonging to another user → `404`; deactivated child still counts toward cap.
 
-### **Chunk 4: Integration Testing & Verification Pipeline**
+### **Chunk 6: Linting Pass**
 
-* **Registration & verification flow:** duplicate email (active) → `409`; duplicate email (limbo) → `409`; valid registration → `201` + `pending_verification_token`; correct code → `200` + `access_token`; wrong code → `400`; expired code → `410`; already-verified account → `409`.
-* **Resend cooldown:** resend before `expires_at` → `429` with `retry_after_seconds`; resend after expiry → `200` with fresh `expires_at`; code replay after `consumed_at` stamped → `400`.
-* **Login gate:** unverified credentials → `403 account_unverified` + fresh `pending_verification_token`; valid verified credentials → `200` + `access_token`; wrong password → `401`.
-* **Logout:** valid session → `200`, cookie cleared (`Max-Age=0`); no session → `401`.
-* **PIN flow:** setup with no prior PIN → `200`; update existing PIN → `200`; verify correct PIN → `200`; verify wrong PIN → `401`; verify before PIN is set → `428`.
-* **Profiles:** child creation up to `MAX_CHILDREN_PER_USER` → `201`; exceeding cap → appropriate error; `onboarding_completed` flips to `true` only after both PIN and first child exist; `GET /profiles/family` returns parent fields and correct children list.
-* **Limbo purge job:** unit-test the sweep query — accounts past `ACCOUNT_LIMBO_PURGE_HOURS` are deleted; accounts within the window are untouched; orphaned `email_verifications` rows past `expires_at` are deleted; rows still within their window are untouched.
-* **Account guard middleware:** authenticated request with purged `users` row → `401`; authenticated request with `is_active = false` → `403 account_disabled`; login with valid credentials but `is_active = false` → `403 account_disabled`.
-* **Child deactivation:** deactivate active child → `200 is_active: false`; deactivate already-inactive child → `409`; deactivate child belonging to another user → `404`; deactivated child still counts toward `MAX_CHILDREN_PER_USER` cap.
-* Run Ruff passes ensuring strict linting and formatting conformity across all modules.
+* Run Ruff across all modules, enforcing strict linting and formatting conformity.

@@ -1,43 +1,56 @@
-import httpx
+from contextlib import asynccontextmanager
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi_mail import MessageSchema, MessageType
 
-app = FastAPI()
+from app.config import settings
+from app.jobs.purge import scheduled_purge
+from app.mail import mail
+
+# APScheduler instance — started on app startup, shut down on app teardown.
+scheduler = AsyncIOScheduler()
 
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Run the limbo-user purge sweep every hour.
+    scheduler.add_job(scheduled_purge, "interval", hours=1, id="limbo_purge")
+    scheduler.start()
+    yield
+    scheduler.shutdown()
+
+
+app = FastAPI(lifespan=lifespan)
+
+# Allow the frontend dev servers and any origins listed in settings to send
+# credentialed requests (cookies).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/healthz")
+async def health_check():
+    return {"status": "ok"}
 
 
 @app.post("/test-email")
 async def send_test_email():
-    """
-    Sends a test email to pedro@gmail.com using Mailpit's REST API.
-    Assumes Mailpit is accessible at http://mailpit:8025 (internal docker network).
-    """
-    # Use 'mailpit' if running in Docker, 'localhost' if running locally
-    mailpit_host = "mailpit"
-    url = f"http://{mailpit_host}:8025/api/v1/send"
+    """Dev endpoint: fires a test email through Mailpit SMTP to confirm the mail pipeline.
 
-    payload = {
-        "From": {"Name": "EarnIt System", "Email": "system@earnit.local"},
-        "To": [{"Name": "Pedro", "Email": "pedro@gmail.com"}],
-        "Subject": "Mailpit Test - Lorem Ipsum",
-        "Text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod "
-        "tempor incididunt ut labore et dolore magna aliqua.",
-        "HTML": "<h1>Lorem Ipsum</h1><p>Lorem ipsum dolor sit amet</p>",
-    }
-
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            return {"status": "success", "mailpit_response": response.json()}
-    except httpx.ConnectError:
-        # Fallback for local development outside Docker
-        url = "http://localhost:8025/api/v1/send"
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=payload)
-            return {"status": "success", "mailpit_response": response.json(), "mode": "local"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    Open http://localhost:8025 in a browser to see the captured message.
+    """
+    message = MessageSchema(
+        subject="EarnIt – Mailpit Test",
+        recipients=["test@example.com"],
+        body="<h1>Mail pipeline OK</h1><p>fastapi-mail → Mailpit is working.</p>",
+        subtype=MessageType.html,
+    )
+    await mail.send_message(message)
+    return {"status": "success", "message": "Test email sent via SMTP → Mailpit."}

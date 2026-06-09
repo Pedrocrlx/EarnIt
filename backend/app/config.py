@@ -1,0 +1,56 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Database
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+
+    @property
+    def database_url(self) -> str:
+        return (
+            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
+
+    # CORS
+    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+
+    # JWT
+    SECRET_KEY: str
+
+    # Email (Mailpit in Docker; override MAIL_SERVER=localhost for local dev)
+    MAIL_FROM: str = "system@earnit.local"
+    MAIL_SERVER: str = "mailpit"
+    MAIL_PORT: int = 1025
+    MAIL_USERNAME: str = ""
+    MAIL_PASSWORD: str = ""
+
+    # --- Password ---
+    PASSWORD_MIN_LENGTH: int = 8
+
+    # --- Email Verification ---
+    VERIFICATION_CODE_CHARSET: str = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    VERIFICATION_CODE_LENGTH: int = 8
+    VERIFICATION_CODE_EXPIRY_ACCOUNT_MINUTES: int = 10
+    VERIFICATION_CODE_EXPIRY_PASSWORD_RESET_MINUTES: int = 30  # future epic
+    VERIFICATION_CODE_EXPIRY_PIN_RESET_MINUTES: int = 10  # future epic
+    ACCOUNT_LIMBO_PURGE_HOURS: int = 24
+
+    # --- Session Lifetimes ---
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30
+    PENDING_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+
+    # --- Profiles ---
+    MAX_CHILDREN_PER_USER: int = 10
+
+    # --- Parental PIN ---
+    PARENT_PIN_LENGTH: int = 4
+
+
+settings = Settings()

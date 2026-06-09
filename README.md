@@ -80,20 +80,17 @@ graph TD
         
         %% Data and Init Configs
         PostgresVolume[(postgres_data Volume)]
-        InitSQL["./ops/postgres/init.sql"]
     end
 
     %% Dependencies and Mounts
     API -->|Depends on Healthy DB| DB
     DB -.->|Persists Data| PostgresVolume
-    InitSQL -.->|Initializes schema| DB
 
     %% Styling
     style Dev fill:#f9f,stroke:#333,stroke-width:2px
     style API fill:#bbf,stroke:#333,stroke-width:2px
     style DB fill:#ffb,stroke:#333,stroke-width:2px
     style PostgresVolume fill:#ddd,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5
-    style InitSQL fill:#e1f5fe,stroke:#0288d1,stroke-width:1px
 ```
 
 # Development Architecture Frontend

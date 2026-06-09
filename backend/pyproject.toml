@@ -5,8 +5,25 @@ description = ""
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.18.4",
+    "apscheduler<4",
+    "asyncpg>=0.31.0",
+    "bcrypt>=5.0.0",
+    "email-validator>=2.3.0",
+    "fastapi-mail>=1.6.4",
     "fastapi[standard]>=0.136.3",
+    "greenlet>=3.5.1",
+    "pydantic-settings>=2.14.1",
+    "pyjwt>=2.13.0",
+    "sqlmodel>=0.0.38",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
@@ -21,5 +38,7 @@ quote-style = "double"
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
     "ruff>=0.15.16",
 ]
