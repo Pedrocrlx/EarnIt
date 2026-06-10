@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi_mail import MessageSchema, MessageType
@@ -33,6 +33,14 @@ app = FastAPI(lifespan=lifespan)
 @app.exception_handler(IntegrityError)
 async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
     return JSONResponse(status_code=409, content={"detail": "Resource already exists."})
+
+
+# Routes that raise structured errors (e.g. {"error": "account_disabled", ...}) pass a
+# dict as `detail`; surface it as the top-level body instead of nesting it under "detail".
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    content = exc.detail if isinstance(exc.detail, dict) else {"detail": exc.detail}
+    return JSONResponse(status_code=exc.status_code, content=content, headers=exc.headers)
 
 
 app.include_router(auth_router.router)

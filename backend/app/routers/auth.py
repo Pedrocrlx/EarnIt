@@ -9,10 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_session
-from app.dependencies.auth import get_pending_verification_user
+from app.dependencies.auth import get_current_user, get_pending_verification_user
 from app.mail import mail
 from app.models.models import EmailVerification, User
-from app.schemas.auth import RegisterRequest, VerifyCodeRequest
+from app.schemas.auth import LoginRequest, RegisterRequest, VerifyCodeRequest
 from app.security.codes import generate_verification_code
 from app.security.hashing import hash_secret, verify_secret
 from app.security.tokens import create_access_token, create_pending_verification_token
@@ -233,3 +233,84 @@ async def resend_verification(
         "message": "A new verification code has been sent.",
         "expires_at": expires_at,
     }
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/auth/login
+# ---------------------------------------------------------------------------
+
+
+async def _ensure_active_verification_code(user: User, session: AsyncSession) -> datetime:
+    """Return the expiry of an active account_verification code, issuing a fresh one if needed."""
+    result = await session.execute(
+        select(EmailVerification)
+        .where(EmailVerification.user_id == user.id)
+        .where(EmailVerification.purpose == "account_verification")
+        .where(EmailVerification.consumed_at.is_(None))
+        .order_by(EmailVerification.created_at.desc())
+        .limit(1)
+    )
+    existing = result.scalar_one_or_none()
+    now = datetime.now(timezone.utc)
+    if existing is not None and existing.expires_at > now:
+        return existing.expires_at
+
+    plaintext_code = generate_verification_code()
+    expires_at = now + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRY_ACCOUNT_MINUTES)
+    session.add(
+        EmailVerification(
+            user_id=user.id,
+            purpose="account_verification",
+            code_hash=await hash_secret(plaintext_code),
+            expires_at=expires_at,
+        )
+    )
+    await session.commit()
+    await _send_verification_email(user.email, plaintext_code)
+    return expires_at
+
+
+@router.post("/login")
+async def login(
+    body: LoginRequest, response: Response, session: AsyncSession = Depends(get_session)
+):
+    result = await session.execute(select(User).where(User.email == str(body.email)))
+    user = result.scalar_one_or_none()
+
+    if user is None or not await verify_secret(body.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid login credentials.")
+
+    # is_active is checked before email_verified_at — a disabled-and-unverified
+    # account always reports account_disabled, never account_unverified.
+    if not user.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "account_disabled", "message": "This account has been disabled."},
+        )
+
+    if user.email_verified_at is None:
+        expires_at = await _ensure_active_verification_code(user, session)
+        unverified_response = JSONResponse(
+            status_code=403,
+            content={
+                "error": "account_unverified",
+                "message": "Please verify your account before continuing.",
+                "verification": {"expires_at": expires_at.isoformat()},
+            },
+        )
+        _set_pending_cookie(unverified_response, user.id)
+        return unverified_response
+
+    _set_access_cookie(response, user.id)
+    return {"status": "success", "message": "Authentication successful."}
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/auth/logout
+# ---------------------------------------------------------------------------
+
+
+@router.post("/logout")
+async def logout(response: Response, current_user: User = Depends(get_current_user)):
+    response.delete_cookie(key="access_token", path="/")
+    return {"status": "success", "message": "Logged out successfully."}
