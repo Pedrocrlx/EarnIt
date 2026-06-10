@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
 
     # Email (Mailpit in Docker; override MAIL_SERVER=localhost for local dev)
-    MAIL_FROM: str = "system@earnit.local"
+    MAIL_FROM: str = "noreply@earnit.app"
     MAIL_SERVER: str = "mailpit"
     MAIL_PORT: int = 1025
     MAIL_USERNAME: str = ""
