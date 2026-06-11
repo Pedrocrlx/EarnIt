@@ -1,10 +1,10 @@
 import { LockKeyhole, Mail } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Navbar } from "@/components/Navbar";
 import Logo from "@/components/Logo";
 
 const formFields = [
@@ -28,15 +28,15 @@ const formFields = [
   },
 ];
 
-
 const RegistrationPage = () => {
+  const navigate = useNavigate();
+
   return (
-    <main className="min-h-screen bg-[#f8f9fb]">
-      <Navbar/>
-      <section className="flex justify-center px-4 pb-16 pt-24 sm:px-6 lg:pt-[106px]">
+    <main className="bg-[#f8f9fb]">
+      <section className="flex justify-center pb-10 pt-5 px-4 sm:px-6">
         <div className="flex w-full max-w-[620px] flex-col items-center gap-10">
           <header className="flex flex-col items-center">
-            <Logo/>
+            <Logo />
             <p className="mt-2 text-center  text-lg font-normal leading-[26px] text-[#404940]">
               Create your account. Join the crew!
             </p>
@@ -82,6 +82,7 @@ const RegistrationPage = () => {
                     </span>
                     <Button
                       variant="link"
+                      onClick={() => navigate("/login")}
                       className="h-auto p-0  text-sm font-semibold leading-5 text-[#003514] no-underline hover:no-underline"
                     >
                       Log In
