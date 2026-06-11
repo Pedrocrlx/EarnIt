@@ -35,8 +35,14 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
     return JSONResponse(status_code=409, content={"detail": "Resource already exists."})
 
 
-# Routes that raise structured errors (e.g. {"error": "account_disabled", ...}) pass a
-# dict as `detail`; surface it as the top-level body instead of nesting it under "detail".
+# This overrides FastAPI's default HTTPException handler, which always wraps `detail`
+# as {"detail": ...}. Routes that raise structured errors — e.g.
+# HTTPException(403, detail={"error": "account_disabled", "message": "..."}) — need
+# {"error": ..., "message": ...} at the top level to match the spec, so:
+#   - dict detail  -> used as-is for the response body (no "detail" wrapper)
+#   - string detail -> kept as {"detail": "..."} for backwards compatibility
+# If a 403/409/etc. response body looks "double-nested" or missing fields during
+# debugging, check whether this handler is firing as expected.
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     content = exc.detail if isinstance(exc.detail, dict) else {"detail": exc.detail}

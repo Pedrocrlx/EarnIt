@@ -242,6 +242,7 @@ async def resend_verification(
 
 async def _ensure_active_verification_code(user: User, session: AsyncSession) -> datetime:
     """Return the expiry of an active account_verification code, issuing a fresh one if needed."""
+    # Look for the most recent unconsumed account_verification code for this user.
     result = await session.execute(
         select(EmailVerification)
         .where(EmailVerification.user_id == user.id)
@@ -252,9 +253,12 @@ async def _ensure_active_verification_code(user: User, session: AsyncSession) ->
     )
     existing = result.scalar_one_or_none()
     now = datetime.now(timezone.utc)
+    # If that code hasn't expired yet, reuse it — don't spam a new email/code.
     if existing is not None and existing.expires_at > now:
         return existing.expires_at
 
+    # No active code (none exists, or the last one expired) — generate and email a new one,
+    # mirroring the /verify/resend "after expiry" path.
     plaintext_code = generate_verification_code()
     expires_at = now + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRY_ACCOUNT_MINUTES)
     session.add(
@@ -274,6 +278,8 @@ async def _ensure_active_verification_code(user: User, session: AsyncSession) ->
 async def login(
     body: LoginRequest, response: Response, session: AsyncSession = Depends(get_session)
 ):
+    # Look up the account by email. If it doesn't exist, fall through to the same
+    # 401 as a wrong password — never reveal whether an email is registered.
     result = await session.execute(select(User).where(User.email == str(body.email)))
     user = result.scalar_one_or_none()
 
@@ -289,6 +295,9 @@ async def login(
         )
 
     if user.email_verified_at is None:
+        # Credentials are correct, but the account is still in "limbo": deny the full
+        # session and instead send the client back through the verification flow with
+        # a fresh pending_verification_token (the old one may have expired).
         expires_at = await _ensure_active_verification_code(user, session)
         unverified_response = JSONResponse(
             status_code=403,
@@ -301,6 +310,7 @@ async def login(
         _set_pending_cookie(unverified_response, user.id)
         return unverified_response
 
+    # Active, verified account with correct credentials — issue the full session cookie.
     _set_access_cookie(response, user.id)
     return {"status": "success", "message": "Authentication successful."}
 
@@ -312,5 +322,8 @@ async def login(
 
 @router.post("/logout")
 async def logout(response: Response, current_user: User = Depends(get_current_user)):
+    # get_current_user already enforces a valid, active session (401/403 otherwise),
+    # so by this point we just need to drop the cookie. delete_cookie sets Max-Age=0,
+    # which tells the browser to discard it immediately.
     response.delete_cookie(key="access_token", path="/")
     return {"status": "success", "message": "Logged out successfully."}

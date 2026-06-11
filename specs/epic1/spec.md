@@ -40,7 +40,7 @@ All backend systems must strictly conform to the technical boundaries outlined b
 * **JWT Payload Structure:** Both token types share the same signing key but carry a `scope` claim that route guards enforce server-side:
   * Full session: `{ "sub": "<user_uuid>", "scope": "full", "exp": <timestamp> }`
   * Pending-verification: `{ "sub": "<user_uuid>", "scope": "verify", "exp": <timestamp> }`
-* **Parental PIN Gate:** The PIN gate is a **UX-layer lock**, not a server-side privilege escalation. All parent API actions (`POST /profiles/children`, `POST /auth/pin`, `GET /profiles/family`, etc.) are already protected by the full `access_token` session. `POST /auth/pin/verify` simply validates the hash so the frontend can decide whether to render the parent dashboard — no new server-side token or scope is issued on success.
+* **Parental PIN Gate:** The PIN gate is a **UX-layer lock**, not a server-side privilege escalation. All parent API actions (`POST /profiles/children`, `POST /auth/pin`, `GET /profiles/family`, etc.) are already protected by the full `access_token` session. `POST /auth/verify-pin` simply validates the hash so the frontend can decide whether to render the parent dashboard — no new server-side token or scope is issued on success.
 * **Account Existence & Activity Check:** Every authenticated request must confirm — after JWT decode — that the `users` row exists and `is_active = true`. A missing row (e.g., purged by the limbo sweep) returns `401 Unauthorized`, which signals the client to discard the session cookie. An inactive row (`is_active = false`) returns `403 account_disabled`. This check is applied as middleware to all routes that require a session.
 
 ---
@@ -338,7 +338,7 @@ class EmailVerification(SQLModel, table=True):
 
 #### 4.2.7 Verify Parental PIN (Dashboard Cross-Switching)
 
-* **Endpoint:** `POST /api/v1/auth/pin/verify`
+* **Endpoint:** `POST /api/v1/auth/verify-pin`
 * **Security:** Required Active Parent Session.
 * **Content-Type:** `application/json`
 
@@ -573,7 +573,7 @@ Once both conditions are satisfied the flag is flipped and never reverts. Onboar
 ### **Chunk 4: Parental PIN**
 
 * Implement `POST /api/v1/auth/pin` — upsert `parent_pin_hash`, stamp `pin_set_at`, and evaluate the onboarding completion trigger (`parent_pin_hash IS NOT NULL AND children count >= 1`); flip `users.onboarding_completed` if both conditions are met.
-* Implement `POST /api/v1/auth/pin/verify` — compare the submitted PIN against `parent_pin_hash` and return the scoped confirmation response used by the frontend to unlock the parent dashboard.
+* Implement `POST /api/v1/auth/verify-pin` — compare the submitted PIN against `parent_pin_hash` and return the scoped confirmation response used by the frontend to unlock the parent dashboard.
 * **Tests:** setup with no prior PIN → `200`; update existing PIN → `200`; invalid PIN format → `400`; verify correct PIN → `200`; verify wrong PIN → `401`; verify before PIN is set → `428`.
 
 ### **Chunk 5: Child Profiles & Family View**

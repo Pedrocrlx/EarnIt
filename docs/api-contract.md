@@ -45,7 +45,7 @@ The `pending_verification_token` is scoped to `Path=/api/v1/auth/verify`, so the
 
 ### The Parental PIN Gate
 
-`POST /auth/pin/verify` does **not** issue a new cookie. A `200` response is purely a signal to the frontend to render the parent dashboard. All parent routes are already protected by the full `access_token` session.
+`POST /auth/verify-pin` does **not** issue a new cookie. A `200` response is purely a signal to the frontend to render the parent dashboard. All parent routes are already protected by the full `access_token` session.
 
 ---
 
@@ -256,7 +256,7 @@ After this call succeeds, if at least one child profile also exists, `onboarding
 
 ---
 
-### `POST /api/v1/auth/pin/verify`
+### `POST /api/v1/auth/verify-pin`
 
 Validate the PIN to unlock the parent dashboard. **No new cookie is issued.**
 
