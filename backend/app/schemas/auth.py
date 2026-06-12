@@ -22,6 +22,8 @@ class RegisterRequest(BaseModel):
             errors.append("one lowercase letter")
         if not re.search(r"\d", v):
             errors.append("one digit")
+        if not re.search(f"[{settings.PASSWORD_SPECIAL_CHARS}]", v):
+            errors.append("one special character")
         if errors:
             raise ValueError("Password must contain: " + ", ".join(errors))
         return v

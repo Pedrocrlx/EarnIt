@@ -28,10 +28,19 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
     session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
     async with session_factory() as session:
         yield session
-        await session.execute(text("DELETE FROM email_verifications"))
         await session.execute(text("DELETE FROM children"))
         await session.execute(text("DELETE FROM users"))
         await session.commit()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _cleanup_purge_tasks():
+    # /register arms a long-sleeping limbo-purge task; cancel any left pending so
+    # they don't leak across tests or warn at event-loop teardown.
+    yield
+    from app.services import accounts
+
+    await accounts.cancel_pending_purges()
 
 
 @pytest.fixture
@@ -65,7 +74,6 @@ async def client(db_engine) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides.clear()
 
     async with session_factory() as s:
-        await s.execute(text("DELETE FROM email_verifications"))
         await s.execute(text("DELETE FROM children"))
         await s.execute(text("DELETE FROM users"))
         await s.commit()

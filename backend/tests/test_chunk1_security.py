@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import jwt
@@ -8,32 +8,64 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.schemas.auth import PinRequest, RegisterRequest
-from app.security.codes import generate_verification_code
 from app.security.hashing import hash_secret, verify_secret
 from app.security.tokens import (
     create_access_token,
     create_pending_verification_token,
     decode_token,
 )
+from app.services.verification import core
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
 
 # ---------------------------------------------------------------------------
-# Verification code generation
+# Stateless verification codes — global engine (app/services/verification/core.py)
 # ---------------------------------------------------------------------------
 
 
 def test_code_has_correct_length():
-    assert len(generate_verification_code()) == settings.VERIFICATION_CODE_LENGTH
+    code = core.generate_code(uuid4(), core.PURPOSE_ACCOUNT, _utcnow())
+    assert len(code) == settings.VERIFICATION_CODE_LENGTH
 
 
 def test_code_uses_only_charset_chars():
     charset = set(settings.VERIFICATION_CODE_CHARSET)
-    for _ in range(20):
-        assert all(c in charset for c in generate_verification_code())
+    code = core.generate_code(uuid4(), core.PURPOSE_ACCOUNT, _utcnow())
+    assert all(c in charset for c in code)
 
 
-def test_codes_are_not_trivially_equal():
-    codes = {generate_verification_code() for _ in range(50)}
-    assert len(codes) > 1  # 32^8 space — duplicates in 50 draws are astronomically unlikely
+def test_code_is_deterministic_for_same_inputs():
+    uid, anchor = uuid4(), _utcnow()
+    a = core.generate_code(uid, core.PURPOSE_ACCOUNT, anchor)
+    b = core.generate_code(uid, core.PURPOSE_ACCOUNT, anchor)
+    assert a == b  # recomputable at verify-time — that's what removes the table
+
+
+def test_code_changes_when_anchor_changes():
+    uid, anchor = uuid4(), _utcnow()
+    rotated = anchor + timedelta(seconds=1)
+    assert core.generate_code(uid, core.PURPOSE_ACCOUNT, anchor) != core.generate_code(
+        uid, core.PURPOSE_ACCOUNT, rotated
+    )
+
+
+def test_verify_code_roundtrip_and_purpose_isolation():
+    uid, anchor = uuid4(), _utcnow()
+    code = core.generate_code(uid, core.PURPOSE_ACCOUNT, anchor)
+    assert core.verify_code(uid, core.PURPOSE_ACCOUNT, anchor, code)
+    # A code minted for one purpose must not validate against another.
+    assert not core.verify_code(uid, core.PURPOSE_PASSWORD_RESET, anchor, code)
+
+
+def test_is_expired_respects_window():
+    anchor = _utcnow()
+    within = anchor + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRY_MINUTES - 1)
+    past = anchor + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRY_MINUTES + 1)
+    assert not core.is_expired(anchor, within)
+    assert core.is_expired(anchor, past)
 
 
 # ---------------------------------------------------------------------------
@@ -98,33 +130,38 @@ def test_tampered_token_raises():
 
 
 def test_register_valid_minimal():
-    req = RegisterRequest(email="user@example.com", password="Password1")
+    req = RegisterRequest(email="user@example.com", password="Password123!")
     assert req.family_name is None
 
 
 def test_register_valid_with_family_name():
-    req = RegisterRequest(email="user@example.com", password="Password1", family_name="Silva")
+    req = RegisterRequest(email="user@example.com", password="Password123!", family_name="Silva")
     assert req.family_name == "Silva"
 
 
 def test_password_too_short_raises():
     with pytest.raises(ValidationError, match="characters"):
-        RegisterRequest(email="u@e.com", password="Ab1")
+        RegisterRequest(email="u@e.com", password="Ab1!")
 
 
 def test_password_no_uppercase_raises():
     with pytest.raises(ValidationError, match="uppercase"):
-        RegisterRequest(email="u@e.com", password="password123")
+        RegisterRequest(email="u@e.com", password="password123!")
 
 
 def test_password_no_lowercase_raises():
     with pytest.raises(ValidationError, match="lowercase"):
-        RegisterRequest(email="u@e.com", password="PASSWORD123")
+        RegisterRequest(email="u@e.com", password="PASSWORD123!")
 
 
 def test_password_no_digit_raises():
     with pytest.raises(ValidationError, match="digit"):
-        RegisterRequest(email="u@e.com", password="PasswordNoDigit")
+        RegisterRequest(email="u@e.com", password="PasswordNoDigit!")
+
+
+def test_password_no_special_char_raises():
+    with pytest.raises(ValidationError, match="special character"):
+        RegisterRequest(email="u@e.com", password="Password1234")
 
 
 def test_invalid_email_raises():

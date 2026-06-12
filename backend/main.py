@@ -1,28 +1,27 @@
 from contextlib import asynccontextmanager
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi_mail import MessageSchema, MessageType
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.jobs.purge import scheduled_purge
+from app.database import get_session
 from app.mail import mail
 from app.routers import auth as auth_router
-
-# APScheduler instance — started on app startup, shut down on app teardown.
-scheduler = AsyncIOScheduler()
+from app.services import accounts
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Run the limbo-user purge sweep every hour.
-    scheduler.add_job(scheduled_purge, "interval", hours=1, id="limbo_purge")
-    scheduler.start()
+    # Reconstruct a limbo-purge task for every still-unverified account, so pending
+    # purges survive a restart (their deadline is derived from users.created_at).
+    await accounts.rearm_pending_purges()
     yield
-    scheduler.shutdown()
+    await accounts.cancel_pending_purges()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -63,7 +62,13 @@ app.add_middleware(
 
 
 @app.get("/healthz")
-async def health_check():
+async def health_check(session: AsyncSession = Depends(get_session)):
+    # Real readiness probe: confirm the DB round-trips, so orchestrators detect a
+    # dead database instead of a process that is merely "up".
+    try:
+        await session.execute(text("SELECT 1"))
+    except Exception:
+        return JSONResponse(status_code=503, content={"status": "degraded"})
     return {"status": "ok"}
 
 

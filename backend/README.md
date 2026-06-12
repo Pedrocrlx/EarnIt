@@ -9,7 +9,7 @@ This directory contains the FastAPI backend for the EarnIt application.
 - **ORM:** SQLModel
 - **Migrations:** Alembic
 - **Mail:** fastapi-mail (SMTP, dev via Mailpit)
-- **Scheduling:** APScheduler (background purge job)
+- **Background work:** asyncio tasks (durable limbo-purge, re-armed on startup)
 - **Package Manager:** [uv](https://github.com/astral-sh/uv)
 
 ## Getting Started
@@ -45,24 +45,101 @@ When running, services are available at:
 
 ```
 backend/
-├── main.py                   # FastAPI app, middleware, exception handlers, lifespan/scheduler
+├── main.py                   # FastAPI app, middleware, exception handlers, lifespan
 ├── app/
 │   ├── config.py             # Settings (env-driven), token lifetimes, password/PIN rules
 │   ├── database.py           # Async SQLAlchemy engine + get_session dependency
 │   ├── mail.py                # fastapi-mail config (SMTP + Jinja2 templates)
-│   ├── models/models.py      # SQLModel tables: User, Child, EmailVerification
+│   ├── models/models.py      # SQLModel tables: User, Child
 │   ├── schemas/auth.py       # Pydantic request/response schemas + validators
 │   ├── security/
-│   │   ├── hashing.py        # bcrypt hashing for passwords/PINs/codes (non-blocking)
-│   │   ├── tokens.py         # JWT creation/decoding (access + pending-verification)
-│   │   └── codes.py          # Verification code generation
+│   │   ├── hashing.py        # bcrypt hashing for passwords/PINs (non-blocking)
+│   │   └── tokens.py         # JWT creation/decoding (access + pending-verification)
+│   ├── services/
+│   │   ├── accounts.py       # Account lifecycle: durable limbo-purge background task
+│   │   └── verification/     # Stateless verification codes (no DB rows)
+│   │       ├── core.py       # global HMAC engine (generate/verify/expiry/cooldown)
+│   │       └── account.py    # account-verification orchestration (+ email)
 │   ├── dependencies/auth.py  # get_current_user / get_pending_verification_user guards
-│   ├── routers/auth.py       # /api/v1/auth/* endpoints
-│   ├── jobs/purge.py         # Scheduled "limbo account" purge sweep
+│   ├── routers/auth/         # /api/v1/auth/* endpoints (register, verify, login, logout)
 │   └── templates/email/      # HTML email templates (verification code, etc.)
 ├── alembic/                   # DB migrations
 └── tests/                     # pytest suite (httpx AsyncClient against the app)
 ```
+
+## Data Model
+
+Two tables (`app/models/models.py`). Verification codes are **not** a table — they are stateless, derived from `users.updated_at` (see [Auth Flows](#auth-flows-step-by-step)).
+
+### `users` — parent account
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID (PK) | client-generated `uuid4`, non-enumerable |
+| `email` | str(320), unique | login identifier |
+| `password_hash` | str(255) | bcrypt |
+| `parent_pin_hash` | str(255), nullable | bcrypt; `NULL` until the PIN is set during onboarding |
+| `pin_set_at` | datetime (tz), nullable | when the PIN was last set/changed |
+| `family_name` | str(150), nullable | display name, e.g. *Família Silva* |
+| `is_active` | bool, default `true` | soft-disable without a destructive delete |
+| `onboarding_completed` | bool, default `false` | server-flipped once `parent_pin_hash` is set **and** ≥1 child exists |
+| `email_verified_at` | datetime (tz), nullable | `NULL` = limbo (unverified); stamped on successful verify |
+| `created_at` | datetime (tz) | registration time; **anchor for the limbo purge** |
+| `updated_at` | datetime (tz) | row last-modified; **anchor for the stateless verification code** |
+
+### `children` — child profile (N per parent)
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID (PK) | |
+| `user_id` | UUID (FK → `users.id`) | `ON DELETE CASCADE` |
+| `name` | str(100) | |
+| `birth_date` | date, nullable | |
+| `avatar_url` | str, nullable | |
+| `is_active` | bool, default `true` | counts against `MAX_CHILDREN_PER_USER` even when inactive |
+| `created_at` / `updated_at` | datetime (tz) | |
+
+> Two columns pull double duty: `created_at` anchors the limbo purge, and `updated_at` anchors the verification code — rotating `updated_at` mints a fresh code and invalidates the old one.
+
+## Auth Flows (step by step)
+
+Every flow shares one **stateless verification code** primitive (`app/services/verification/core.py`):
+
+> A code is `HMAC(SECRET_KEY, "user_id:purpose:updated_at")`, valid for `VERIFICATION_CODE_EXPIRY_MINUTES` (10 min) from the `updated_at` anchor. **Nothing is persisted** — the server recomputes and compares it. The `purpose` (`account_verification` / `password_reset` / `pin_reset`) is baked into the HMAC, so a code from one flow can't be used in another. Because all purposes share the `updated_at` anchor, at most one code is live per account at a time (rotating for any purpose supersedes the rest) — acceptable for MVP, where these flows don't overlap.
+
+### 1. Registration & email verification — ✅ Implemented
+
+1. **`POST /api/v1/auth/register`** `{ email, password, family_name? }`
+   - Validates the password policy (≥`PASSWORD_MIN_LENGTH` chars, upper + lower + digit + special).
+   - Inserts a `users` row in **limbo** (`email_verified_at = NULL`); a duplicate email → `409`.
+   - Derives an `account_verification` code from `updated_at` and emails it (dispatched *after* the response, off the critical path).
+   - Sets a scoped `pending_verification_token` cookie and **arms a durable purge task** (deletes this account after `ACCOUNT_LIMBO_PURGE_HOURS` unless verified first). → `201`
+2. **`POST /api/v1/auth/verify`** `{ code }` *(pending cookie required)*
+   - `409` if already verified · `410` if the 10-min window elapsed · `400` if the code doesn't match.
+   - On success: stamps `email_verified_at`, bumps `updated_at` (so the used code can't be replayed), **cancels the purge task**, and swaps the pending cookie for a full `access_token` session. → `200`
+3. **`POST /api/v1/auth/verify/resend`** *(pending cookie required)*
+   - `429` (with `retry_after_seconds`) while the current code is still live; otherwise rotates the anchor → new code, emailed off the response path. → `200`
+4. **Abandoned verification:** logging in with correct credentials on a limbo account returns `403 account_unverified` + a fresh pending cookie, re-entering this flow. If the limbo window passes with no verification, the purge task deletes the account and frees the email — *as if never registered*.
+
+### 2. Forgot password — 🔜 Planned (design, not yet implemented)
+
+> Reuses the code primitive with `purpose = password_reset`. Intended endpoints:
+
+1. **`POST /api/v1/auth/forgot-password`** `{ email }`
+   - **Always** returns `200` (never reveals whether the email is registered). If it maps to a verified account, rotate its anchor and email a `password_reset` code; a still-live code is not re-sent (cooldown).
+2. **`POST /api/v1/auth/reset-password`** `{ email, code, new_password }`
+   - `410` if the window elapsed · `400` if the code/purpose doesn't match · validates the new password policy.
+   - On success: set `password_hash`, bump `updated_at` (which invalidates the code). → `200`
+
+### 3. Forgot PIN — 🔜 Planned (design, not yet implemented)
+
+> The parental PIN only gates the child→parent dashboard switch, so the user is normally still logged in. Reuses the code primitive with `purpose = pin_reset`. Intended endpoints — **full `access_token` session required**:
+
+1. **`POST /api/v1/auth/forgot-pin`** *(auth required)*
+   - Rotate the anchor and email a `pin_reset` code to the account's email. Cooldown as above.
+2. **`POST /api/v1/auth/reset-pin`** `{ code, new_pin }` *(auth required)*
+   - `410` / `400` as above · validates the PIN format (`^[0-9]{PARENT_PIN_LENGTH}$`).
+   - On success: set `parent_pin_hash` + `pin_set_at`, bump `updated_at`. → `200`
 
 ## Epic 1 (Authentication & Profiles) — Progress
 
@@ -70,8 +147,8 @@ Implementation follows `specs/epic1/spec.md`, split into chunks:
 
 | Chunk | Scope | Status |
 |---|---|---|
-| 0 | Infrastructure: FastAPI/CORS boilerplate, async DB engine, Alembic migrations, fastapi-mail + email templates, APScheduler limbo-purge job | ✅ Done |
-| 1 | Crypto & auth utilities: JWT tokens, bcrypt hashing, verification codes, request schemas, `get_current_user` / `get_pending_verification_user` guards | ✅ Done |
+| 0 | Infrastructure: FastAPI/CORS boilerplate, async DB engine, Alembic migrations, fastapi-mail + email templates, durable limbo-purge background task | ✅ Done |
+| 1 | Crypto & auth utilities: JWT tokens, bcrypt hashing, stateless verification-code service, request schemas, `get_current_user` / `get_pending_verification_user` guards | ✅ Done |
 | 2 | `POST /auth/register`, `POST /auth/verify`, `POST /auth/verify/resend` | ✅ Done |
 | 3 | `POST /auth/login`, `POST /auth/logout` | ✅ Done |
 | 4 | `POST /auth/pin`, `POST /auth/verify-pin` (parental PIN gate) | ⏳ Not started |

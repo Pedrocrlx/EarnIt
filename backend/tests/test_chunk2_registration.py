@@ -11,7 +11,7 @@ _REGISTER_URL = "/api/v1/auth/register"
 _VERIFY_URL = "/api/v1/auth/verify"
 _RESEND_URL = "/api/v1/auth/verify/resend"
 
-_VALID = {"email": "user@example.com", "password": "Password1", "family_name": "Silva"}
+_VALID = {"email": "user@example.com", "password": "Password123!", "family_name": "Silva"}
 
 
 def _pending_cookie(response) -> str:
@@ -114,10 +114,9 @@ async def test_verify_expired_code_returns_410(
     token = _pending_cookie(reg)
     code = mock_mail[0].template_body["code"]
 
-    # Push expires_at into the past
-    await db_session.execute(
-        text("UPDATE email_verifications SET expires_at = NOW() - INTERVAL '1 minute'")
-    )
+    # The code's anchor is users.updated_at — pushing it past the 10-min window
+    # makes the derived code expire (no email_verifications row to touch anymore).
+    await db_session.execute(text("UPDATE users SET updated_at = NOW() - INTERVAL '11 minutes'"))
     await db_session.commit()
 
     res = await client.post(
@@ -149,28 +148,6 @@ async def test_verify_already_verified_returns_409(client: AsyncClient, mock_mai
     assert res.status_code == 409
 
 
-async def test_verify_consumed_code_replay_returns_400(
-    client: AsyncClient, mock_mail, db_session: AsyncSession
-):
-    reg = await client.post(_REGISTER_URL, json=_VALID)
-    token = _pending_cookie(reg)
-    code = mock_mail[0].template_body["code"]
-
-    # Mark the code as consumed without stamping email_verified_at (artificial state)
-    await db_session.execute(
-        text("UPDATE email_verifications SET consumed_at = NOW() WHERE consumed_at IS NULL")
-    )
-    await db_session.commit()
-
-    res = await client.post(
-        _VERIFY_URL,
-        json={"code": code},
-        cookies={"pending_verification_token": token},
-    )
-    # No active code found → 400
-    assert res.status_code == 400
-
-
 # ---------------------------------------------------------------------------
 # Resend
 # ---------------------------------------------------------------------------
@@ -198,10 +175,8 @@ async def test_resend_after_expiry_returns_200_with_new_expires_at(
     reg = await client.post(_REGISTER_URL, json=_VALID)
     token = _pending_cookie(reg)
 
-    # Expire the existing code
-    await db_session.execute(
-        text("UPDATE email_verifications SET expires_at = NOW() - INTERVAL '1 minute'")
-    )
+    # Expire the active window by pushing the anchor (users.updated_at) into the past.
+    await db_session.execute(text("UPDATE users SET updated_at = NOW() - INTERVAL '11 minutes'"))
     await db_session.commit()
 
     res = await client.post(
@@ -219,7 +194,7 @@ async def test_resend_after_expiry_returns_200_with_new_expires_at(
 @pytest.mark.parametrize(
     "payload,field",
     [
-        ({"email": "bad-email", "password": "Password1"}, "email"),
+        ({"email": "bad-email", "password": "Password123!"}, "email"),
         ({"email": "u@e.com", "password": "short"}, "password"),
         ({"email": "u@e.com", "password": "nouppercase1"}, "password"),
         ({"email": "u@e.com", "password": "NODIGIT"}, "password"),

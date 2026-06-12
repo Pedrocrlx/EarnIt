@@ -28,11 +28,11 @@ All backend systems must strictly conform to the technical boundaries outlined b
 
 * **Engine Connection:** PostgreSQL 17 using `asyncpg` as the async database dialect driver.
 * **Data Layer Isolation:** One `User` (parent) record can host multiple `Child` records, linked through the `children.user_id` foreign key — mirroring a Netflix-style account where the parent profile gates access to the control panel via PIN while children get their own lightweight profiles.
-* **Verification Ledger:** Each `User` also owns a 1-to-N history of issued codes via `email_verifications`, keeping expiry tracking, resend-cooldown enforcement, and audit trails isolated from the core identity record rather than overwriting a single column in place.
+* **Stateless Verification Codes:** Email verification codes are **not** persisted (no `email_verifications` table, no extra columns). A code is an HMAC over `user_id + purpose + anchor`, where the anchor is the user's `updated_at` timestamp — so the code is fully derived from data already on the `users` row and can be recomputed and checked at verify-time. Expiry, resend-cooldown, and purpose-isolation are all handled by the service layer (`app/services/verification/` — a global `core` engine plus one orchestration module per purpose, e.g. `account`); see §4.4 (Email Verification Rules).
 
 ### 3.2 Authentication, Cryptography & Session Strategy
 
-* **Secrets Sealing:** Passwords, PINs, and email verification codes must never exist as plaintext in the database. All are salted and hashed asynchronously (e.g., `passlib` with `bcrypt` or `argon2-cffi`); verification codes are additionally never logged or echoed back by the API after issuance.
+* **Secrets Sealing:** Passwords and PINs must never exist as plaintext in the database — both are salted and hashed asynchronously (e.g., `passlib` with `bcrypt` or `argon2-cffi`). Email verification codes are never stored at all (stateless HMAC, see §4.4 Email Verification Rules) and are never logged or echoed back by the API after issuance.
 * **Session Management:** Stateless, cryptographically signed JWTs using a strong, environment-injected secret key.
 * **Token Distribution:** All tokens are delivered via HTTP-only, Secure cookies, eliminating XSS extraction vectors. Full sessions use `Path=/`; pending-verification sessions use a narrowly-scoped `Path=/api/v1/auth/verify` cookie so they cannot authenticate any other route.
 * **Cross-Dashboard Security:** Elevating from a child's view back to the parent dashboard requires verification against `parent_pin_hash` — children access their own view without credentials.
@@ -72,8 +72,6 @@ class User(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
 
     children: list["Child"] = Relationship(back_populates="user")
-    # 1-to-N issued code history — enables expiry checks, resend cooldowns, and audit trails
-    verification_codes: list["EmailVerification"] = Relationship(back_populates="user")
 
 
 class Child(SQLModel, table=True):
@@ -90,22 +88,9 @@ class Child(SQLModel, table=True):
 
     user: User = Relationship(back_populates="children")
 
-
-# one row per issued verification code; backs account verification, password reset, and PIN reset flows
-class EmailVerification(SQLModel, table=True):
-    __tablename__: str = "email_verifications"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True, nullable=False)
-    user_id: UUID = Field(foreign_key="users.id", index=True, nullable=False)
-    purpose: str = Field(max_length=30, nullable=False)  # 'account_verification' | 'password_reset' | 'pin_reset' — endpoints filter by this to prevent cross-flow code submission
-    code_hash: str = Field(max_length=255, nullable=False)  # salted hash only — plaintext exists solely in the outbound email, mirrors password/PIN sealing
-    expires_at: datetime = Field(nullable=False)  # serves as both the entry deadline and the earliest moment a resend becomes eligible
-    consumed_at: datetime | None = Field(default=None, nullable=True)  # stamped on successful redemption; prevents the same code from being replayed
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-
-    user: User = Relationship(back_populates="verification_codes")
-
 ```
+
+> **No `EmailVerification` table.** Verification codes are stateless and computed on demand by the service layer (see §4.4 (Email Verification Rules)). The only persistent state involved is the `users.updated_at` anchor and `users.email_verified_at` — both already on the `User` model above.
 
 > **Schema notes:**
 >
@@ -115,7 +100,7 @@ class EmailVerification(SQLModel, table=True):
 > * `onboarding_completed` is flipped to `true` automatically by the server — not by a client call — once `parent_pin_hash IS NOT NULL` **and** at least one `children` row exists for the user (see §4.4 Onboarding Completion Rule).
 > * `family_name` identifies the family unit for display purposes (e.g. *Família Silva*); only the last name is collected for MVP — first-name personalisation is deferred post-MVP.
 > * `children` intentionally has no `balance` column — balance is derived from a transaction ledger outside this epic's scope.
-> * `email_verified_at` and `email_verifications` jointly implement the "limbo" flow; inline comments on those fields carry the field-level rationale.
+> * `email_verified_at` implements the "limbo" flow: `NULL` means unverified (limbo), a timestamp means verified. The verification code itself is stateless — derived from `updated_at` rather than stored (see §4.4 (Email Verification Rules)).
 
 ---
 
@@ -474,14 +459,13 @@ All tuneable values live in a central `config.py` module and may be overridden v
 # config.py
 
 # --- Password ---
-PASSWORD_MIN_LENGTH: int = 8                  # minimum character count for account passwords
+PASSWORD_MIN_LENGTH: int = 12                 # minimum character count for account passwords
+PASSWORD_SPECIAL_CHARS: str = "!@#$%^&*()_+-=[]{};':\"\\|,.<>/?"  # accepted special characters
 
 # --- Email Verification ---
 VERIFICATION_CODE_CHARSET: str = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # alphanumeric, ambiguous chars excluded (0/O, 1/I/L)
 VERIFICATION_CODE_LENGTH: int = 8             # character count of the generated code
-VERIFICATION_CODE_EXPIRY_ACCOUNT_MINUTES: int = 10        # account registration verification
-VERIFICATION_CODE_EXPIRY_PASSWORD_RESET_MINUTES: int = 30  # password reset — longer window (future epic)
-VERIFICATION_CODE_EXPIRY_PIN_RESET_MINUTES: int = 10      # PIN reset (future epic)
+VERIFICATION_CODE_EXPIRY_MINUTES: int = 10    # global code lifetime — account verification, password reset, PIN reset
 ACCOUNT_LIMBO_PURGE_HOURS: int = 24           # hours from users.created_at after which unverified accounts are purged
 
 # --- Session Lifetimes ---
@@ -501,10 +485,11 @@ PARENT_PIN_LENGTH: int = 4                    # digit count; validation pattern:
 
 #### Password Complexity Constraints
 
-* Must span at least `PASSWORD_MIN_LENGTH` (default: `8`) characters.
+* Must span at least `PASSWORD_MIN_LENGTH` (default: `12`) characters.
 * Must feature at least one uppercase alphabetic character `[A-Z]`.
 * Must feature at least one lowercase alphabetic character `[a-z]`.
 * Must feature at least one numerical digit `[0-9]`.
+* Must feature at least one special character from `PASSWORD_SPECIAL_CHARS`.
 
 #### Parental PIN Rules
 
@@ -526,12 +511,13 @@ Once both conditions are satisfied the flag is flipped and never reverts. Onboar
 
 #### Email Verification Rules
 
-* **Code composition:** Generated from `VERIFICATION_CODE_CHARSET` — an alphanumeric set with visually ambiguous characters removed (no `0`/`O`, `1`/`I`/`L`).
+* **Code composition:** Derived deterministically as `HMAC(SECRET_KEY, user_id:purpose:anchor)`, folded onto `VERIFICATION_CODE_CHARSET` — an alphanumeric set with visually ambiguous characters removed (no `0`/`O`, `1`/`I`/`L`). The anchor is `users.updated_at`.
 * **Code length:** Fixed at `VERIFICATION_CODE_LENGTH` (default: `8`) characters, balancing brute-force resistance against manual entry ergonomics.
-* **Storage:** Persisted only as a salted hash (`email_verifications.code_hash`) — plaintext exists solely in the outbound email; never logged or returned by the API.
-* **Entry window:** A code is valid for `VERIFICATION_CODE_EXPIRY_ACCOUNT_MINUTES` (default: `10`) minutes from issuance (`expires_at`); expired codes are rejected with `410 Gone`.
-* **Purpose isolation:** every endpoint that queries `email_verifications` must filter by its own `purpose` value — e.g. `/auth/verify` filters by `'account_verification'`, a future forgot-password endpoint by `'password_reset'`, and so on. A code issued for one flow is treated as non-existent by all other flows, preventing cross-flow submission.
-* **Resend cooldown:** `POST /auth/verify/resend` is rejected with `429 Too Many Requests` while the current code's `expires_at` has not yet elapsed — at most one live code exists per account at any time.
+* **Storage:** None. The code is never persisted — it is recomputed from the user row and compared (constant-time) at verify-time. Plaintext exists solely in the outbound email; never logged or returned by the API. Because it is HMAC-keyed by `SECRET_KEY`, it cannot be forged without the server secret.
+* **Entry window:** A code is valid for `VERIFICATION_CODE_EXPIRY_MINUTES` (default: `10`) minutes from its anchor; once `NOW() - updated_at` exceeds the window the code is rejected with `410 Gone`.
+* **Purpose isolation:** the `purpose` discriminator (`'account_verification'` | `'password_reset'` | `'pin_reset'`) is baked into the HMAC, so a code minted for one flow never validates against another — no cross-flow submission.
+* **Resend cooldown:** `POST /auth/verify/resend` is rejected with `429 Too Many Requests` while the current window is still open. Resending rotates the anchor (`updated_at = NOW()`), which yields a fresh code and a fresh window — at most one live code exists per account at any time.
+* **Implicit consumption:** there is no `consumed_at` flag. Redemption moves the anchor — account verification stamps `email_verified_at` and bumps `updated_at`; a reset bumps `updated_at` — so the just-used code stops matching and cannot be replayed.
 * **Limbo purge window:** Accounts where `email_verified_at IS NULL` for more than `ACCOUNT_LIMBO_PURGE_HOURS` (default: `24`) hours past `users.created_at` are purged by a scheduled sweep, freeing the email address for re-registration.
 * **Login gate:** Valid credentials against an unverified account never establish a full session — every login attempt re-checks `email_verified_at` and re-enters the verification flow regardless of how many times the user previously exited it.
 
@@ -543,26 +529,26 @@ Once both conditions are satisfied the flag is flipped and never reverts. Onboar
 
 * Establish FastAPI boilerplate configuration using safe CORS definitions.
 * Configure database driver layer via `SQLModel` engines using async execution wrappers.
-* Initialize Alembic configuration folders mapping environment setups to target PostgreSQL databases; generate and review the initial migration for `users`, `children`, and `email_verifications` — confirm the diff matches the SQLModel definitions before applying.
+* Initialize Alembic configuration folders mapping environment setups to target PostgreSQL databases; generate and review the initial migration for `users` and `children` — confirm the diff matches the SQLModel definitions before applying.
 * Configure `fastapi-mail` connection (SMTP credentials via environment variables, connection pool, and base email template for the verification code email).
-* Wire up a scheduled background task runner (e.g., APScheduler or Celery beat) and implement the limbo purge job — a recurring sweep that hard-deletes `users` rows where `email_verified_at IS NULL` and `created_at < NOW() - ACCOUNT_LIMBO_PURGE_HOURS`; also hard-deletes orphaned `email_verifications` rows where `expires_at < NOW()` and either `consumed_at IS NULL` (abandoned codes) or the parent `users` row no longer exists.
-* **Tests:** purge sweep deletes accounts past `ACCOUNT_LIMBO_PURGE_HOURS`; accounts within the window are untouched; orphaned `email_verifications` rows past `expires_at` are deleted; rows still within their window are untouched.
+* Wire up a scheduled background task runner (e.g., APScheduler or Celery beat) and implement the limbo purge job — a recurring sweep that hard-deletes `users` rows where `email_verified_at IS NULL` and `created_at < NOW() - ACCOUNT_LIMBO_PURGE_HOURS`. (Verification codes are stateless, so there is nothing else to sweep.)
+* **Tests:** purge sweep deletes accounts past `ACCOUNT_LIMBO_PURGE_HOURS`; accounts within the window are untouched; verified accounts are never purged regardless of age.
 
 ### **Chunk 1: Cryptographic & Auth Utilities**
 
 * Build modular token encoding components using PyJWT.
 * Write operational password security hashing utility components with non-blocking properties.
 * Write runtime Pydantic schema validation wrappers checking entry rules for emails, passwords, and security PIN strings.
-* Implement a cryptographically secure verification-code generator drawing from `VERIFICATION_CODE_CHARSET`, plus its salted-hash and comparison utilities — mirroring password/PIN sealing.
+* Implement the stateless verification-code service (`app/services/verification/`): a global `core` engine — deterministic HMAC generation drawing from `VERIFICATION_CODE_CHARSET`, plus constant-time comparison, expiry, and resend-cooldown helpers — with per-purpose orchestration modules (`account`, later `password_reset` / `pin_reset`) owning each flow's email template and pre/post rules. No persistence, no hashing of stored codes.
 * Write account existence and activity guard middleware — applied to all authenticated routes — that returns `401` when the `users` row is missing (purged account) and `403 account_disabled` when `is_active = false`.
 
 ### **Chunk 2: Registration & Email Verification**
 
-* Code the `POST /api/v1/auth/register` controller — evaluate email constraints and schema integrity, create the account in an unverified ("limbo") state, dispatch a hashed verification code via `fastapi-mail`, and issue a narrowly-scoped `pending_verification_token` cookie.
+* Code the `POST /api/v1/auth/register` controller — evaluate email constraints and schema integrity, create the account in an unverified ("limbo") state, derive and dispatch a verification code via `fastapi-mail`, and issue a narrowly-scoped `pending_verification_token` cookie.
 * Implement custom exception handlers mapping database uniqueness failures to `409 Conflict` responses.
-* Build `POST /api/v1/auth/verify` — look up the active code filtered by `purpose = 'account_verification'`, compare the hash, stamp `email_verified_at` on success, and replace the `pending_verification_token` cookie with a full `access_token` session.
-* Build `POST /api/v1/auth/verify/resend` — reject with `429` while the current code's `expires_at` has not elapsed; otherwise insert a new code row and dispatch a fresh email.
-* **Tests:** duplicate email (active) → `409`; duplicate email (limbo) → `409`; valid registration → `201` + `pending_verification_token`; correct code → `200` + `access_token`; wrong code → `400`; expired code → `410`; already-verified account → `409`; resend before `expires_at` → `429` with `retry_after_seconds`; resend after expiry → `200` with fresh `expires_at`; code replay after `consumed_at` stamped → `400`.
+* Build `POST /api/v1/auth/verify` — recompute the `'account_verification'` code from the user's anchor, compare it constant-time, stamp `email_verified_at` on success (which also rotates the anchor), and replace the `pending_verification_token` cookie with a full `access_token` session.
+* Build `POST /api/v1/auth/verify/resend` — reject with `429` while the current window is open; otherwise rotate the anchor and dispatch a fresh code.
+* **Tests:** duplicate email (active) → `409`; duplicate email (limbo) → `409`; valid registration → `201` + `pending_verification_token`; correct code → `200` + `access_token`; wrong code → `400`; expired code → `410`; already-verified account → `409`; resend before window elapses → `429` with `retry_after_seconds`; resend after expiry → `200` with fresh `expires_at`.
 
 ### **Chunk 3: Login & Logout**
 

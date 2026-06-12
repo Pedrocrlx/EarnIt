@@ -32,14 +32,15 @@ class Settings(BaseSettings):
     MAIL_PASSWORD: str = ""
 
     # --- Password ---
-    PASSWORD_MIN_LENGTH: int = 8
+    PASSWORD_MIN_LENGTH: int = 12
+    PASSWORD_SPECIAL_CHARS: str = "!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>\\/?"
 
     # --- Email Verification ---
     VERIFICATION_CODE_CHARSET: str = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     VERIFICATION_CODE_LENGTH: int = 8
-    VERIFICATION_CODE_EXPIRY_ACCOUNT_MINUTES: int = 10
-    VERIFICATION_CODE_EXPIRY_PASSWORD_RESET_MINUTES: int = 30  # future epic
-    VERIFICATION_CODE_EXPIRY_PIN_RESET_MINUTES: int = 10  # future epic
+    # Codes are stateless (see app/services/verification.py); one global lifetime
+    # applies to account verification, password reset, and PIN reset alike.
+    VERIFICATION_CODE_EXPIRY_MINUTES: int = 10
     ACCOUNT_LIMBO_PURGE_HOURS: int = 24
 
     # --- Session Lifetimes ---

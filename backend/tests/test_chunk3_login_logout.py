@@ -11,7 +11,7 @@ _VERIFY_URL = "/api/v1/auth/verify"
 _LOGIN_URL = "/api/v1/auth/login"
 _LOGOUT_URL = "/api/v1/auth/logout"
 
-_VALID = {"email": "user@example.com", "password": "Password1", "family_name": "Silva"}
+_VALID = {"email": "user@example.com", "password": "Password123!", "family_name": "Silva"}
 
 
 def _cookie(response, name: str) -> str | None:

@@ -85,17 +85,18 @@ Create a new parent account. Issues a `pending_verification_token` cookie — no
 ```json
 {
   "email": "parent@example.com",
-  "password": "SuperSecure1",
+  "password": "SuperSecure1!",
   "family_name": "Silva"
 }
 ```
 > `family_name` is optional.
 
 **Password rules** (validated server-side, returns `422` if broken):
-- At least 8 characters
+- At least 12 characters
 - At least one uppercase letter
 - At least one lowercase letter
 - At least one digit
+- At least one special character (e.g. `!@#$%^&*()_+-=[]{};':"\|,.<>/?`)
 
 **`201 Created`** — sets `pending_verification_token` cookie
 ```json

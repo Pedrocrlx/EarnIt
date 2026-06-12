@@ -4,12 +4,20 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.jobs.purge import run_purge
-from app.models.models import EmailVerification, User
+from app.database import AsyncSessionLocal
+from app.models.models import User
+from app.services import accounts
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+async def _fetch(user_id) -> User | None:
+    # The purge task commits via its own session; read back through a fresh one so
+    # we see the committed state rather than db_session's identity-map snapshot.
+    async with AsyncSessionLocal() as session:
+        return await session.get(User, user_id)
 
 
 def _make_user(*, verified: bool = False, created_hours_ago: float = 0) -> User:
@@ -23,25 +31,6 @@ def _make_user(*, verified: bool = False, created_hours_ago: float = 0) -> User:
     )
 
 
-def _make_code(
-    user_id,
-    *,
-    expired: bool = False,
-    consumed: bool = False,
-    minutes_ago: float = 0,
-) -> EmailVerification:
-    expiry_offset = -1 if expired else settings.VERIFICATION_CODE_EXPIRY_ACCOUNT_MINUTES
-    return EmailVerification(
-        id=uuid4(),
-        user_id=user_id,
-        purpose="account_verification",
-        code_hash="hash",
-        expires_at=_now() + timedelta(minutes=expiry_offset),
-        consumed_at=_now() - timedelta(minutes=minutes_ago) if consumed else None,
-        created_at=_now() - timedelta(minutes=minutes_ago),
-    )
-
-
 async def _add(session: AsyncSession, *objects) -> None:
     for obj in objects:
         session.add(obj)
@@ -49,104 +38,54 @@ async def _add(session: AsyncSession, *objects) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Limbo user sweep
+# Limbo purge — durable background "promise" (app/services/accounts.py)
+#
+# Each registration arms a task that deletes the account once its window elapses,
+# unless verification defuses it. The deadline is derived from users.created_at,
+# so the work is restart-safe (re-armed on startup).
 # ---------------------------------------------------------------------------
 
 
-async def test_purge_deletes_unverified_users_past_window(db_session: AsyncSession):
-    stale = _make_user(verified=False, created_hours_ago=settings.ACCOUNT_LIMBO_PURGE_HOURS + 1)
-    await _add(db_session, stale)
+async def test_discard_removes_unverified_account(db_session: AsyncSession):
+    user = _make_user(verified=False)
+    await _add(db_session, user)
 
-    await run_purge(db_session)
+    deleted = await accounts._discard_if_unverified(db_session, user.id)
 
-    result = await db_session.get(User, stale.id)
-    assert result is None
-
-
-async def test_purge_keeps_unverified_users_within_window(db_session: AsyncSession):
-    fresh = _make_user(verified=False, created_hours_ago=settings.ACCOUNT_LIMBO_PURGE_HOURS - 1)
-    await _add(db_session, fresh)
-
-    await run_purge(db_session)
-
-    result = await db_session.get(User, fresh.id)
-    assert result is not None
+    assert deleted is True
+    assert await db_session.get(User, user.id) is None
 
 
-async def test_purge_keeps_verified_users_regardless_of_age(db_session: AsyncSession):
-    old_verified = _make_user(
-        verified=True, created_hours_ago=settings.ACCOUNT_LIMBO_PURGE_HOURS + 48
-    )
-    await _add(db_session, old_verified)
-
-    await run_purge(db_session)
-
-    result = await db_session.get(User, old_verified.id)
-    assert result is not None
-
-
-# ---------------------------------------------------------------------------
-# Orphaned verification code sweep
-# ---------------------------------------------------------------------------
-
-
-async def test_purge_deletes_expired_unconsumed_codes(db_session: AsyncSession):
+async def test_discard_keeps_verified_account_defused(db_session: AsyncSession):
+    # Verification stamped email_verified_at before the task fired → no-op.
     user = _make_user(verified=True)
     await _add(db_session, user)
 
-    stale_code = _make_code(user.id, expired=True, consumed=False)
-    await _add(db_session, stale_code)
+    deleted = await accounts._discard_if_unverified(db_session, user.id)
 
-    await run_purge(db_session)
-
-    result = await db_session.get(EmailVerification, stale_code.id)
-    assert result is None
+    assert deleted is False
+    assert await db_session.get(User, user.id) is not None
 
 
-async def test_purge_keeps_live_unconsumed_codes(db_session: AsyncSession):
-    user = _make_user(verified=True)
+async def test_discard_missing_account_is_noop(db_session: AsyncSession):
+    deleted = await accounts._discard_if_unverified(db_session, uuid4())
+    assert deleted is False
+
+
+async def test_purge_task_deletes_account_past_deadline(db_session: AsyncSession):
+    # created_hours_ago > window → deadline already in the past → no sleep, immediate delete.
+    user = _make_user(verified=False, created_hours_ago=settings.ACCOUNT_LIMBO_PURGE_HOURS + 1)
     await _add(db_session, user)
 
-    live_code = _make_code(user.id, expired=False, consumed=False)
-    await _add(db_session, live_code)
+    await accounts._purge_after_limbo(user.id, accounts._limbo_deadline(user.created_at))
 
-    await run_purge(db_session)
-
-    result = await db_session.get(EmailVerification, live_code.id)
-    assert result is not None
+    assert await _fetch(user.id) is None
 
 
-async def test_purge_keeps_consumed_codes_as_audit_trail(db_session: AsyncSession):
-    user = _make_user(verified=True)
+async def test_purge_task_skips_verified_account_past_deadline(db_session: AsyncSession):
+    user = _make_user(verified=True, created_hours_ago=settings.ACCOUNT_LIMBO_PURGE_HOURS + 1)
     await _add(db_session, user)
 
-    consumed_code = _make_code(user.id, expired=True, consumed=True, minutes_ago=30)
-    await _add(db_session, consumed_code)
+    await accounts._purge_after_limbo(user.id, accounts._limbo_deadline(user.created_at))
 
-    await run_purge(db_session)
-
-    result = await db_session.get(EmailVerification, consumed_code.id)
-    assert result is not None
-
-
-async def test_purge_cascades_codes_when_limbo_user_deleted(db_session: AsyncSession):
-    stale_user = _make_user(
-        verified=False, created_hours_ago=settings.ACCOUNT_LIMBO_PURGE_HOURS + 1
-    )
-    await _add(db_session, stale_user)
-
-    code = _make_code(stale_user.id, expired=False)
-    await _add(db_session, code)
-
-    # Capture IDs before expiry — accessing attributes on expired ORM objects
-    # outside an async context triggers MissingGreenlet.
-    stale_user_id = stale_user.id
-    code_id = code.id
-
-    await run_purge(db_session)
-    # PostgreSQL CASCADE removes the code at the DB level; SQLAlchemy's identity
-    # map doesn't track that — expire_all forces a fresh DB read on next access.
-    db_session.expire_all()
-
-    assert await db_session.get(User, stale_user_id) is None
-    assert await db_session.get(EmailVerification, code_id) is None
+    assert await _fetch(user.id) is not None
