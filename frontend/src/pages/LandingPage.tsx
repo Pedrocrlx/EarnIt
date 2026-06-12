@@ -50,11 +50,11 @@ export const LandingPage = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="flex flex-col w-full overflow-x-hidden">
+    <div className="flex flex-col w-full">
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="bg-white px-4 py-10 sm:px-6 lg:px-20 lg:py-16">
-          <div className="container mx-auto grid lg:grid-cols-2 gap-8 items-center">
+        <section className="bg-white mx-10 sm:px-6 lg:px-20 lg:py-16">
+          <div className="container grid lg:grid-cols-2">
             <div className="space-y-6 max-w-lg">
               <h1 className="font-montserrat text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight text-[#003514]">
                 Turn Chores into <br />
@@ -74,32 +74,12 @@ export const LandingPage = () => {
               </Button>
             </div>
 
-            <div className="relative max-w-sm lg:max-w-none mx-auto lg:mx-0">
-              <div className="bg-[#034e22] rounded-[24px] aspect-square overflow-hidden border-4 border-white shadow-xl relative">
-                {/* Decorative Elements */}
-                <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(0,53,20,0.4)_0%,transparent_100%)] z-10" />
-                <img 
-                  src="https://images.unsplash.com/photo-1502086223501-7ea244b05ffb?auto=format&fit=crop&q=80&w=800" 
-                  alt="Family happy"
-                  className="absolute inset-0 w-full h-full object-cover opacity-80"
-                />
-                
-                {/* Floating Badge 1 */}
-                <div className="absolute -top-3 -left-3 bg-white p-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-bounce-slow rotate-[-6deg] z-20">
-                  <div className="bg-[#deec5a]/20 p-1 rounded-md">
-                    <Coins className="w-4 h-4 text-[#003514]" />
-                  </div>
-                  <span className="font-bold text-[#003514] text-sm">+50 Points!</span>
-                </div>
-
-                {/* Floating Badge 2 */}
-                <div className="absolute -bottom-2 -right-2 bg-white p-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-float rotate-[3deg] z-20">
-                  <div className="bg-[#034e22]/10 p-1 rounded-md">
-                    <CheckCircle2 className="w-4 h-4 text-[#034e22]" />
-                  </div>
-                  <span className="font-bold text-[#003514] text-sm">Room Cleaned</span>
-                </div>
-              </div>
+            <div className="relative justify-self-center mx-auto w-70 h-96">
+              <img 
+                src="/mascot/avocado.webp" 
+                alt="Family happy"
+                className="object-cover"
+              />
             </div>
           </div>
         </section>
@@ -172,7 +152,7 @@ export const LandingPage = () => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-100 border-t border-black/5 py-6 px-4 sm:px-6 lg:px-20">
+          <footer className="bg-gray-100 border-t border-black/5 py-6 sm:px-6 lg:px-20">
         <div className="container mx-auto">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
             <div className="flex flex-col items-center lg:items-start gap-2">

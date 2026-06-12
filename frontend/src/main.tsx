@@ -6,7 +6,7 @@ import App from "./App.tsx";
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <head>
-      <link rel="icon" type="image/x-icon" href="/public/favicon.ico"></link>
+      <link rel="icon" type="image/x-icon" href="/favicon.ico"></link>
     </head>
     <App />
   </StrictMode>,

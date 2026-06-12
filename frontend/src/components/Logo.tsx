@@ -3,7 +3,7 @@ export const Logo = () => {
       <img
         src="/earnit_icon_black.webp"
         alt="EarnIt logo"
-        className="h-35 w-auto"
+        className="object-cover h-35 w-auto"
       />
   );
 };

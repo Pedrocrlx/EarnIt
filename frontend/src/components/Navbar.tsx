@@ -20,7 +20,7 @@ export const Navbar = () => {
 
   return (
     <header className="w-full border-b border-black/5 bg-white shadow-[0px_1px_2px_#0000000d]">
-      <div className="mx-auto flex min-h-[93px] w-full max-w-[1706px] items-center justify-between px-6 sm:px-10 lg:px-[138px]">
+      <div className="flex items-center justify-between">
         <Link to="/">
           <Logo/>
         </Link>
