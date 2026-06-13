@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import jwt
@@ -26,7 +26,7 @@ def decode_token(token: str) -> dict:
 
 
 def _make_token(user_id: UUID, scope: str, expire_minutes: int) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": str(user_id),
         "scope": scope,

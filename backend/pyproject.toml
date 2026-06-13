@@ -29,7 +29,13 @@ line-length = 100
 target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "ASYNC", "RUF"]
+ignore = [
+    "B008",   # Depends(...) in argument defaults is the standard FastAPI DI pattern
+    "RUF001", # en/em dashes are used intentionally in user-facing strings
+    "RUF002",
+    "RUF003",
+]
 
 [tool.ruff.format]
 quote-style = "double"

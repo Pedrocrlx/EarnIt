@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime
@@ -23,17 +23,17 @@ class User(SQLModel, table=True):
         default=None, nullable=True, sa_type=DateTime(timezone=True)
     )
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         nullable=False,
         sa_type=DateTime(timezone=True),
     )
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         nullable=False,
         sa_type=DateTime(timezone=True),
     )
 
-    children: list["Child"] = Relationship(back_populates="user")
+    children: list[Child] = Relationship(back_populates="user")
 
 
 class Child(SQLModel, table=True):
@@ -47,12 +47,12 @@ class Child(SQLModel, table=True):
     avatar_url: str | None = Field(default=None, nullable=True)
     is_active: bool = Field(default=True, nullable=False)
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         nullable=False,
         sa_type=DateTime(timezone=True),
     )
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         nullable=False,
         sa_type=DateTime(timezone=True),
     )

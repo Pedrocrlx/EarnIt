@@ -16,7 +16,7 @@ def _extract_user_id(payload: dict) -> UUID:
     try:
         return UUID(sub)
     except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid token") from None
 
 
 async def get_current_user(
@@ -33,7 +33,7 @@ async def get_current_user(
     try:
         payload = decode_token(access_token)
     except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
     if payload.get("scope") != "full":
         raise HTTPException(status_code=401, detail="Invalid token scope")
     user_id = _extract_user_id(payload)
@@ -58,7 +58,7 @@ async def get_pending_verification_user(
     try:
         payload = decode_token(pending_verification_token)
     except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
     if payload.get("scope") != "verify":
         raise HTTPException(status_code=401, detail="Invalid token scope")
     user_id = _extract_user_id(payload)
@@ -78,7 +78,7 @@ async def get_password_reset_user(
     try:
         payload = decode_token(password_reset_token)
     except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
     if payload.get("scope") != "password_reset":
         raise HTTPException(status_code=401, detail="Invalid token scope")
     user_id = _extract_user_id(payload)

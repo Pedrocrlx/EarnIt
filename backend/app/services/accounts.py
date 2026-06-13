@@ -13,7 +13,7 @@ restart. Accounts already past their deadline are deleted on the next tick.
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -48,7 +48,7 @@ async def _discard_if_unverified(session: AsyncSession, user_id: UUID) -> bool:
 
 
 async def _purge_after_limbo(user_id: UUID, deadline: datetime) -> None:
-    remaining = (deadline - datetime.now(timezone.utc)).total_seconds()
+    remaining = (deadline - datetime.now(UTC)).total_seconds()
     if remaining > 0:
         await asyncio.sleep(remaining)
     async with AsyncSessionLocal() as session:

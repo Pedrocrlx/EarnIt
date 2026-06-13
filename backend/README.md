@@ -37,7 +37,7 @@ When running, services are available at:
 - Mailpit (captured outgoing emails): `http://localhost:8025`
 
 ## Development Conventions
-- **Linting:** We use `ruff` for linting and formatting (`uv run ruff check .`, `uv run ruff format .`).
+- **Linting:** We use `ruff` for linting and formatting (`uv run ruff check .`, `uv run ruff format .`). The lint rule set (`pyproject.toml`) covers pycodestyle, Pyflakes, import sorting, pyupgrade, bugbear, simplify, comprehensions, async, and ruff-specific checks — with `B008` (FastAPI `Depends(...)` in argument defaults) and `RUF001-003` (ambiguous dashes in user-facing strings) intentionally ignored.
 - **Testing:** `uv run pytest tests/ -q` (requires the `db` and `mailpit` containers running).
 - **API Docs:** When running, access the interactive docs at `/docs`.
 
@@ -176,7 +176,7 @@ Implementation follows `specs/epic1/spec.md`, split into chunks:
 | 3 | `POST /auth/login`, `POST /auth/logout` | ✅ Done |
 | 4 | `POST /auth/pin`, `POST /auth/verify-pin`, `POST /auth/forgot-pin`, `POST /auth/reset-pin` (parental PIN gate + reset) | ✅ Done |
 | 5 | `POST/PATCH /profiles/children`, `GET /profiles/family` | ✅ Done |
-| 6 | Final ruff lint pass across all modules | ⏳ Not started |
+| 6 | Final ruff lint pass across all modules | ✅ Done |
 | 7 | `POST /auth/forgot-password`, `POST /auth/forgot-password/verify`, `POST /auth/reset-password` | ✅ Done |
 
 All implemented endpoints are covered by tests in `tests/` (one file per chunk, e.g. `test_chunk2_registration.py`, `test_chunk3_login_logout.py`).

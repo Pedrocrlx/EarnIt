@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import jwt
@@ -18,7 +18,7 @@ from app.services.verification import core
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +206,7 @@ async def test_get_current_user_valid(db_session: AsyncSession):
         id=uuid4(),
         email=f"dep-{uuid4()}@example.com",
         password_hash="hash",
-        email_verified_at=datetime.now(timezone.utc),
+        email_verified_at=datetime.now(UTC),
     )
     db_session.add(user)
     await db_session.commit()
@@ -247,7 +247,7 @@ async def test_get_current_user_disabled_account_raises(db_session: AsyncSession
         email=f"disabled-{uuid4()}@example.com",
         password_hash="hash",
         is_active=False,
-        email_verified_at=datetime.now(timezone.utc),
+        email_verified_at=datetime.now(UTC),
     )
     db_session.add(user)
     await db_session.commit()

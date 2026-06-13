@@ -14,7 +14,7 @@ what to pre-check, what to stamp on success) lives in sibling modules such as
 
 import hashlib
 import hmac
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from app.config import settings
@@ -26,7 +26,7 @@ PURPOSE_PIN_RESET = "pin_reset"
 
 def now() -> datetime:
     """Single UTC clock source, so callers and the engine agree on the instant."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def generate_code(user_id: UUID, purpose: str, anchor: datetime) -> str:

@@ -24,7 +24,7 @@ async def db_engine():
 
 
 @pytest_asyncio.fixture
-async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
+async def db_session(db_engine) -> AsyncGenerator[AsyncSession]:
     session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
     async with session_factory() as session:
         yield session
@@ -56,7 +56,7 @@ def mock_mail(monkeypatch):
 
 
 @pytest_asyncio.fixture
-async def client(db_engine) -> AsyncGenerator[AsyncClient, None]:
+async def client(db_engine) -> AsyncGenerator[AsyncClient]:
     """HTTP test client wired to the FastAPI app with the test DB session override."""
     from main import app  # imported here to avoid circular issues at module load
 
