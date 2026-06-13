@@ -16,12 +16,12 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import AsyncSessionLocal
-from app.models.models import User
+from app.models.models import Child, User
 
 # Strong references to in-flight tasks, keyed by user id. asyncio keeps only weak
 # refs, so without this a task can be garbage-collected mid-sleep. Keying by user
@@ -90,3 +90,16 @@ async def cancel_pending_purges() -> None:
         task.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
     _pending.clear()
+
+
+async def maybe_complete_onboarding(user: User, session: AsyncSession) -> None:
+    """Flip ``onboarding_completed`` once the parent PIN is set and ≥1 child exists.
+
+    One-way: never reverts once set.
+    """
+    if user.onboarding_completed or user.parent_pin_hash is None:
+        return
+    count = await session.scalar(select(func.count()).where(Child.user_id == user.id))
+    if count and count >= 1:
+        user.onboarding_completed = True
+        await session.commit()

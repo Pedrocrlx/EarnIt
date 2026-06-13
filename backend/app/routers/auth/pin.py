@@ -1,25 +1,16 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.dependencies.auth import get_current_user
-from app.models.models import Child, User
+from app.models.models import User
 from app.schemas.auth import PinRequest, ResetPinRequest
 from app.security.hashing import hash_secret, verify_secret
+from app.services.accounts import maybe_complete_onboarding
 from app.services.verification import core, pin_reset
 
 router = APIRouter()
-
-
-async def _maybe_complete_onboarding(user: User, session: AsyncSession) -> None:
-    if user.onboarding_completed or user.parent_pin_hash is None:
-        return
-    count = await session.scalar(select(func.count()).where(Child.user_id == user.id))
-    if count and count >= 1:
-        user.onboarding_completed = True
-        await session.commit()
 
 
 @router.post("/pin")
@@ -32,7 +23,7 @@ async def set_pin(
     current_user.pin_set_at = core.now()
     await session.commit()
 
-    await _maybe_complete_onboarding(current_user, session)
+    await maybe_complete_onboarding(current_user, session)
 
     return {"status": "success", "message": "Parental security PIN established."}
 
@@ -99,6 +90,6 @@ async def reset_pin(
     current_user.updated_at = now
     await session.commit()
 
-    await _maybe_complete_onboarding(current_user, session)
+    await maybe_complete_onboarding(current_user, session)
 
     return {"status": "success", "message": "PIN has been reset."}

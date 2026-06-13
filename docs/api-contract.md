@@ -453,6 +453,12 @@ Add a child profile to the family.
 ```
 > The cap is 10 children per account, counting active and deactivated profiles.
 
+| Status | Meaning |
+|---|---|
+| `401` | No valid `access_token` session |
+| `422` | `name` is missing/empty, or fields fail validation |
+| `409` | `children_cap_reached` — maximum number of child profiles reached |
+
 ---
 
 ### `PATCH /api/v1/profiles/children/{child_id}`
@@ -473,6 +479,7 @@ Soft-deactivate a child profile. The record is kept and still counts toward the 
 
 | Status | Meaning |
 |---|---|
+| `401` | No valid `access_token` session |
 | `404` | Child not found or belongs to another user |
 | `409` | Child is already inactive |
 
@@ -501,6 +508,11 @@ Fetch the authenticated user's profile and all their child profiles.
   ]
 }
 ```
+> `children` includes both active and deactivated profiles — filter on `is_active` client-side if needed.
+
+| Status | Meaning |
+|---|---|
+| `401` | No valid `access_token` session |
 
 ---
 

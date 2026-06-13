@@ -12,6 +12,7 @@ from app.config import settings
 from app.database import get_session
 from app.mail import mail
 from app.routers import auth as auth_router
+from app.routers import profiles as profiles_router
 from app.services import accounts
 
 
@@ -49,6 +50,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 
 app.include_router(auth_router.router)
+app.include_router(profiles_router.router)
 
 # Allow the frontend dev servers and any origins listed in settings to send
 # credentialed requests (cookies).

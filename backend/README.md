@@ -51,19 +51,23 @@ backend/
 │   ├── database.py           # Async SQLAlchemy engine + get_session dependency
 │   ├── mail.py                # fastapi-mail config (SMTP + Jinja2 templates)
 │   ├── models/models.py      # SQLModel tables: User, Child
-│   ├── schemas/auth.py       # Pydantic request/response schemas + validators
+│   ├── schemas/
+│   │   ├── auth.py            # Pydantic request/response schemas + validators
+│   │   └── profiles.py        # Child profile request schemas
 │   ├── security/
 │   │   ├── hashing.py        # bcrypt hashing for passwords/PINs (non-blocking)
 │   │   └── tokens.py         # JWT creation/decoding (access + pending-verification)
 │   ├── services/
-│   │   ├── accounts.py       # Account lifecycle: durable limbo-purge background task
+│   │   ├── accounts.py       # Account lifecycle: limbo-purge task + onboarding-completion trigger
 │   │   └── verification/     # Stateless verification codes (no DB rows)
 │   │       ├── core.py       # global HMAC engine (generate/verify/expiry/cooldown)
 │   │       ├── account.py    # account-verification orchestration (+ email)
 │   │       ├── password_reset.py  # password-reset orchestration (+ email)
 │   │       └── pin_reset.py  # PIN-reset orchestration (+ email)
 │   ├── dependencies/auth.py  # get_current_user / get_pending_verification_user / get_password_reset_user guards
-│   ├── routers/auth/         # /api/v1/auth/* endpoints (register, verify, login, logout, password_reset, pin)
+│   ├── routers/
+│   │   ├── auth/              # /api/v1/auth/* endpoints (register, verify, login, logout, password_reset, pin)
+│   │   └── profiles.py        # /api/v1/profiles/* endpoints (children, family)
 │   └── templates/email/      # HTML email templates (verification code, etc.)
 ├── alembic/                   # DB migrations
 └── tests/                     # pytest suite (httpx AsyncClient against the app)
@@ -149,6 +153,17 @@ Every flow shares one **stateless verification code** primitive (`app/services/v
 3. **`POST /api/v1/auth/reset-password`** `{ new_password }` *(`password_reset_token` cookie required)*
    - Validates the new password against the same policy as registration, sets `password_hash`, and bumps `updated_at` (which also invalidates the now-used code). Clears the `password_reset_token` cookie. → `200`
 
+### 4. Child profiles & family view — ✅ Implemented
+
+> All three routes require a full `access_token` session. `MAX_CHILDREN_PER_USER` (default 10) caps `children` rows per parent, counting active and deactivated profiles alike.
+
+1. **`POST /api/v1/profiles/children`** `{ name, birth_date?, avatar_url? }` *(`access_token` required)*
+   - `409 children_cap_reached` if the parent already has `MAX_CHILDREN_PER_USER` children (active + inactive). Otherwise creates the `Child` row and re-evaluates the onboarding trigger. → `201`
+2. **`PATCH /api/v1/profiles/children/{child_id}`** *(`access_token` required)*
+   - `404` if the child doesn't exist or belongs to another user · `409` if already inactive. On success, sets `is_active = false` (soft-delete; still counts toward the cap). → `200`
+3. **`GET /api/v1/profiles/family`** *(`access_token` required)*
+   - Returns the parent's profile (`id`, `family_name`, `onboarding_completed`) plus all `children` rows, active and inactive. → `200`
+
 ## Epic 1 (Authentication & Profiles) — Progress
 
 Implementation follows `specs/epic1/spec.md`, split into chunks:
@@ -160,7 +175,7 @@ Implementation follows `specs/epic1/spec.md`, split into chunks:
 | 2 | `POST /auth/register`, `POST /auth/verify`, `POST /auth/verify/resend` | ✅ Done |
 | 3 | `POST /auth/login`, `POST /auth/logout` | ✅ Done |
 | 4 | `POST /auth/pin`, `POST /auth/verify-pin`, `POST /auth/forgot-pin`, `POST /auth/reset-pin` (parental PIN gate + reset) | ✅ Done |
-| 5 | `POST/PATCH /profiles/children`, `GET /profiles/family` | ⏳ Not started |
+| 5 | `POST/PATCH /profiles/children`, `GET /profiles/family` | ✅ Done |
 | 6 | Final ruff lint pass across all modules | ⏳ Not started |
 | 7 | `POST /auth/forgot-password`, `POST /auth/forgot-password/verify`, `POST /auth/reset-password` | ✅ Done |
 
