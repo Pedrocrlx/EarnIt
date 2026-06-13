@@ -2,42 +2,15 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-_REGISTER_URL = "/api/v1/auth/register"
-_VERIFY_URL = "/api/v1/auth/verify"
+from tests.conftest import VALID_USER, register_and_verify
+
 _PIN_URL = "/api/v1/auth/pin"
 _VERIFY_PIN_URL = "/api/v1/auth/verify-pin"
 _FORGOT_PIN_URL = "/api/v1/auth/forgot-pin"
 _RESET_PIN_URL = "/api/v1/auth/reset-pin"
 
-_VALID = {"email": "user@example.com", "password": "Password123!", "family_name": "Silva"}
 _PIN = "1234"
 _NEW_PIN = "5678"
-
-
-def _cookie(response, name: str) -> str | None:
-    return response.cookies.get(name) or (
-        next(
-            (
-                part.split("=", 1)[1].split(";")[0]
-                for part in response.headers.get("set-cookie", "").split(",")
-                if f"{name}=" in part
-            ),
-            None,
-        )
-    )
-
-
-async def _register_and_verify(client: AsyncClient, mock_mail) -> str:
-    """Register + verify an account, returning the access_token cookie value."""
-    reg = await client.post(_REGISTER_URL, json=_VALID)
-    token = _cookie(reg, "pending_verification_token")
-    code = mock_mail[0].template_body["code"]
-    verify_res = await client.post(
-        _VERIFY_URL,
-        json={"code": code},
-        cookies={"pending_verification_token": token},
-    )
-    return _cookie(verify_res, "access_token")
 
 
 # ---------------------------------------------------------------------------
@@ -48,14 +21,15 @@ async def _register_and_verify(client: AsyncClient, mock_mail) -> str:
 async def test_set_pin_with_no_prior_pin_returns_200(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
 
     res = await client.post(_PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token})
     assert res.status_code == 200
     assert res.json() == {"status": "success", "message": "Parental security PIN established."}
 
     result = await db_session.execute(
-        text("SELECT parent_pin_hash FROM users WHERE email = :email"), {"email": _VALID["email"]}
+        text("SELECT parent_pin_hash FROM users WHERE email = :email"),
+        {"email": VALID_USER["email"]},
     )
     assert result.scalar_one() is not None
 
@@ -63,13 +37,13 @@ async def test_set_pin_with_no_prior_pin_returns_200(
 async def test_set_pin_update_existing_changes_hash(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
 
     await client.post(_PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token})
     first_hash = (
         await db_session.execute(
             text("SELECT parent_pin_hash FROM users WHERE email = :email"),
-            {"email": _VALID["email"]},
+            {"email": VALID_USER["email"]},
         )
     ).scalar_one()
 
@@ -80,14 +54,14 @@ async def test_set_pin_update_existing_changes_hash(
     second_hash = (
         await db_session.execute(
             text("SELECT parent_pin_hash FROM users WHERE email = :email"),
-            {"email": _VALID["email"]},
+            {"email": VALID_USER["email"]},
         )
     ).scalar_one()
     assert first_hash != second_hash
 
 
 async def test_set_pin_invalid_format_returns_422(client: AsyncClient, mock_mail):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
 
     res = await client.post(_PIN_URL, json={"pin": "12"}, cookies={"access_token": access_token})
     assert res.status_code == 422
@@ -96,23 +70,23 @@ async def test_set_pin_invalid_format_returns_422(client: AsyncClient, mock_mail
 async def test_onboarding_completes_only_with_pin_and_child(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
 
     # PIN set, but no children yet — onboarding not complete.
     await client.post(_PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token})
     onboarding = (
         await db_session.execute(
             text("SELECT onboarding_completed FROM users WHERE email = :email"),
-            {"email": _VALID["email"]},
+            {"email": VALID_USER["email"]},
         )
     ).scalar_one()
     assert onboarding is False
 
-    # Insert a child directly (this test predates the Chunk 6 profile endpoints,
-    # and inserting directly keeps this chunk's tests independent of them).
+    # Insert a child directly — keeps these PIN tests independent of the
+    # profile endpoints (see test_profiles.py).
     user_id = (
         await db_session.execute(
-            text("SELECT id FROM users WHERE email = :email"), {"email": _VALID["email"]}
+            text("SELECT id FROM users WHERE email = :email"), {"email": VALID_USER["email"]}
         )
     ).scalar_one()
     await db_session.execute(
@@ -132,7 +106,7 @@ async def test_onboarding_completes_only_with_pin_and_child(
     onboarding = (
         await db_session.execute(
             text("SELECT onboarding_completed FROM users WHERE email = :email"),
-            {"email": _VALID["email"]},
+            {"email": VALID_USER["email"]},
         )
     ).scalar_one()
     assert onboarding is True
@@ -149,7 +123,7 @@ async def test_pin_without_access_token_returns_401(client: AsyncClient):
 
 
 async def test_verify_pin_before_set_returns_428(client: AsyncClient, mock_mail):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
 
     res = await client.post(
         _VERIFY_PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token}
@@ -158,7 +132,7 @@ async def test_verify_pin_before_set_returns_428(client: AsyncClient, mock_mail)
 
 
 async def test_verify_pin_correct_returns_200(client: AsyncClient, mock_mail):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
     await client.post(_PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token})
 
     res = await client.post(
@@ -169,7 +143,7 @@ async def test_verify_pin_correct_returns_200(client: AsyncClient, mock_mail):
 
 
 async def test_verify_pin_wrong_returns_401(client: AsyncClient, mock_mail):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
     await client.post(_PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token})
 
     res = await client.post(
@@ -191,7 +165,7 @@ async def test_verify_pin_without_access_token_returns_401(client: AsyncClient):
 async def test_forgot_pin_before_expiry_returns_429_with_retry_after(
     client: AsyncClient, mock_mail
 ):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
     await client.post(_PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token})
 
     res = await client.post(_FORGOT_PIN_URL, cookies={"access_token": access_token})
@@ -204,7 +178,7 @@ async def test_forgot_pin_before_expiry_returns_429_with_retry_after(
 async def test_forgot_pin_after_expiry_returns_200_with_new_expires_at(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
     await client.post(_PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token})
 
     await db_session.execute(text("UPDATE users SET updated_at = NOW() - INTERVAL '11 minutes'"))
@@ -232,7 +206,7 @@ async def test_forgot_pin_without_access_token_returns_401(client: AsyncClient):
 async def test_reset_pin_correct_code_allows_new_pin_verify(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
     await client.post(_PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token})
 
     await db_session.execute(text("UPDATE users SET updated_at = NOW() - INTERVAL '11 minutes'"))
@@ -265,7 +239,7 @@ async def test_reset_pin_correct_code_allows_new_pin_verify(
 async def test_reset_pin_wrong_code_returns_400(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
     await client.post(_PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token})
 
     await db_session.execute(text("UPDATE users SET updated_at = NOW() - INTERVAL '11 minutes'"))
@@ -283,7 +257,7 @@ async def test_reset_pin_wrong_code_returns_400(
 async def test_reset_pin_expired_code_returns_410(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
     await client.post(_PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token})
 
     await db_session.execute(text("UPDATE users SET updated_at = NOW() - INTERVAL '11 minutes'"))

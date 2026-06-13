@@ -3,42 +3,14 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from tests.conftest import VALID_USER, register_and_verify
 
-_REGISTER_URL = "/api/v1/auth/register"
-_VERIFY_URL = "/api/v1/auth/verify"
 _PIN_URL = "/api/v1/auth/pin"
 _CHILDREN_URL = "/api/v1/profiles/children"
 _FAMILY_URL = "/api/v1/profiles/family"
 
-_VALID = {"email": "user@example.com", "password": "Password123!", "family_name": "Silva"}
 _OTHER = {"email": "other@example.com", "password": "Password123!", "family_name": "Costa"}
 _PIN = "1234"
-
-
-def _cookie(response, name: str) -> str | None:
-    return response.cookies.get(name) or (
-        next(
-            (
-                part.split("=", 1)[1].split(";")[0]
-                for part in response.headers.get("set-cookie", "").split(",")
-                if f"{name}=" in part
-            ),
-            None,
-        )
-    )
-
-
-async def _register_and_verify(client: AsyncClient, mock_mail, payload=_VALID) -> str:
-    """Register + verify an account, returning the access_token cookie value."""
-    reg = await client.post(_REGISTER_URL, json=payload)
-    token = _cookie(reg, "pending_verification_token")
-    code = mock_mail[-1].template_body["code"]
-    verify_res = await client.post(
-        _VERIFY_URL,
-        json={"code": code},
-        cookies={"pending_verification_token": token},
-    )
-    return _cookie(verify_res, "access_token")
 
 
 # ---------------------------------------------------------------------------
@@ -47,7 +19,7 @@ async def _register_and_verify(client: AsyncClient, mock_mail, payload=_VALID) -
 
 
 async def test_create_child_returns_201(client: AsyncClient, mock_mail):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
 
     res = await client.post(
         _CHILDREN_URL,
@@ -64,7 +36,7 @@ async def test_create_child_returns_201(client: AsyncClient, mock_mail):
 
 
 async def test_create_child_missing_name_returns_422(client: AsyncClient, mock_mail):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
 
     res = await client.post(_CHILDREN_URL, json={}, cookies={"access_token": access_token})
     assert res.status_code == 422
@@ -77,7 +49,7 @@ async def test_create_child_without_access_token_returns_401(client: AsyncClient
 
 async def test_children_cap_enforced(client: AsyncClient, mock_mail, monkeypatch):
     monkeypatch.setattr(settings, "MAX_CHILDREN_PER_USER", 2)
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
 
     res1 = await client.post(
         _CHILDREN_URL, json={"name": "Leo"}, cookies={"access_token": access_token}
@@ -102,7 +74,7 @@ async def test_deactivated_children_still_count_toward_cap(
     client: AsyncClient, mock_mail, monkeypatch
 ):
     monkeypatch.setattr(settings, "MAX_CHILDREN_PER_USER", 2)
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
 
     res1 = await client.post(
         _CHILDREN_URL, json={"name": "Leo"}, cookies={"access_token": access_token}
@@ -127,14 +99,14 @@ async def test_deactivated_children_still_count_toward_cap(
 async def test_onboarding_completes_when_child_created_after_pin(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
 
     # PIN set, but no children yet — onboarding not complete.
     await client.post(_PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token})
     onboarding = (
         await db_session.execute(
             text("SELECT onboarding_completed FROM users WHERE email = :email"),
-            {"email": _VALID["email"]},
+            {"email": VALID_USER["email"]},
         )
     ).scalar_one()
     assert onboarding is False
@@ -147,7 +119,7 @@ async def test_onboarding_completes_when_child_created_after_pin(
     onboarding = (
         await db_session.execute(
             text("SELECT onboarding_completed FROM users WHERE email = :email"),
-            {"email": _VALID["email"]},
+            {"email": VALID_USER["email"]},
         )
     ).scalar_one()
     assert onboarding is True
@@ -159,7 +131,7 @@ async def test_onboarding_completes_when_child_created_after_pin(
 
 
 async def test_get_family_returns_profile_and_children(client: AsyncClient, mock_mail):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
 
     create_res = await client.post(
         _CHILDREN_URL, json={"name": "Leo"}, cookies={"access_token": access_token}
@@ -172,7 +144,7 @@ async def test_get_family_returns_profile_and_children(client: AsyncClient, mock
     res = await client.get(_FAMILY_URL, cookies={"access_token": access_token})
     assert res.status_code == 200
     body = res.json()
-    assert body["family_name"] == _VALID["family_name"]
+    assert body["family_name"] == VALID_USER["family_name"]
     assert "onboarding_completed" in body
     names = {c["name"]: c["is_active"] for c in body["children"]}
     assert names == {"Leo": False, "Mia": True}
@@ -189,7 +161,7 @@ async def test_get_family_without_access_token_returns_401(client: AsyncClient):
 
 
 async def test_deactivate_active_child_returns_200(client: AsyncClient, mock_mail):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
 
     create_res = await client.post(
         _CHILDREN_URL, json={"name": "Leo"}, cookies={"access_token": access_token}
@@ -207,7 +179,7 @@ async def test_deactivate_active_child_returns_200(client: AsyncClient, mock_mai
 
 
 async def test_deactivate_already_inactive_child_returns_409(client: AsyncClient, mock_mail):
-    access_token = await _register_and_verify(client, mock_mail)
+    access_token = await register_and_verify(client, mock_mail)
 
     create_res = await client.post(
         _CHILDREN_URL, json={"name": "Leo"}, cookies={"access_token": access_token}
@@ -220,8 +192,8 @@ async def test_deactivate_already_inactive_child_returns_409(client: AsyncClient
 
 
 async def test_deactivate_child_of_another_user_returns_404(client: AsyncClient, mock_mail):
-    access_token = await _register_and_verify(client, mock_mail)
-    other_access_token = await _register_and_verify(client, mock_mail, payload=_OTHER)
+    access_token = await register_and_verify(client, mock_mail)
+    other_access_token = await register_and_verify(client, mock_mail, **_OTHER)
 
     create_res = await client.post(
         _CHILDREN_URL, json={"name": "Leo"}, cookies={"access_token": access_token}

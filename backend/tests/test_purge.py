@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -89,3 +90,21 @@ async def test_purge_task_skips_verified_account_past_deadline(db_session: Async
     await accounts._purge_after_limbo(user.id, accounts._limbo_deadline(user.created_at))
 
     assert await _fetch(user.id) is not None
+
+
+async def test_rearm_pending_purges_schedules_limbo_accounts_only(db_session: AsyncSession):
+    # Past its deadline already, so the rearmed task fires (and deletes) immediately.
+    limbo_user = _make_user(
+        verified=False, created_hours_ago=settings.ACCOUNT_LIMBO_PURGE_HOURS + 1
+    )
+    verified_user = _make_user(
+        verified=True, created_hours_ago=settings.ACCOUNT_LIMBO_PURGE_HOURS + 1
+    )
+    await _add(db_session, limbo_user, verified_user)
+
+    await accounts.rearm_pending_purges()
+    assert limbo_user.id in accounts._pending
+    await asyncio.gather(*accounts._pending.values(), return_exceptions=True)
+
+    assert await _fetch(limbo_user.id) is None
+    assert await _fetch(verified_user.id) is not None

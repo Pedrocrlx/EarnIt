@@ -38,7 +38,7 @@ When running, services are available at:
 
 ## Development Conventions
 - **Linting:** We use `ruff` for linting and formatting (`uv run ruff check .`, `uv run ruff format .`). The lint rule set (`pyproject.toml`) covers pycodestyle, Pyflakes, import sorting, pyupgrade, bugbear, simplify, comprehensions, async, and ruff-specific checks — with `B008` (FastAPI `Depends(...)` in argument defaults) and `RUF001-003` (ambiguous dashes in user-facing strings) intentionally ignored.
-- **Testing:** `uv run pytest tests/ -q` (requires the `db` and `mailpit` containers running).
+- **Testing:** `uv run pytest tests/ -q` (requires the `db` and `mailpit` containers running). Coverage: `uv run pytest --cov=app --cov-report=term-missing`.
 - **API Docs:** When running, access the interactive docs at `/docs`.
 
 ## Project Structure
@@ -179,7 +179,7 @@ Implementation follows `specs/epic1/spec.md`, split into chunks:
 | 6 | `POST/PATCH /profiles/children`, `GET /profiles/family` | ✅ Done |
 | 7 | Final ruff lint pass across all modules | ✅ Done |
 
-All implemented endpoints are covered by tests in `tests/` (one file per chunk, e.g. `test_chunk2_registration.py`, `test_chunk3_login_logout.py`).
+All implemented endpoints are covered by tests in `tests/` (one file per feature, e.g. `test_registration.py`, `test_login_logout.py`). `tests/conftest.py` centralizes shared fixtures plus the example account (`VALID_USER`), cookie-extraction (`extract_cookie`), and register+verify (`register_and_verify`) helpers used across feature files.
 
 ## Connecting the Frontend
 
