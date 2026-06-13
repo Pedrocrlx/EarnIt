@@ -60,13 +60,27 @@ class ResetPasswordRequest(BaseModel):
         return _validate_password_strength(v)
 
 
+def _validate_pin_format(v: str) -> str:
+    pattern = r"\d{" + str(settings.PARENT_PIN_LENGTH) + r"}"
+    if not re.fullmatch(pattern, v):
+        raise ValueError(f"PIN must be exactly {settings.PARENT_PIN_LENGTH} digits (0–9)")
+    return v
+
+
 class PinRequest(BaseModel):
     pin: str
 
     @field_validator("pin")
     @classmethod
     def validate_pin(cls, v: str) -> str:
-        pattern = r"\d{" + str(settings.PARENT_PIN_LENGTH) + r"}"
-        if not re.fullmatch(pattern, v):
-            raise ValueError(f"PIN must be exactly {settings.PARENT_PIN_LENGTH} digits (0–9)")
-        return v
+        return _validate_pin_format(v)
+
+
+class ResetPinRequest(BaseModel):
+    code: str
+    new_pin: str
+
+    @field_validator("new_pin")
+    @classmethod
+    def validate_new_pin(cls, v: str) -> str:
+        return _validate_pin_format(v)

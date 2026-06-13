@@ -560,7 +560,9 @@ Once both conditions are satisfied the flag is flipped and never reverts. Onboar
 
 * Implement `POST /api/v1/auth/pin` — upsert `parent_pin_hash`, stamp `pin_set_at`, and evaluate the onboarding completion trigger (`parent_pin_hash IS NOT NULL AND children count >= 1`); flip `users.onboarding_completed` if both conditions are met.
 * Implement `POST /api/v1/auth/verify-pin` — compare the submitted PIN against `parent_pin_hash` and return the scoped confirmation response used by the frontend to unlock the parent dashboard.
-* **Tests:** setup with no prior PIN → `200`; update existing PIN → `200`; invalid PIN format → `400`; verify correct PIN → `200`; verify wrong PIN → `401`; verify before PIN is set → `428`.
+* Implement `POST /api/v1/auth/forgot-pin` — reusing the code primitive with `purpose = 'pin_reset'` (requires a full `access_token` session, so no anti-enumeration concern applies). Rejects with `429` + `retry_after_seconds` while the current window is open; otherwise rotates the anchor and dispatches a `pin_reset` code.
+* Implement `POST /api/v1/auth/reset-pin` `{ code, new_pin }` — `410` if the window elapsed, `400` if the code doesn't match; on success sets `parent_pin_hash` + `pin_set_at`, bumps `updated_at` (invalidating the code), and re-evaluates the onboarding trigger.
+* **Tests:** setup with no prior PIN → `200`; update existing PIN → `200`; invalid PIN format → `422` (Pydantic validation, consistent with the password-policy checks in Chunk 2); `onboarding_completed` flips to `true` only once both a PIN is set and ≥1 `children` row exists; verify correct PIN → `200`; verify wrong PIN → `401`; verify before PIN is set → `428`; `forgot-pin` while window is open → `429` with `retry_after_seconds`; `forgot-pin` after expiry → `200` with fresh `expires_at` and one `pin_reset` email; `reset-pin` with correct code → `200` (old PIN rejected, new PIN accepted by `/verify-pin`); wrong code → `400`; expired code → `410`.
 
 ### **Chunk 5: Child Profiles & Family View**
 

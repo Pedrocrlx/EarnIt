@@ -312,7 +312,7 @@ Set or update the parental PIN. This is a create-or-update — calling it again 
 ```json
 { "pin": "1234" }
 ```
-> PIN must be exactly 4 digits (`0–9`). Returns `400` otherwise.
+> PIN must be exactly 4 digits (`0–9`). Returns `422` otherwise.
 
 **`200 OK`**
 ```json
@@ -323,6 +323,11 @@ Set or update the parental PIN. This is a create-or-update — calling it again 
 ```
 
 After this call succeeds, if at least one child profile also exists, `onboarding_completed` flips to `true` on the user record — the frontend can detect this on the next `GET /profiles/family` call.
+
+| Status | Meaning |
+|---|---|
+| `401` | No valid `access_token` session |
+| `422` | PIN is not exactly 4 digits |
 
 ---
 
@@ -347,8 +352,67 @@ Validate the PIN to unlock the parent dashboard. **No new cookie is issued.**
 
 | Status | Meaning |
 |---|---|
-| `401` | Wrong PIN |
+| `401` | Wrong PIN, or no valid `access_token` session |
 | `428` | PIN has not been set yet |
+
+---
+
+### `POST /api/v1/auth/forgot-pin`
+
+Request a PIN-reset code, emailed to the account's address. The caller is already logged in (just locked out of the parent dashboard), so there's no anti-enumeration concern here — unlike `/auth/forgot-password`.
+
+> **Auth required:** `access_token` cookie
+
+**`200 OK`**
+```json
+{
+  "status": "success",
+  "message": "A PIN reset code has been sent.",
+  "expires_at": "2026-06-08T12:44:56Z"
+}
+```
+
+**`429 Too Many Requests`** — current code is still valid, show a countdown
+```json
+{
+  "status": "error",
+  "message": "A PIN reset code is still active. Please wait before requesting another.",
+  "retry_after_seconds": 312
+}
+```
+
+| Status | Meaning |
+|---|---|
+| `401` | No valid `access_token` session |
+| `429` | A code is still active — see `retry_after_seconds` |
+
+---
+
+### `POST /api/v1/auth/reset-pin`
+
+Redeem the 8-character code from the PIN-reset email and set a new parental PIN.
+
+> **Auth required:** `access_token` cookie
+
+**Request**
+```json
+{ "code": "K7H29XQF", "new_pin": "5678" }
+```
+> `new_pin` must be exactly 4 digits (`0–9`). Returns `422` otherwise.
+
+**`200 OK`**
+```json
+{
+  "status": "success",
+  "message": "PIN has been reset."
+}
+```
+
+| Status | Meaning |
+|---|---|
+| `400` | Code is wrong |
+| `410` | Code has expired — call `/auth/forgot-pin` again |
+| `422` | `new_pin` is not exactly 4 digits |
 
 ---
 

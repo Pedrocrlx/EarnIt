@@ -60,9 +60,10 @@ backend/
 │   │   └── verification/     # Stateless verification codes (no DB rows)
 │   │       ├── core.py       # global HMAC engine (generate/verify/expiry/cooldown)
 │   │       ├── account.py    # account-verification orchestration (+ email)
-│   │       └── password_reset.py  # password-reset orchestration (+ email)
+│   │       ├── password_reset.py  # password-reset orchestration (+ email)
+│   │       └── pin_reset.py  # PIN-reset orchestration (+ email)
 │   ├── dependencies/auth.py  # get_current_user / get_pending_verification_user / get_password_reset_user guards
-│   ├── routers/auth/         # /api/v1/auth/* endpoints (register, verify, login, logout, password_reset)
+│   ├── routers/auth/         # /api/v1/auth/* endpoints (register, verify, login, logout, password_reset, pin)
 │   └── templates/email/      # HTML email templates (verification code, etc.)
 ├── alembic/                   # DB migrations
 └── tests/                     # pytest suite (httpx AsyncClient against the app)
@@ -122,7 +123,20 @@ Every flow shares one **stateless verification code** primitive (`app/services/v
    - `429` (with `retry_after_seconds`) while the current code is still live; otherwise rotates the anchor → new code, emailed off the response path. → `200`
 4. **Abandoned verification:** logging in with correct credentials on a limbo account returns `403 account_unverified` + a fresh pending cookie, re-entering this flow. If the limbo window passes with no verification, the purge task deletes the account and frees the email — *as if never registered*.
 
-### 2. Forgot password — ✅ Implemented
+### 2. Parental PIN & Forgot PIN — ✅ Implemented
+
+> The parental PIN gates the child→parent dashboard switch on a shared device. Forgot-PIN reuses the code primitive with `purpose = pin_reset` — since the caller already holds a full `access_token` session, there's no anti-enumeration concern.
+
+1. **`POST /api/v1/auth/pin`** `{ pin }` *(`access_token` required)*
+   - Upserts `parent_pin_hash` (bcrypt) and stamps `pin_set_at`. Evaluates the onboarding trigger (`parent_pin_hash IS NOT NULL AND children count >= 1`) and flips `onboarding_completed` if newly satisfied. → `200`
+2. **`POST /api/v1/auth/verify-pin`** `{ pin }` *(`access_token` required)*
+   - `428` if no PIN has been set yet · `401` if the PIN doesn't match. On success returns `{"authenticated": true}` — **no new cookie is issued**; this is purely a green light for the frontend to render the parent dashboard. → `200`
+3. **`POST /api/v1/auth/forgot-pin`** *(`access_token` required)*
+   - `429` (with `retry_after_seconds`) while the current `pin_reset` code is still live; otherwise rotates the anchor and emails a fresh code. → `200`
+4. **`POST /api/v1/auth/reset-pin`** `{ code, new_pin }` *(`access_token` required)*
+   - `410` if the 10-min window elapsed · `400` if the code doesn't match. On success: sets `parent_pin_hash` + `pin_set_at`, bumps `updated_at` (invalidating the code), and re-evaluates the onboarding trigger. → `200`
+
+### 3. Forgot password — ✅ Implemented
 
 > Reuses the code primitive with `purpose = password_reset`. Three steps: request a code by email → verify the code → set a new password.
 
@@ -135,16 +149,6 @@ Every flow shares one **stateless verification code** primitive (`app/services/v
 3. **`POST /api/v1/auth/reset-password`** `{ new_password }` *(`password_reset_token` cookie required)*
    - Validates the new password against the same policy as registration, sets `password_hash`, and bumps `updated_at` (which also invalidates the now-used code). Clears the `password_reset_token` cookie. → `200`
 
-### 3. Forgot PIN — 🔜 Planned (design, not yet implemented)
-
-> The parental PIN only gates the child→parent dashboard switch, so the user is normally still logged in. Reuses the code primitive with `purpose = pin_reset`. Intended endpoints — **full `access_token` session required**:
-
-1. **`POST /api/v1/auth/forgot-pin`** *(auth required)*
-   - Rotate the anchor and email a `pin_reset` code to the account's email. Cooldown as above.
-2. **`POST /api/v1/auth/reset-pin`** `{ code, new_pin }` *(auth required)*
-   - `410` / `400` as above · validates the PIN format (`^[0-9]{PARENT_PIN_LENGTH}$`).
-   - On success: set `parent_pin_hash` + `pin_set_at`, bump `updated_at`. → `200`
-
 ## Epic 1 (Authentication & Profiles) — Progress
 
 Implementation follows `specs/epic1/spec.md`, split into chunks:
@@ -155,7 +159,7 @@ Implementation follows `specs/epic1/spec.md`, split into chunks:
 | 1 | Crypto & auth utilities: JWT tokens, bcrypt hashing, stateless verification-code service, request schemas, `get_current_user` / `get_pending_verification_user` guards | ✅ Done |
 | 2 | `POST /auth/register`, `POST /auth/verify`, `POST /auth/verify/resend` | ✅ Done |
 | 3 | `POST /auth/login`, `POST /auth/logout` | ✅ Done |
-| 4 | `POST /auth/pin`, `POST /auth/verify-pin` (parental PIN gate) | ⏳ Not started |
+| 4 | `POST /auth/pin`, `POST /auth/verify-pin`, `POST /auth/forgot-pin`, `POST /auth/reset-pin` (parental PIN gate + reset) | ✅ Done |
 | 5 | `POST/PATCH /profiles/children`, `GET /profiles/family` | ⏳ Not started |
 | 6 | Final ruff lint pass across all modules | ⏳ Not started |
 | 7 | `POST /auth/forgot-password`, `POST /auth/forgot-password/verify`, `POST /auth/reset-password` | ✅ Done |
