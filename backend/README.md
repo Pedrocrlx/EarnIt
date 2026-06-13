@@ -38,7 +38,7 @@ When running, services are available at:
 
 ## Development Conventions
 - **Linting:** We use `ruff` for linting and formatting (`uv run ruff check .`, `uv run ruff format .`). The lint rule set (`pyproject.toml`) covers pycodestyle, Pyflakes, import sorting, pyupgrade, bugbear, simplify, comprehensions, async, and ruff-specific checks — with `B008` (FastAPI `Depends(...)` in argument defaults) and `RUF001-003` (ambiguous dashes in user-facing strings) intentionally ignored.
-- **Testing:** `uv run pytest tests/ -q` (requires the `db` and `mailpit` containers running). Coverage: `uv run pytest --cov=app --cov-report=term-missing`.
+- **Testing:** `uv run pytest tests/ -q` (requires the `db` and `mailpit` containers running). Coverage: `uv run pytest --cov=app --cov-report=term-missing`. CI runs the same suite against `postgres:17-alpine` and `mailpit` service containers (see `.github/workflows/ci.yml`).
 - **API Docs:** When running, access the interactive docs at `/docs`.
 
 ## Project Structure

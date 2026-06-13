@@ -30,10 +30,62 @@ jobs:
       - name: Ruff format
         run: ruff format --check .
 
-      # - name: Install backend dependencies
-      #   run: |
-      #     python -m pip install --upgrade uv
-      #     uv sync --dev
-      #
-      # - name: Run pytest
-      #   run: uv run pytest
+  backend-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      db:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: earnit_user
+          POSTGRES_PASSWORD: earnit
+          POSTGRES_DB: earnit_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U earnit_user -d earnit_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mailpit:
+        image: axllent/mailpit:v1.30.1
+        ports:
+          - 8025:8025
+          - 1025:1025
+        options: >-
+          --health-cmd "wget -qO- http://localhost:8025/api/v1/info || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      POSTGRES_USER: earnit_user
+      POSTGRES_PASSWORD: earnit
+      POSTGRES_DB: earnit_db
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      SECRET_KEY: ci-test-secret-key
+      MAIL_SERVER: localhost
+      MAIL_PORT: 1025
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        run: python -m pip install --upgrade uv
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run pytest
+        run: uv run pytest -q
