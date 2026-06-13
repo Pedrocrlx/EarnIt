@@ -1,3 +1,10 @@
+"""Login: exchange email/password for a full access_token session.
+
+Designed to resist user-enumeration via response content or timing — see the
+inline comments on _DUMMY_PASSWORD_HASH and the is_active/email_verified_at
+ordering below. Logout lives in logout.py.
+"""
+
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import JSONResponse

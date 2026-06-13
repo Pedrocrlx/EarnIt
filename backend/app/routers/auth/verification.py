@@ -1,3 +1,11 @@
+"""Registration, step 2: redeem the account_verification code (and resend it).
+
+Requires the pending_verification_token cookie issued by POST /auth/register
+(see register.py) — enforced by the get_pending_verification_user dependency
+(scope='verify'). On success, the pending cookie is swapped for a full
+access_token session.
+"""
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession

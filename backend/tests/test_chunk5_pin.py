@@ -108,7 +108,8 @@ async def test_onboarding_completes_only_with_pin_and_child(
     ).scalar_one()
     assert onboarding is False
 
-    # Insert a child directly (Chunk 5 endpoints don't exist yet).
+    # Insert a child directly (this test predates the Chunk 6 profile endpoints,
+    # and inserting directly keeps this chunk's tests independent of them).
     user_id = (
         await db_session.execute(
             text("SELECT id FROM users WHERE email = :email"), {"email": _VALID["email"]}

@@ -1,3 +1,11 @@
+"""Registration: create a parent account in limbo and start email verification.
+
+A new user starts with email_verified_at = NULL ("limbo") and a durable purge
+task that deletes the row after ACCOUNT_LIMBO_PURGE_HOURS unless verified —
+see verification.py for the next step and app/services/accounts.py for the
+purge task itself.
+"""
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession

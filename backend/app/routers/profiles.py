@@ -1,3 +1,12 @@
+"""Child profiles & family view: create/deactivate children, view the family summary.
+
+All three routes require a full access_token session (see
+app/dependencies/auth.py). Creating a child re-checks the onboarding trigger
+(app/services/accounts.maybe_complete_onboarding) — this may be the second of
+its two conditions (PIN set in app/routers/auth/pin.py + >=1 child) to become
+true.
+"""
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException

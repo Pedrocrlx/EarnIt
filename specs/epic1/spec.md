@@ -556,7 +556,14 @@ Once both conditions are satisfied the flag is flipped and never reverts. Onboar
 * Implement `POST /api/v1/auth/logout` — clear the `access_token` cookie by responding with `Max-Age=0`.
 * **Tests:** wrong password → `401`; valid credentials, `is_active = false` → `403 account_disabled`; valid credentials, `email_verified_at IS NULL` → `403 account_unverified` + fresh `pending_verification_token`; valid verified credentials → `200` + `access_token`; valid session logout → `200`, cookie cleared; no session logout → `401`; authenticated request with purged `users` row → `401`; authenticated request with `is_active = false` → `403 account_disabled`.
 
-### **Chunk 4: Parental PIN**
+### **Chunk 4: Forgot Password**
+
+* Implement `POST /api/v1/auth/forgot-password` — look up the account by email; if it exists and `is_active`, rotate the anchor (`updated_at = NOW()`) and dispatch a `'password_reset'` code via `fastapi-mail`. Regardless of whether the email matches an account, return the identical `200` response — never reveal account existence.
+* Implement `POST /api/v1/auth/forgot-password/verify` — recompute the `'password_reset'` code from the user's anchor and compare it constant-time. Collapse every failure mode (unknown email, expired window, wrong code) into the same `400 {"detail": "Invalid or expired code."}` — distinct outcomes here would leak account existence. On success, issue a narrowly-scoped `password_reset_token` cookie (path-restricted to `/api/v1/auth/reset-password`, lifetime `VERIFICATION_CODE_EXPIRY_MINUTES`).
+* Implement `POST /api/v1/auth/reset-password` — requires the `password_reset_token` cookie (scope `password_reset`); set `password_hash` to the new (policy-validated) password, bump `updated_at` (closing the reset code's window), clear the cookie.
+* **Tests:** `forgot-password` for a known verified account → `200` + one `password_reset` email; unknown email → `200`, no email, identical response body; disabled account → `200`, no email, identical response body; `forgot-password/verify` with correct code → `200` + `password_reset_token` cookie; wrong code, expired code, and unknown email → `400` with identical body; `reset-password` with valid cookie + strong password → `200`, old password rejected by `/login`, new password accepted; without cookie → `401`; weak new password → `422`.
+
+### **Chunk 5: Parental PIN**
 
 * Implement `POST /api/v1/auth/pin` — upsert `parent_pin_hash`, stamp `pin_set_at`, and evaluate the onboarding completion trigger (`parent_pin_hash IS NOT NULL AND children count >= 1`); flip `users.onboarding_completed` if both conditions are met.
 * Implement `POST /api/v1/auth/verify-pin` — compare the submitted PIN against `parent_pin_hash` and return the scoped confirmation response used by the frontend to unlock the parent dashboard.
@@ -564,20 +571,13 @@ Once both conditions are satisfied the flag is flipped and never reverts. Onboar
 * Implement `POST /api/v1/auth/reset-pin` `{ code, new_pin }` — `410` if the window elapsed, `400` if the code doesn't match; on success sets `parent_pin_hash` + `pin_set_at`, bumps `updated_at` (invalidating the code), and re-evaluates the onboarding trigger.
 * **Tests:** setup with no prior PIN → `200`; update existing PIN → `200`; invalid PIN format → `422` (Pydantic validation, consistent with the password-policy checks in Chunk 2); `onboarding_completed` flips to `true` only once both a PIN is set and ≥1 `children` row exists; verify correct PIN → `200`; verify wrong PIN → `401`; verify before PIN is set → `428`; `forgot-pin` while window is open → `429` with `retry_after_seconds`; `forgot-pin` after expiry → `200` with fresh `expires_at` and one `pin_reset` email; `reset-pin` with correct code → `200` (old PIN rejected, new PIN accepted by `/verify-pin`); wrong code → `400`; expired code → `410`.
 
-### **Chunk 5: Child Profiles & Family View**
+### **Chunk 6: Child Profiles & Family View**
 
 * Implement `POST /api/v1/profiles/children` — validate the `MAX_CHILDREN_PER_USER` cap (all rows, regardless of `is_active`), create the `Child` record, and evaluate the onboarding completion trigger; flip `users.onboarding_completed` if both conditions are met.
 * Implement `PATCH /api/v1/profiles/children/{child_id}` — validate ownership, confirm the child is not already inactive, and set `is_active = false`.
 * Implement `GET /api/v1/profiles/family` — return the authenticated user's profile alongside all associated `children` rows.
 * **Tests:** child creation up to `MAX_CHILDREN_PER_USER` → `201`; exceeding cap → `409 children_cap_reached`; `onboarding_completed` flips to `true` only after both PIN and first child exist; `GET /profiles/family` returns correct parent fields and children list; deactivate active child → `200 is_active: false`; deactivate already-inactive child → `409`; deactivate child belonging to another user → `404`; deactivated child still counts toward cap.
 
-### **Chunk 6: Linting Pass**
+### **Chunk 7: Linting Pass**
 
 * Run Ruff across all modules, enforcing strict linting and formatting conformity.
-
-### **Chunk 7: Forgot Password**
-
-* Implement `POST /api/v1/auth/forgot-password` — look up the account by email; if it exists and `is_active`, rotate the anchor (`updated_at = NOW()`) and dispatch a `'password_reset'` code via `fastapi-mail`. Regardless of whether the email matches an account, return the identical `200` response — never reveal account existence.
-* Implement `POST /api/v1/auth/forgot-password/verify` — recompute the `'password_reset'` code from the user's anchor and compare it constant-time. Collapse every failure mode (unknown email, expired window, wrong code) into the same `400 {"detail": "Invalid or expired code."}` — distinct outcomes here would leak account existence. On success, issue a narrowly-scoped `password_reset_token` cookie (path-restricted to `/api/v1/auth/reset-password`, lifetime `VERIFICATION_CODE_EXPIRY_MINUTES`).
-* Implement `POST /api/v1/auth/reset-password` — requires the `password_reset_token` cookie (scope `password_reset`); set `password_hash` to the new (policy-validated) password, bump `updated_at` (closing the reset code's window), clear the cookie.
-* **Tests:** `forgot-password` for a known verified account → `200` + one `password_reset` email; unknown email → `200`, no email, identical response body; disabled account → `200`, no email, identical response body; `forgot-password/verify` with correct code → `200` + `password_reset_token` cookie; wrong code, expired code, and unknown email → `400` with identical body; `reset-password` with valid cookie + strong password → `200`, old password rejected by `/login`, new password accepted; without cookie → `401`; weak new password → `422`.
