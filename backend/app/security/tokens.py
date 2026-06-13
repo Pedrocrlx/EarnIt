@@ -16,6 +16,10 @@ def create_pending_verification_token(user_id: UUID) -> str:
     return _make_token(user_id, "verify", settings.PENDING_VERIFICATION_TOKEN_EXPIRE_MINUTES)
 
 
+def create_password_reset_token(user_id: UUID) -> str:
+    return _make_token(user_id, "password_reset", settings.VERIFICATION_CODE_EXPIRY_MINUTES)
+
+
 def decode_token(token: str) -> dict:
     """Decode and verify a JWT. Raises jwt.PyJWTError on any failure (invalid or expired)."""
     return jwt.decode(token, settings.SECRET_KEY, algorithms=[_ALGORITHM])

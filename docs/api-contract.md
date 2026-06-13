@@ -233,6 +233,75 @@ Clear the session cookie.
 
 ---
 
+### `POST /api/v1/auth/forgot-password`
+
+Request a password reset code by email. **Always returns the same `200` response**, whether or not the email is registered — the frontend must not display an "email not found" error.
+
+**Request**
+```json
+{ "email": "parent@example.com" }
+```
+
+**`200 OK`**
+```json
+{
+  "status": "success",
+  "message": "If that email is registered, a password reset code has been sent."
+}
+```
+
+---
+
+### `POST /api/v1/auth/forgot-password/verify`
+
+Redeem the 8-character password-reset code emailed by `/forgot-password`. On success, issues a short-lived `password_reset_token` cookie scoped to `/api/v1/auth/reset-password`.
+
+**Request**
+```json
+{ "email": "parent@example.com", "code": "K7H29XQF" }
+```
+
+**`200 OK`** — sets `password_reset_token` cookie
+```json
+{
+  "status": "success",
+  "message": "Code verified. You can now set a new password."
+}
+```
+
+| Status | Body | Meaning |
+|---|---|---|
+| `400` | `{"detail": "Invalid or expired code."}` | Unknown email, wrong code, **or** expired code — all collapsed into the same response so account existence is never revealed |
+
+---
+
+### `POST /api/v1/auth/reset-password`
+
+Set a new password. Clears the `password_reset_token` cookie on success.
+
+> **Auth required:** `password_reset_token` cookie (issued by `/forgot-password/verify`)
+
+**Request**
+```json
+{ "new_password": "NewSuperSecure1!" }
+```
+> Same password rules as registration. Returns `422` if not met.
+
+**`200 OK`** — clears `password_reset_token` cookie
+```json
+{
+  "status": "success",
+  "message": "Password has been reset."
+}
+```
+
+| Status | Meaning |
+|---|---|
+| `401` | Missing, invalid, or expired `password_reset_token` cookie |
+| `422` | New password doesn't meet the password rules |
+
+---
+
 ### `POST /api/v1/auth/pin`
 
 Set or update the parental PIN. This is a create-or-update — calling it again replaces the existing PIN.

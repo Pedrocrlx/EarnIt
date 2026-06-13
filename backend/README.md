@@ -59,9 +59,10 @@ backend/
 │   │   ├── accounts.py       # Account lifecycle: durable limbo-purge background task
 │   │   └── verification/     # Stateless verification codes (no DB rows)
 │   │       ├── core.py       # global HMAC engine (generate/verify/expiry/cooldown)
-│   │       └── account.py    # account-verification orchestration (+ email)
-│   ├── dependencies/auth.py  # get_current_user / get_pending_verification_user guards
-│   ├── routers/auth/         # /api/v1/auth/* endpoints (register, verify, login, logout)
+│   │       ├── account.py    # account-verification orchestration (+ email)
+│   │       └── password_reset.py  # password-reset orchestration (+ email)
+│   ├── dependencies/auth.py  # get_current_user / get_pending_verification_user / get_password_reset_user guards
+│   ├── routers/auth/         # /api/v1/auth/* endpoints (register, verify, login, logout, password_reset)
 │   └── templates/email/      # HTML email templates (verification code, etc.)
 ├── alembic/                   # DB migrations
 └── tests/                     # pytest suite (httpx AsyncClient against the app)
@@ -121,15 +122,18 @@ Every flow shares one **stateless verification code** primitive (`app/services/v
    - `429` (with `retry_after_seconds`) while the current code is still live; otherwise rotates the anchor → new code, emailed off the response path. → `200`
 4. **Abandoned verification:** logging in with correct credentials on a limbo account returns `403 account_unverified` + a fresh pending cookie, re-entering this flow. If the limbo window passes with no verification, the purge task deletes the account and frees the email — *as if never registered*.
 
-### 2. Forgot password — 🔜 Planned (design, not yet implemented)
+### 2. Forgot password — ✅ Implemented
 
-> Reuses the code primitive with `purpose = password_reset`. Intended endpoints:
+> Reuses the code primitive with `purpose = password_reset`. Three steps: request a code by email → verify the code → set a new password.
 
 1. **`POST /api/v1/auth/forgot-password`** `{ email }`
-   - **Always** returns `200` (never reveals whether the email is registered). If it maps to a verified account, rotate its anchor and email a `password_reset` code; a still-live code is not re-sent (cooldown).
-2. **`POST /api/v1/auth/reset-password`** `{ email, code, new_password }`
-   - `410` if the window elapsed · `400` if the code/purpose doesn't match · validates the new password policy.
-   - On success: set `password_hash`, bump `updated_at` (which invalidates the code). → `200`
+   - Looks up the account by email. If found and `is_active`, rotates its anchor (`updated_at = now()`) and emails a `password_reset` code (dispatched after the response).
+   - **Always** returns the same `200` body — `{"status": "success", "message": "If that email is registered, a password reset code has been sent."}` — regardless of whether the email is registered, active, or not. No enumeration.
+2. **`POST /api/v1/auth/forgot-password/verify`** `{ email, code }`
+   - Recomputes the `password_reset` code from the user's anchor and compares it. Unknown email, expired window (>10 min), and wrong code are all collapsed into the same `400 {"detail": "Invalid or expired code."}` — distinct outcomes here would leak account existence.
+   - On success: issues a `password_reset_token` cookie (scope `password_reset`, path-scoped to `/api/v1/auth/reset-password`, lifetime `VERIFICATION_CODE_EXPIRY_MINUTES`). → `200`
+3. **`POST /api/v1/auth/reset-password`** `{ new_password }` *(`password_reset_token` cookie required)*
+   - Validates the new password against the same policy as registration, sets `password_hash`, and bumps `updated_at` (which also invalidates the now-used code). Clears the `password_reset_token` cookie. → `200`
 
 ### 3. Forgot PIN — 🔜 Planned (design, not yet implemented)
 
@@ -154,6 +158,7 @@ Implementation follows `specs/epic1/spec.md`, split into chunks:
 | 4 | `POST /auth/pin`, `POST /auth/verify-pin` (parental PIN gate) | ⏳ Not started |
 | 5 | `POST/PATCH /profiles/children`, `GET /profiles/family` | ⏳ Not started |
 | 6 | Final ruff lint pass across all modules | ⏳ Not started |
+| 7 | `POST /auth/forgot-password`, `POST /auth/forgot-password/verify`, `POST /auth/reset-password` | ✅ Done |
 
 All implemented endpoints are covered by tests in `tests/` (one file per chunk, e.g. `test_chunk2_registration.py`, `test_chunk3_login_logout.py`).
 

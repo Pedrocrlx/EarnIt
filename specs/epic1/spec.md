@@ -572,3 +572,10 @@ Once both conditions are satisfied the flag is flipped and never reverts. Onboar
 ### **Chunk 6: Linting Pass**
 
 * Run Ruff across all modules, enforcing strict linting and formatting conformity.
+
+### **Chunk 7: Forgot Password**
+
+* Implement `POST /api/v1/auth/forgot-password` — look up the account by email; if it exists and `is_active`, rotate the anchor (`updated_at = NOW()`) and dispatch a `'password_reset'` code via `fastapi-mail`. Regardless of whether the email matches an account, return the identical `200` response — never reveal account existence.
+* Implement `POST /api/v1/auth/forgot-password/verify` — recompute the `'password_reset'` code from the user's anchor and compare it constant-time. Collapse every failure mode (unknown email, expired window, wrong code) into the same `400 {"detail": "Invalid or expired code."}` — distinct outcomes here would leak account existence. On success, issue a narrowly-scoped `password_reset_token` cookie (path-restricted to `/api/v1/auth/reset-password`, lifetime `VERIFICATION_CODE_EXPIRY_MINUTES`).
+* Implement `POST /api/v1/auth/reset-password` — requires the `password_reset_token` cookie (scope `password_reset`); set `password_hash` to the new (policy-validated) password, bump `updated_at` (closing the reset code's window), clear the cookie.
+* **Tests:** `forgot-password` for a known verified account → `200` + one `password_reset` email; unknown email → `200`, no email, identical response body; disabled account → `200`, no email, identical response body; `forgot-password/verify` with correct code → `200` + `password_reset_token` cookie; wrong code, expired code, and unknown email → `400` with identical body; `reset-password` with valid cookie + strong password → `200`, old password rejected by `/login`, new password accepted; without cookie → `401`; weak new password → `422`.

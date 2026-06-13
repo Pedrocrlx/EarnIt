@@ -5,6 +5,23 @@ from pydantic import BaseModel, EmailStr, field_validator
 from app.config import settings
 
 
+def _validate_password_strength(v: str) -> str:
+    errors = []
+    if len(v) < settings.PASSWORD_MIN_LENGTH:
+        errors.append(f"at least {settings.PASSWORD_MIN_LENGTH} characters")
+    if not re.search(r"[A-Z]", v):
+        errors.append("one uppercase letter")
+    if not re.search(r"[a-z]", v):
+        errors.append("one lowercase letter")
+    if not re.search(r"\d", v):
+        errors.append("one digit")
+    if not re.search(f"[{settings.PASSWORD_SPECIAL_CHARS}]", v):
+        errors.append("one special character")
+    if errors:
+        raise ValueError("Password must contain: " + ", ".join(errors))
+    return v
+
+
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
@@ -13,20 +30,7 @@ class RegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
-        errors = []
-        if len(v) < settings.PASSWORD_MIN_LENGTH:
-            errors.append(f"at least {settings.PASSWORD_MIN_LENGTH} characters")
-        if not re.search(r"[A-Z]", v):
-            errors.append("one uppercase letter")
-        if not re.search(r"[a-z]", v):
-            errors.append("one lowercase letter")
-        if not re.search(r"\d", v):
-            errors.append("one digit")
-        if not re.search(f"[{settings.PASSWORD_SPECIAL_CHARS}]", v):
-            errors.append("one special character")
-        if errors:
-            raise ValueError("Password must contain: " + ", ".join(errors))
-        return v
+        return _validate_password_strength(v)
 
 
 class LoginRequest(BaseModel):
@@ -36,6 +40,24 @@ class LoginRequest(BaseModel):
 
 class VerifyCodeRequest(BaseModel):
     code: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordVerifyRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        return _validate_password_strength(v)
 
 
 class PinRequest(BaseModel):
