@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -10,19 +11,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_session
+from app.logging_config import configure_logging
 from app.mail import mail
 from app.routers import auth as auth_router
 from app.routers import profiles as profiles_router
 from app.services import accounts
 
+configure_logging()
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("EarnIt API starting up")
     # Reconstruct a limbo-purge task for every still-unverified account, so pending
     # purges survive a restart (their deadline is derived from users.created_at).
     await accounts.rearm_pending_purges()
     yield
     await accounts.cancel_pending_purges()
+    logger.info("EarnIt API shutting down")
 
 
 app = FastAPI(lifespan=lifespan)

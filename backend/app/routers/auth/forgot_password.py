@@ -8,6 +8,8 @@ verification-code primitive with purpose='password_reset'
 password) lives in reset_password.py.
 """
 
+import logging
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +19,8 @@ from app.models.models import User
 from app.routers.auth._shared import set_password_reset_cookie
 from app.schemas.auth import ForgotPasswordRequest, ResetPasswordVerifyRequest
 from app.services.verification import core, password_reset
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -40,6 +44,7 @@ async def forgot_password(
     if user is not None and user.is_active:
         await password_reset.rotate(user, session)
         background_tasks.add_task(password_reset.send_current_code, user)
+        logger.info("Password reset requested: user_id=%s", user.id)
 
     return _GENERIC_REQUEST_RESPONSE
 
@@ -60,7 +65,11 @@ async def forgot_password_verify(
         or not password_reset.is_window_open(user, core.now())
         or not password_reset.verify(user, body.code)
     ):
+        logger.warning(
+            "Password reset verify failed: user_id=%s", user.id if user is not None else "unknown"
+        )
         raise HTTPException(status_code=400, detail="Invalid or expired code.")
 
     set_password_reset_cookie(response, user.id)
+    logger.info("Password reset code verified: user_id=%s", user.id)
     return {"status": "success", "message": "Code verified. You can now set a new password."}

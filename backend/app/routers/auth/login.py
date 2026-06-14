@@ -5,6 +5,8 @@ inline comments on _DUMMY_PASSWORD_HASH and the is_active/email_verified_at
 ordering below. Logout lives in logout.py.
 """
 
+import logging
+
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
@@ -17,6 +19,8 @@ from app.routers.auth._shared import set_access_cookie, set_pending_cookie
 from app.schemas.auth import LoginRequest
 from app.security.hashing import verify_secret
 from app.services.verification import account
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -40,11 +44,15 @@ async def login(
     password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
     password_ok = await verify_secret(body.password, password_hash)
     if user is None or not password_ok:
+        # No user_id to log here without re-introducing an enumeration signal via log
+        # volume/content — the failure itself is the only thing worth recording.
+        logger.warning("Login failed: invalid credentials")
         raise HTTPException(status_code=401, detail="Invalid login credentials.")
 
     # is_active is checked before email_verified_at — a disabled-and-unverified
     # account always reports account_disabled, never account_unverified.
     if not user.is_active:
+        logger.warning("Login blocked: account disabled (user_id=%s)", user.id)
         raise HTTPException(
             status_code=403,
             detail={"error": "account_disabled", "message": "This account has been disabled."},
@@ -64,8 +72,10 @@ async def login(
             },
         )
         set_pending_cookie(unverified_response, user.id)
+        logger.info("Login blocked: account unverified (user_id=%s)", user.id)
         return unverified_response
 
     # Active, verified account with correct credentials — issue the full session cookie.
     set_access_cookie(response, user.id)
+    logger.info("Login successful: user_id=%s", user.id)
     return {"status": "success", "message": "Authentication successful."}

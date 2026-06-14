@@ -13,6 +13,7 @@ restart. Accounts already past their deadline are deleted on the next tick.
 """
 
 import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -22,6 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.models import Child, User
+
+logger = logging.getLogger(__name__)
 
 # Strong references to in-flight tasks, keyed by user id. asyncio keeps only weak
 # refs, so without this a task can be garbage-collected mid-sleep. Keying by user
@@ -44,6 +47,7 @@ async def _discard_if_unverified(session: AsyncSession, user_id: UUID) -> bool:
         return False
     await session.delete(user)
     await session.commit()
+    logger.info("Limbo account purged: user_id=%s", user_id)
     return True
 
 
@@ -81,6 +85,8 @@ async def rearm_pending_purges() -> None:
         limbo_users = result.scalars().all()
     for user in limbo_users:
         schedule_limbo_purge(user)
+    if limbo_users:
+        logger.info("Re-armed %d pending limbo purge(s)", len(limbo_users))
 
 
 async def cancel_pending_purges() -> None:
@@ -103,3 +109,4 @@ async def maybe_complete_onboarding(user: User, session: AsyncSession) -> None:
     if count and count >= 1:
         user.onboarding_completed = True
         await session.commit()
+        logger.info("Onboarding completed: user_id=%s", user.id)

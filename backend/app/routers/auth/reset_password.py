@@ -5,6 +5,8 @@ POST /auth/forgot-password/verify (see forgot_password.py) — enforced by the
 get_password_reset_user dependency (scope='password_reset').
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +17,8 @@ from app.routers.auth._shared import clear_password_reset_cookie
 from app.schemas.auth import ResetPasswordRequest
 from app.security.hashing import hash_secret
 from app.services.verification import core
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -33,4 +37,5 @@ async def reset_password(
     await session.commit()
 
     clear_password_reset_cookie(response)
+    logger.info("Password reset completed: user_id=%s", current_user.id)
     return {"status": "success", "message": "Password has been reset."}

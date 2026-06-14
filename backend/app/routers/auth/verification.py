@@ -6,6 +6,8 @@ Requires the pending_verification_token cookie issued by POST /auth/register
 access_token session.
 """
 
+import logging
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +19,8 @@ from app.routers.auth._shared import clear_pending_cookie, set_access_cookie
 from app.schemas.auth import VerifyCodeRequest
 from app.services.accounts import cancel_limbo_purge
 from app.services.verification import account, core
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -36,9 +40,11 @@ async def verify_account(
     # Expiry is checked before the code itself so an expired window returns 410,
     # not a generic 400 — the client can then prompt a resend.
     if not account.is_window_open(current_user, now):
+        logger.info("Account verification failed: code expired (user_id=%s)", current_user.id)
         raise HTTPException(status_code=410, detail="Verification code has expired.")
 
     if not account.verify(current_user, body.code):
+        logger.warning("Account verification failed: invalid code (user_id=%s)", current_user.id)
         raise HTTPException(status_code=400, detail="Invalid verification code.")
 
     # Stamping email_verified_at + bumping updated_at also moves the anchor, so the
@@ -50,6 +56,8 @@ async def verify_account(
     # Account is verified — defuse its limbo purge now rather than leaving the task
     # asleep until its deadline just to no-op.
     cancel_limbo_purge(current_user.id)
+
+    logger.info("Account verified: user_id=%s", current_user.id)
 
     clear_pending_cookie(response)
     set_access_cookie(response, current_user.id)
@@ -77,6 +85,7 @@ async def resend_verification(
 
     # Anti-spam: a fresh code can only be issued once the current window has closed.
     if account.is_window_open(current_user, now):
+        logger.info("Verification resend rate-limited: user_id=%s", current_user.id)
         return JSONResponse(
             status_code=429,
             content={
@@ -92,6 +101,7 @@ async def resend_verification(
     # new code off the critical path.
     expires_at = await account.rotate(current_user, session)
     background_tasks.add_task(account.send_current_code, current_user)
+    logger.info("Verification code resent: user_id=%s", current_user.id)
     return {
         "status": "success",
         "message": "A new verification code has been sent.",

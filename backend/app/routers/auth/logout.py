@@ -3,10 +3,14 @@
 Counterpart to login.py — see app/dependencies/auth.py for the session guard.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, Response
 
 from app.dependencies.auth import get_current_user
 from app.models.models import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -17,4 +21,5 @@ async def logout(response: Response, current_user: User = Depends(get_current_us
     # so by this point we just need to drop the cookie. delete_cookie sets Max-Age=0,
     # which tells the browser to discard it immediately.
     response.delete_cookie(key="access_token", path="/")
+    logger.info("Logout: user_id=%s", current_user.id)
     return {"status": "success", "message": "Logged out successfully."}

@@ -6,6 +6,8 @@ see verification.py for the next step and app/services/accounts.py for the
 purge task itself.
 """
 
+import logging
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +19,8 @@ from app.schemas.auth import RegisterRequest
 from app.security.hashing import hash_secret
 from app.services.accounts import schedule_limbo_purge
 from app.services.verification import account
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -53,6 +57,8 @@ async def register(
     # window elapses, unless verification defuses it first. Re-armed on restart
     # from users.created_at (see app/services/accounts.py).
     schedule_limbo_purge(user)
+
+    logger.info("New account registered: user_id=%s", user.id)
 
     return {
         "status": "pending_verification",

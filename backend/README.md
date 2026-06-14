@@ -49,6 +49,7 @@ backend/
 ├── app/
 │   ├── config.py             # Settings (env-driven), token lifetimes, password/PIN rules
 │   ├── database.py           # Async SQLAlchemy engine + get_session dependency
+│   ├── logging_config.py     # stdlib logging setup (LOG_LEVEL, format) — see Logging
 │   ├── mail.py                # fastapi-mail config (SMTP + Jinja2 templates)
 │   ├── models/models.py      # SQLModel tables: User, Child
 │   ├── schemas/
@@ -180,6 +181,22 @@ Implementation follows `specs/epic1/spec.md`, split into chunks:
 | 7 | Final ruff lint pass across all modules | ✅ Done |
 
 All implemented endpoints are covered by tests in `tests/` (one file per feature, e.g. `test_registration.py`, `test_login_logout.py`). `tests/conftest.py` centralizes shared fixtures plus the example account (`VALID_USER`), cookie-extraction (`extract_cookie`), and register+verify (`register_and_verify`) helpers used across feature files.
+
+## Logging
+
+Plain stdlib `logging`, configured once in `app/logging_config.py` and applied at
+import time in `main.py` (`configure_logging()`, before the `FastAPI` app is
+constructed). Every module gets its own logger via `logging.getLogger(__name__)`
+and inherits the global config — no per-module setup needed.
+
+- **Format:** `%(asctime)s %(levelname)s %(name)s: %(message)s` to stdout (container-friendly — Docker/Compose captures stdout as the log stream).
+- **Level:** `LOG_LEVEL` env var (default `INFO`; see `.env.example`). Set to `DEBUG` locally for noisier output, `WARNING` in CI if the test logs get too busy.
+- **What gets logged** — one line per security-relevant or lifecycle event, identified by `user_id` (a non-enumerable UUID) once a request resolves to an account:
+  - **Auth lifecycle:** registration, account verification (success / expired / invalid code), verification resend (incl. `429` rate-limit), login (success / invalid credentials / disabled / unverified), logout.
+  - **Password & PIN recovery:** forgot-password request + code verification (success/failure), password reset completion, PIN set, PIN verification (success/failure), forgot/reset-PIN (incl. expired/invalid code and `429` rate-limit).
+  - **Profiles:** child profile created (incl. `409 children_cap_reached`), child profile deactivated.
+  - **Background lifecycle:** limbo-account purges, re-arming pending purges on startup, onboarding-completion trigger firing.
+- **What never gets logged:** verification codes, passwords, PINs, password/PIN hashes, JWTs, or raw email addresses. On login failure specifically, nothing identifying is logged at all (logging `user_id` only for *known* accounts would create a log-volume signal that distinguishes registered from unregistered emails — the same anti-enumeration concern as the API response itself).
 
 ## Connecting the Frontend
 

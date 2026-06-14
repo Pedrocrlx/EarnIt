@@ -53,5 +53,8 @@ class Settings(BaseSettings):
     # --- Parental PIN ---
     PARENT_PIN_LENGTH: int = 4
 
+    # --- Logging ---
+    LOG_LEVEL: str = "INFO"
+
 
 settings = Settings()
