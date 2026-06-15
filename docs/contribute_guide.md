@@ -4,8 +4,9 @@ Thanks for helping improve EarnIt. This guide explains how to run the project lo
 
 ## Project structure
 - `backend/` FastAPI API + PostgreSQL
+  - `backend/mail/` Mailpit (dev SMTP sink), isolated and included by the compose files below
 - `frontend/` React (Vite) SPA
-- `compose.yaml` full stack (Nginx + API + DB + Frontend)
+- `compose.yaml` full stack (Nginx + API + DB + Frontend, includes `backend/mail/compose.yaml`)
 
 ## Local development
 

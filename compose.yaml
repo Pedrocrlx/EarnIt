@@ -1,3 +1,8 @@
+# Mailpit lives in its own compose file (backend/mail/compose.yaml), isolated
+# from the EarnIt application services below — see backend/mail/README.md.
+include:
+  - backend/mail/compose.yaml
+
 services:
   # +++++ NGINX Reverse Proxy (The Front Door) +++++++++++++++++++++++++++++++++++++++++
   proxy:
@@ -55,15 +60,6 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
-
-  # +++++ Mailpit (Email Testing) +++++++++++++++++++++++++++++++++++
-  mailpit:
-    image: axllent/mailpit:v1.30.1
-    container_name: earnIt_mailpit
-    ports:
-      - "8025:8025"
-      - "1025:1025"
-    restart: unless-stopped
 
 volumes:
   postgres_data:

@@ -6,11 +6,12 @@ is grounded in the actual code/config in this repo. Use this to prepare for
 a project defense — if a question feels too basic, that's intentional: "no
 matter how simple" was the brief.
 
-**240 Q&A pairs**, organized into 21 topic sections (language/runtime, web
+**243 Q&A pairs**, organized into 22 topic sections (language/runtime, web
 framework, ORM, database, migrations, package management, linting, testing,
 containerization, email, JWT/cookies, hashing, verification codes,
 anti-enumeration, background tasks, profiles/onboarding, CI/CD, project
-structure, error handling, AI usage, logging & observability).
+structure, error handling, AI usage, logging & observability, mail service
+isolation).
 
 ---
 
@@ -2184,6 +2185,46 @@ no email") would be a natural follow-up, especially for the anti-enumeration
 logging rule in Q237 — a test that fails if someone later "helpfully" adds
 `user.email` to that log line would catch the regression long before a code
 review would.
+
+## 22. Mail Service Isolation (`backend/mail/`)
+
+**Q241. Why does Mailpit get its own `backend/mail/compose.yaml` instead of being defined inline in `compose.yaml` and `backend/compose.yaml` as before?**
+Mailpit isn't an EarnIt application service — it's dev/test infrastructure
+shared by *both* the full-stack compose file (root `compose.yaml`) and the
+backend-only one (`backend/compose.yaml`), and previously its definition was
+duplicated in both files. Pulling it into `backend/mail/compose.yaml` gives it
+a single definition (no drift between the two copies) and a dedicated
+directory under `backend/` — where the rest of the email-related code
+(`app/mail.py`, `app/templates/email/`) already lives — so it can be started,
+stopped, or have its logs tailed independently of `db`/`api`/`frontend` —
+useful when debugging email delivery without wanting to restart the whole
+stack.
+
+**Q242. Mechanically, how do the root and backend compose files pull in `backend/mail/compose.yaml` — doesn't Compose require one top-level file?**
+Via the Compose Specification's [`include:`](https://docs.docker.com/compose/multiple-compose-files/include/)
+directive (Docker Compose v2.20+; this repo runs v5.1.3). The root
+`compose.yaml` and `backend/compose.yaml` start with:
+```yaml
+include:
+  - backend/mail/compose.yaml   # from the repo root
+  - mail/compose.yaml           # from backend/compose.yaml
+```
+`include` merges the included file's services into the *same* Compose
+project and network as the including file — so the `mailpit` service is
+reachable by service name (`MAIL_SERVER=mailpit`, `MAIL_PORT=1025`, per
+`app/config.py`/`.env.example`) exactly as it was when defined inline. This
+is different from `docker compose -f a.yaml -f b.yaml up`, which requires the
+caller to list every file — `include` is declared *by* the including file, so
+`docker compose up` from either `compose.yaml` or `backend/compose.yaml`
+just works without extra flags.
+
+**Q243. Does this change anything about CI (`.github/workflows/ci.yml`), which also needs a `mailpit` container for the test suite?**
+No. CI defines `mailpit` directly as a GitHub Actions *service container*
+(a different mechanism from Docker Compose entirely — GitHub Actions spins it
+up alongside the test job's container). `backend/mail/compose.yaml` is only
+consumed via Compose's `include:` by the two local-dev compose files; CI never
+reads it. The two are kept consistent only in the sense that both happen to use the
+same `axllent/mailpit` image and ports — there's no shared file between them.
 
 ---
 

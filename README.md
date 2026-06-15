@@ -4,6 +4,8 @@
 
 The app is a React SPA served by Vite, talking to a FastAPI backend. FastAPI persists data in PostgreSQL. In the full stack setup, Nginx is the single public entrypoint on port 80: it routes `/` to the Vite dev server for the SPA, and `/api`, `/docs`, and `/openapi.json` to FastAPI. FastAPI then reads/writes to PostgreSQL on the internal Docker network, while the browser only ever talks to Nginx.
 
+Outbound emails (verification codes, password/PIN reset) are sent to **Mailpit**, a dev SMTP sink with a web UI at `http://localhost:8025`. Mailpit's service definition is isolated in [`backend/mail/`](backend/mail/README.md) and pulled into both `compose.yaml` (root) and `backend/compose.yaml` via Docker Compose's `include:` directive, so it can be run, debugged, or restarted independently of the rest of the stack.
+
 # Tech Stack
 
 - **Backend:** FastAPI, SQLModel, PostgreSQL (see [backend/README.md](backend/README.md))

@@ -26,6 +26,10 @@ make up-ba      # Start API, DB, and Mailpit
 make down       # Stop the stack
 ```
 
+Mailpit's service definition lives in its own [`mail/compose.yaml`](mail/README.md),
+included automatically by `compose.yaml` — see that file for working with it
+in isolation (`make mail-up` / `make mail-down` / `make mail-logs`).
+
 **Local Development (without Docker):**
 ```bash
 uv sync
@@ -38,7 +42,7 @@ When running, services are available at:
 
 ## Development Conventions
 - **Linting:** We use `ruff` for linting and formatting (`uv run ruff check .`, `uv run ruff format .`). The lint rule set (`pyproject.toml`) covers pycodestyle, Pyflakes, import sorting, pyupgrade, bugbear, simplify, comprehensions, async, and ruff-specific checks — with `B008` (FastAPI `Depends(...)` in argument defaults) and `RUF001-003` (ambiguous dashes in user-facing strings) intentionally ignored.
-- **Testing:** `uv run pytest tests/ -q` (requires the `db` and `mailpit` containers running). Coverage: `uv run pytest --cov=app --cov-report=term-missing`. CI runs the same suite against `postgres:17-alpine` and `mailpit` service containers (see `.github/workflows/ci.yml`).
+- **Testing:** `uv run pytest tests/ -q` (requires the `db` and `mailpit` containers running — `mailpit` is defined in [`mail/compose.yaml`](mail/README.md) and included automatically by `docker compose up`). Coverage: `uv run pytest --cov=app --cov-report=term-missing`. CI runs the same suite against `postgres:17-alpine` and `mailpit` service containers (see `.github/workflows/ci.yml`).
 - **API Docs:** When running, access the interactive docs at `/docs`.
 
 ## Project Structure
@@ -71,6 +75,7 @@ backend/
 │   │   └── profiles.py        # /api/v1/profiles/* endpoints (children, family)
 │   └── templates/email/      # HTML email templates (verification code, etc.)
 ├── alembic/                   # DB migrations
+├── mail/                      # Mailpit compose service, isolated — see mail/README.md
 └── tests/                     # pytest suite (httpx AsyncClient against the app)
 ```
 
