@@ -4,8 +4,8 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import app.database as app_database
 from app.config import settings
-from app.database import AsyncSessionLocal
 from app.models.models import User
 from app.services import accounts
 
@@ -17,7 +17,9 @@ def _now() -> datetime:
 async def _fetch(user_id) -> User | None:
     # The purge task commits via its own session; read back through a fresh one so
     # we see the committed state rather than db_session's identity-map snapshot.
-    async with AsyncSessionLocal() as session:
+    # Looked up via the module attribute (not imported by name) so this respects
+    # conftest's test-database AsyncSessionLocal override.
+    async with app_database.AsyncSessionLocal() as session:
         return await session.get(User, user_id)
 
 

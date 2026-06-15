@@ -1,3 +1,5 @@
+"""This module contains the SQLModel models for the application."""
+
 from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 

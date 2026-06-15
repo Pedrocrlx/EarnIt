@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 
+import asyncpg
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -7,7 +8,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
+import app.database as app_database
 import app.models.models  # noqa: F401 — registers all tables with SQLModel.metadata
+import app.services.accounts as app_accounts
 from app.config import settings
 from app.database import get_session
 
@@ -66,10 +69,46 @@ async def register_and_verify(client: AsyncClient, mock_mail, **overrides) -> st
 
 @pytest_asyncio.fixture(scope="session")
 async def db_engine():
-    engine = create_async_engine(settings.database_url, echo=False)
+    # Run against a dedicated "<db>_test" database, never the dev database — the
+    # teardown below does `drop_all`, which would otherwise wipe the dev schema
+    # (leaving alembic_version stuck at head with no tables, breaking `make up-ba`).
+    test_db_name = f"{settings.POSTGRES_DB}_test"
+
+    # CREATE DATABASE can't run inside a transaction, so use a raw asyncpg
+    # connection to the default database to create it if it doesn't exist yet.
+    conn = await asyncpg.connect(
+        user=settings.POSTGRES_USER,
+        password=settings.POSTGRES_PASSWORD,
+        host=settings.POSTGRES_HOST,
+        port=settings.POSTGRES_PORT,
+        database=settings.POSTGRES_DB,
+    )
+    try:
+        await conn.execute(f'CREATE DATABASE "{test_db_name}"')
+    except asyncpg.DuplicateDatabaseError:
+        pass
+    finally:
+        await conn.close()
+
+    test_url = settings.database_url.rsplit("/", 1)[0] + f"/{test_db_name}"
+    engine = create_async_engine(test_url, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+
+    # app.services.accounts imported AsyncSessionLocal (bound to the dev database)
+    # by name for its background purge tasks — repoint both that reference and the
+    # module attribute at the test database for the duration of the test session,
+    # so those tasks see the same data as the rest of the test fixtures.
+    test_session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    original_database_factory = app_database.AsyncSessionLocal
+    original_accounts_factory = app_accounts.AsyncSessionLocal
+    app_database.AsyncSessionLocal = test_session_factory
+    app_accounts.AsyncSessionLocal = test_session_factory
+
     yield engine
+
+    app_database.AsyncSessionLocal = original_database_factory
+    app_accounts.AsyncSessionLocal = original_accounts_factory
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.drop_all)
     await engine.dispose()

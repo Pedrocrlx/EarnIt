@@ -30,6 +30,11 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+    environment:
+      # .env (mounted into the container) targets local/pytest with
+      # POSTGRES_HOST=localhost — override it to the compose service name so
+      # the api container reaches the db container.
+      POSTGRES_HOST: db
     depends_on:
       db:
         condition: service_healthy

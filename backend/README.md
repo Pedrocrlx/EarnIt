@@ -18,12 +18,25 @@ This directory contains the FastAPI backend for the EarnIt application.
 - [Docker & Docker Compose](https://docs.docker.com/get-docker/)
 - [uv](https://github.com/astral-sh/uv)
 
+### First-Time Setup
+```bash
+cp .env.example .env   # then fill in SECRET_KEY (openssl rand -hex 32)
+```
+
 ### Running the Backend Stack
 
 **Using Docker:**
 ```bash
 make up-ba      # Start API, DB, and Mailpit
 make down       # Stop the stack
+```
+
+The `api` container talks to `db` over the compose network (`POSTGRES_HOST=db`,
+set in `compose.yaml`) regardless of the `POSTGRES_HOST` in `.env` — `.env` itself
+targets local/pytest (`POSTGRES_HOST=localhost`). On a fresh database, apply
+migrations once the stack is up:
+```bash
+docker compose exec api uv run alembic upgrade head
 ```
 
 Mailpit's service definition lives in its own [`mail/compose.yaml`](mail/README.md),
