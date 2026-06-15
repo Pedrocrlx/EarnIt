@@ -3,19 +3,118 @@
 This document declares AI tool usage specific to the `backend/` directory, as
 required by `guide.md` (§10.2) and summarized in the root [README.md](../README.md#ai-usage-section).
 
-## Phase 3
+All entries below use **Claude Code (Sonnet 4.6)**, following the chunked
+breakdown in `specs/epic1/spec.md`. All AI-assisted code was reviewed and is
+understood by the submitting team member.
 
-- **Claude Code (Sonnet 4.6)** implemented the crypto & auth utilities (Chunk 1) — async bcrypt hashing, JWT creation/decoding for the three cookie scopes, and the stateless HMAC verification-code engine — in `app/security/` and `app/services/verification/core.py`, because getting this shared primitive right once meant every later flow (registration, password reset, PIN reset) could reuse it without re-deriving the same logic three times.
-- **Claude Code (Sonnet 4.6)** implemented registration & email verification (Chunk 2) — `POST /register`, `POST /verify`, `POST /verify/resend`, and the durable self-disarming limbo-purge background task — in `app/routers/auth/register.py`, `app/routers/auth/verification.py`, and `app/services/accounts.py`, because the asyncio purge-task pattern (surviving restarts via `users.created_at`) is easy to get subtly wrong and benefited from being implemented and test-driven against `specs/epic1/spec.md` together.
-- **Claude Code (Sonnet 4.6)** implemented login & logout (Chunk 3) — including the constant-time dummy-hash comparison and `is_active`/`email_verified_at` ordering for anti-enumeration — in `app/routers/auth/login.py` and `app/routers/auth/logout.py`, because drafting the implementation and the adversarial test cases (timing/response-leak scenarios) side by side made both easier to review together.
-- **Claude Code (Sonnet 4.6)** implemented forgot/reset password (Chunk 4) — the three-step `/forgot-password` → `/forgot-password/verify` → `/reset-password` flow — in `app/routers/auth/forgot_password.py`, `app/routers/auth/reset_password.py`, and `app/services/verification/password_reset.py`, by reusing the already-reviewed Chunk 1 primitive with `purpose=password_reset` — low-risk, high-volume boilerplate where AI saved the most time relative to review effort.
-- **Claude Code (Sonnet 4.6)** implemented the parental PIN gate & PIN reset (Chunk 5) — `POST /pin`, `POST /verify-pin`, `POST /forgot-pin`, `POST /reset-pin`, and the shared `maybe_complete_onboarding` trigger — in `app/routers/auth/pin.py`, `app/routers/auth/pin_reset.py`, and `app/services/verification/pin_reset.py`, extracting the onboarding check into `app/services/accounts.py` so its two call sites (`/pin` and `/profiles/children`) can't drift out of sync.
-- **Claude Code (Sonnet 4.6)** implemented child profiles & the family view (Chunk 6) — `POST/PATCH /profiles/children` and `GET /profiles/family`, including the `MAX_CHILDREN_PER_USER` cap counting active + inactive children — in `app/routers/profiles.py` and `app/schemas/profiles.py`, as straightforward CRUD over an already-modeled table, reviewed for the cap-counting and ownership-check edge cases.
-- **Claude Code (Sonnet 4.6)** ran a final repo-wide `ruff check`/`ruff format` pass (Chunk 7) after all chunks landed, fixing import ordering, `datetime.now(UTC)` consistency, and error-message wording — reviewed as a whole rather than file-by-file, since lint auto-fixes are low-risk by construction.
-- **Claude Code (Sonnet 4.6)** wrote the `pytest` suite — ~109 async tests against the real FastAPI app via `httpx.AsyncClient` plus a real test database, covering every endpoint's happy path, documented error codes, and edge cases (rate-limit cooldowns, expired codes, cap enforcement) — in `tests/` (`conftest.py` shared fixtures + one file per feature), written from the spec's documented contract rather than copied from the implementation, which caught several edge cases independently.
-- **Claude Code (Sonnet 4.6)** added application logging — one shared stdlib `logging` config (`app/logging_config.py`, `LOG_LEVEL` setting) and `logger.info`/`logger.warning` calls across `app/routers/auth/*.py`, `app/routers/profiles.py`, and `app/services/accounts.py` — covering ~20 security/lifecycle events identified by `user_id`, with a rule never to log secrets (codes/passwords/PINs/hashes/JWTs) or, on login failure, any identifier at all. The what-to-log/what-never-to-log design was agreed first; AI's role was implementing it consistently across ~10 files.
-- **Claude Code (Sonnet 4.6)** wrote `backend/DEFENSE_QA.md` — 240 defense-prep Q&A across 21 sections answering "why" for every technical decision visible in the code (stack, ORM, migrations, hashing, verification codes, anti-enumeration, background tasks, CI, logging, AI usage) — grounded by reading the actual implementation file-by-file before answering, which doubled as an informal consistency check, and reviewed by the team afterward.
+## Chunk 1 — Crypto & Auth Utilities
+`app/security/`, `app/services/verification/core.py`
 
-All AI-assisted code was reviewed and is understood by the submitting team
-member; see the root README's AI Usage section for tooling used outside the
-backend (documentation, infrastructure, design).
+- This is the shared primitive (bcrypt hashing, JWT scopes, the stateless HMAC
+  verification-code engine) every later chunk reuses — getting it right *once*
+  meant Chunks 2/4/5 didn't each re-derive the same crypto logic.
+- **Advice:** front-load AI assistance on shared/foundational modules first.
+  Mistakes here would have propagated into three different flows; reviewing
+  one small, well-tested core module is far cheaper than reviewing the same
+  logic copy-pasted three times.
+
+## Chunk 2 — Registration & Email Verification
+`app/routers/auth/register.py`, `app/routers/auth/verification.py`, `app/services/accounts.py`
+
+- The durable, self-disarming limbo-purge background task (survives process
+  restarts via `users.created_at`) is the kind of asyncio pattern that's easy
+  to get subtly wrong — task GC, double-purge races, re-arming on startup.
+- **Advice:** for concurrency-heavy code, ask the AI to write the tests
+  *alongside* the implementation (not after) and read both together. The
+  asyncio plumbing is where a quick read-through is most likely to miss a
+  race condition that a test would catch.
+
+## Chunk 3 — Login & Logout
+`app/routers/auth/login.py`, `app/routers/auth/logout.py`
+
+- Anti-enumeration logins have failure modes that "look right" but leak via
+  timing or response shape (constant-time dummy-hash comparison, the
+  `is_active`/`email_verified_at` check ordering).
+- **Advice:** for security-sensitive flows, have the AI generate the
+  *adversarial* test cases (Q177-184 in `DEFENSE_QA.md`) alongside the
+  implementation. Reviewing "does this leak whether the email exists?" is much
+  easier with a concrete failing/passing test than by reading the code alone.
+
+## Chunk 4 — Forgot/Reset Password
+`app/routers/auth/forgot_password.py`, `app/routers/auth/reset_password.py`, `app/services/verification/password_reset.py`
+
+- Mechanical reuse of the Chunk 1 primitive (`purpose=password_reset`) across
+  a new three-step flow.
+- **Advice:** this was the highest AI-time-saved-to-review-effort ratio of the
+  whole epic — once the primitive (Chunk 1) and the pattern (anti-enumeration
+  from Chunk 3) are both established and reviewed, applying them to a new flow
+  is low-risk, high-volume boilerplate.
+
+## Chunk 5 — Parental PIN & PIN Reset
+`app/routers/auth/pin.py`, `app/routers/auth/pin_reset.py`, `app/services/verification/pin_reset.py`
+
+- The onboarding-completion trigger (`parent_pin_hash` set **and** ≥1 child)
+  has *two* independent entry points (`/pin` and, later, `/profiles/children`
+  in Chunk 6).
+- **Advice:** when a condition needs checking from multiple call sites, ask
+  the AI to extract it into a shared helper (`maybe_complete_onboarding` in
+  `app/services/accounts.py`) *before* the second call site exists — otherwise
+  it's tempting to duplicate the check "just this once" and the two copies
+  drift.
+
+## Chunk 6 — Child Profiles & Family View
+`app/routers/profiles.py`, `app/schemas/profiles.py`
+
+- Straightforward CRUD over an already-modeled table (`MAX_CHILDREN_PER_USER`
+  cap, soft-deactivation, family summary).
+- **Advice:** even "boring" CRUD has sharp edges worth double-checking in
+  review — e.g. the cap counts *deactivated* children too, and the
+  ownership check returns `404` (not `403`) for another user's child to avoid
+  confirming the child exists at all.
+
+## Chunk 7 — Final Lint Pass
+repo-wide (`backend/`)
+
+- A single `ruff check`/`ruff format` pass after all chunks landed (import
+  ordering, `datetime.now(UTC)` consistency, error-message wording).
+- **Advice:** save mechanical lint/format cleanup for *one* pass at the end
+  rather than chunk-by-chunk — auto-fixes are low-risk by construction, so
+  reviewing one combined diff is faster than re-reviewing the same kind of
+  change seven times.
+
+## Test Suite
+`tests/` (`conftest.py` + one file per feature, ~109 tests)
+
+- Tests were written from the *spec's documented contract* (`docs/api-contract.md`),
+  not from the implementation.
+- **Advice:** writing tests from the spec rather than the code is a deliberate
+  choice — it makes the test suite double as an independent check on the
+  implementation. Several edge cases (e.g. deactivated children still counting
+  toward the cap) were caught *because* the test and the code came from the
+  same spec but different reasoning paths, not because one was copied from the
+  other.
+
+## Logging
+`app/logging_config.py`, `app/config.py`, `app/routers/auth/*.py`, `app/routers/profiles.py`, `app/services/accounts.py`
+
+- One shared stdlib `logging` config, ~20 security/lifecycle events logged by
+  `user_id`, with a hard rule: never log secrets (codes/passwords/PINs/hashes/
+  JWTs), and on login failure, log *no* identifier at all (anti-enumeration
+  applies to logs too, not just HTTP responses).
+- **Advice:** for anything touching "what gets logged," design the rules
+  (what/never-what) in conversation *first*, then have the AI apply that
+  agreed design consistently across every file. Consistency across ~10 files
+  is the hard part — a human reviewing file-by-file is more likely to miss the
+  one spot that breaks the rule than the AI is to apply it unevenly, provided
+  the rule was nailed down before implementation started.
+
+## Defense Q&A
+`backend/DEFENSE_QA.md` (240 Q&A, 21 sections)
+
+- A defense-prep document grounded by reading the actual implementation
+  file-by-file before answering "why" questions about every technical
+  decision.
+- **Advice:** this kind of document is most useful when generated *late*,
+  after the code it describes has stabilized — and the grounding step (AI
+  re-reading each module before writing the answer) is itself a free
+  informal consistency check, separate from the document's stated purpose.
