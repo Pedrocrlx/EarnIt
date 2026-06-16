@@ -11,6 +11,11 @@ import Logo from "@/components/Logo";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
+type LoginCredentials = {
+  email: string;
+  password: string;
+};
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -19,13 +24,13 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   const loginMutation = useMutation({
-    mutationFn: (data: any) => apiFetch("/auth/login", {
+    mutationFn: (data: LoginCredentials) => apiFetch("/auth/login", {
       method: "POST",
       body: JSON.stringify(data),
     }),
     onSuccess: () => {
       login();
-      navigate("/");
+      navigate("/profiles/select");
     },
   });
 

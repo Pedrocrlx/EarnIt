@@ -1,4 +1,4 @@
-import { LockKeyhole, Mail, User, Eye, EyeOff } from "lucide-react";
+import { LockKeyhole, Mail, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
@@ -15,7 +15,6 @@ const RegistrationPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [familyName, setFamilyName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -36,7 +35,7 @@ const RegistrationPage = () => {
       alert("Passwords do not match");
       return;
     }
-    registerMutation.mutate({ email, password, family_name: familyName });
+    registerMutation.mutate({ email, password });
   };
 
   return (
@@ -52,13 +51,6 @@ const RegistrationPage = () => {
           <Card className="w-full rounded-xl border-0 bg-white shadow-[0px_8px_10px_-6px_#034e221a,0px_10px_25px_-5px_#034e2226]">
             <CardContent className="px-6 pb-9 pt-9 sm:px-10 sm:pb-8 sm:pt-10">
               <form className="space-y-6" onSubmit={handleSubmit}>
-                <div className="space-y-1">
-                  <Label htmlFor="family_name" className="text-sm font-semibold leading-5 text-[#191c1e]">Family Name</Label>
-                  <div className="relative">
-                    <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#404940]" />
-                    <Input id="family_name" value={familyName} onChange={(e) => setFamilyName(e.target.value)} className="h-[51px] rounded-lg border-2 border-[#e1e2e4] bg-[#f8f9fb] pl-10 pr-3 text-base font-normal leading-normal text-[#6b7280]" />
-                  </div>
-                </div>
                 <div className="space-y-1">
                   <Label htmlFor="email" className="text-sm font-semibold leading-5 text-[#191c1e]">Email address</Label>
                   <div className="relative">

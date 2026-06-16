@@ -1,12 +1,17 @@
-export const Logo = () => {
+import { cn } from "@/lib/utils";
+
+type LogoProps = {
+  className?: string;
+};
+
+export const Logo = ({ className }: LogoProps) => {
   return (
-      <img
-        src="/earnit_icon_black.webp"
-        alt="EarnIt logo"
-        className="object-cover h-35 w-auto"
-      />
+    <img
+      src="/earnit_icon_black.webp"
+      alt="EarnIt logo"
+      className={cn("h-36 w-auto object-contain", className)}
+    />
   );
 };
 
-export default Logo
-
+export default Logo;

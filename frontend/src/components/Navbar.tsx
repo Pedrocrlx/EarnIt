@@ -17,16 +17,16 @@ export const Navbar = () => {
   const isLoginPage = location.pathname === "/login";
   const isRegisterPage = location.pathname === "/register";
 
-  const primaryButtonStyle = "h-auto rounded-full bg-[#deec5a] px-6 py-3 shadow-[0px_4px_0px_#5b630080] hover:bg-[#d7e652] text-sm font-bold leading-5 text-[#1a1d00]";
-  const ghostButtonStyle = "h-auto px-6 py-3 shadow-none hover:bg-transparent text-sm font-semibold leading-5 text-[#003514] hover:text-[#003514]";
+  const primaryButtonStyle = "h-auto rounded-full bg-[#deec5a] px-4 py-2 text-xs font-bold leading-5 text-[#1a1d00] shadow-[0px_4px_0px_#5b630080] hover:bg-[#d7e652] sm:text-sm";
+  const ghostButtonStyle = "h-auto px-4 py-2 text-xs font-semibold leading-5 text-[#003514] shadow-none hover:bg-transparent hover:text-[#003514] sm:text-sm";
 
   return (
     <header className="w-full border-b border-black/5 bg-white shadow-[0px_1px_2px_#0000000d]">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between px-5 py-2 sm:px-8 lg:px-16">
         <Link to="/">
-          <Logo/>
+          <Logo className="h-12 w-auto sm:h-14" />
         </Link>
-        <nav aria-label="Primary" className="hidden items-center gap-16 md:flex">
+        <nav aria-label="Primary" className="hidden items-center gap-10 md:flex lg:gap-16">
           {navigationItems.map((item) => (
             <Link
               key={item.name}
@@ -37,7 +37,7 @@ export const Navbar = () => {
             </Link>
           ))}
         </nav>
-        <div className="flex items-center gap-4 sm:gap-6">
+        <div className="flex items-center gap-2 sm:gap-4">
           {isAuthenticated ? (
             <Button
               variant="default"
