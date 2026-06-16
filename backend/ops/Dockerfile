@@ -12,4 +12,6 @@ COPY pyproject.toml uv.lock ./
 
 RUN uv sync --no-dev
 
-CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Apply pending migrations before serving — idempotent, so this is safe on every
+# container start (no-op once the db is already at head).
+CMD ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload"]

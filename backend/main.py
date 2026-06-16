@@ -1,43 +1,63 @@
-import httpx
-from fastapi import FastAPI
+import logging
+from contextlib import asynccontextmanager
 
-app = FastAPI()
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
+
+from src.api.routes import api_router
+from src.core.config import settings
+from src.logging_config import configure_logging
+from src.services import accounts
+
+configure_logging()
+logger = logging.getLogger(__name__)
 
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("EarnIt API starting up")
+    # Reconstruct a limbo-purge task for every still-unverified account, so pending
+    # purges survive a restart (their deadline is derived from users.created_at).
+    await accounts.rearm_pending_purges()
+    yield
+    await accounts.cancel_pending_purges()
+    logger.info("EarnIt API shutting down")
 
 
-@app.post("/test-email")
-async def send_test_email():
-    """
-    Sends a test email to pedro@gmail.com using Mailpit's REST API.
-    Assumes Mailpit is accessible at http://mailpit:8025 (internal docker network).
-    """
-    # Use 'mailpit' if running in Docker, 'localhost' if running locally
-    mailpit_host = "mailpit"
-    url = f"http://{mailpit_host}:8025/api/v1/send"
+app = FastAPI(lifespan=lifespan)
 
-    payload = {
-        "From": {"Name": "EarnIt System", "Email": "system@earnit.local"},
-        "To": [{"Name": "Pedro", "Email": "pedro@gmail.com"}],
-        "Subject": "Mailpit Test - Lorem Ipsum",
-        "Text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod "
-        "tempor incididunt ut labore et dolore magna aliqua.",
-        "HTML": "<h1>Lorem Ipsum</h1><p>Lorem ipsum dolor sit amet</p>",
-    }
 
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            return {"status": "success", "mailpit_response": response.json()}
-    except httpx.ConnectError:
-        # Fallback for local development outside Docker
-        url = "http://localhost:8025/api/v1/send"
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=payload)
-            return {"status": "success", "mailpit_response": response.json(), "mode": "local"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+# Catch any unhandled database uniqueness failures and return a clean 409.
+# Routes that want a more specific message catch IntegrityError themselves first.
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": "Resource already exists."})
+
+
+# This overrides FastAPI's default HTTPException handler, which always wraps `detail`
+# as {"detail": ...}. Routes that raise structured errors — e.g.
+# HTTPException(403, detail={"error": "account_disabled", "message": "..."}) — need
+# {"error": ..., "message": ...} at the top level to match the spec, so:
+#   - dict detail  -> used as-is for the response body (no "detail" wrapper)
+#   - string detail -> kept as {"detail": "..."} for backwards compatibility
+# If a 403/409/etc. response body looks "double-nested" or missing fields during
+# debugging, check whether this handler is firing as expected.
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    content = exc.detail if isinstance(exc.detail, dict) else {"detail": exc.detail}
+    return JSONResponse(status_code=exc.status_code, content=content, headers=exc.headers)
+
+
+app.include_router(api_router)
+
+# Allow the frontend dev servers and any origins listed in settings to send
+# credentialed requests (cookies).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)

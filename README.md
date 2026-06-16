@@ -4,6 +4,8 @@
 
 The app is a React SPA served by Vite, talking to a FastAPI backend. FastAPI persists data in PostgreSQL. In the full stack setup, Nginx is the single public entrypoint on port 80: it routes `/` to the Vite dev server for the SPA, and `/api`, `/docs`, and `/openapi.json` to FastAPI. FastAPI then reads/writes to PostgreSQL on the internal Docker network, while the browser only ever talks to Nginx.
 
+Outbound emails (verification codes, password/PIN reset) are sent to **Mailpit**, a dev SMTP sink with a web UI at `http://localhost:8025`. Mailpit's service definition is isolated in [`backend/mail/`](backend/mail/README.md) and pulled into both `compose.yaml` (root) and `backend/compose.yaml` via Docker Compose's `include:` directive, so it can be run, debugged, or restarted independently of the rest of the stack.
+
 # Tech Stack
 
 - **Backend:** FastAPI, SQLModel, PostgreSQL (see [backend/README.md](backend/README.md))
@@ -80,20 +82,17 @@ graph TD
         
         %% Data and Init Configs
         PostgresVolume[(postgres_data Volume)]
-        InitSQL["./ops/postgres/init.sql"]
     end
 
     %% Dependencies and Mounts
     API -->|Depends on Healthy DB| DB
     DB -.->|Persists Data| PostgresVolume
-    InitSQL -.->|Initializes schema| DB
 
     %% Styling
     style Dev fill:#f9f,stroke:#333,stroke-width:2px
     style API fill:#bbf,stroke:#333,stroke-width:2px
     style DB fill:#ffb,stroke:#333,stroke-width:2px
     style PostgresVolume fill:#ddd,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5
-    style InitSQL fill:#e1f5fe,stroke:#0288d1,stroke-width:1px
 ```
 
 # Development Architecture Frontend
