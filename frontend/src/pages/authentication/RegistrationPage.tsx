@@ -10,6 +10,11 @@ import { Separator } from "@/components/ui/separator";
 import Logo from "@/components/Logo";
 import { apiFetch } from "@/lib/api";
 
+type RegisterCredentials = {
+  email: string;
+  password: string;
+};
+
 const RegistrationPage = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -19,7 +24,7 @@ const RegistrationPage = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const registerMutation = useMutation({
-    mutationFn: (data: any) => apiFetch("/auth/register", {
+    mutationFn: (data: RegisterCredentials) => apiFetch("/auth/register", {
       method: "POST",
       body: JSON.stringify(data),
     }),

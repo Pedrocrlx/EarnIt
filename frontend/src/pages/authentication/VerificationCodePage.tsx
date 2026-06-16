@@ -5,6 +5,18 @@ import { Button } from "@/components/ui/button";
 import { useMutation } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
+type VerifyCodeRequest = {
+  code: string;
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+};
+
 const OTP_LENGTH = 6;
 
 export const VerificationCode = () => {
@@ -108,15 +120,15 @@ export const VerificationCode = () => {
   };
 
   const verifyMutation = useMutation({
-    mutationFn: (data: any) => apiFetch("/auth/verify", {
+    mutationFn: (data: VerifyCodeRequest) => apiFetch("/auth/verify", {
       method: "POST",
       body: JSON.stringify(data),
     }),
     onSuccess: () => {
       navigate("/dashboard");
     },
-    onError: (error: any) => {
-      alert(error.message || "Verification failed");
+    onError: (error: unknown) => {
+      alert(getErrorMessage(error, "Verification failed"));
     },
   });
 
@@ -127,8 +139,8 @@ export const VerificationCode = () => {
     onSuccess: () => {
       alert("A new verification code has been sent.");
     },
-    onError: (error: any) => {
-      alert(error.message || "Failed to resend code");
+    onError: (error: unknown) => {
+      alert(getErrorMessage(error, "Failed to resend code"));
     },
   });
 
