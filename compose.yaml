@@ -1,8 +1,3 @@
-# Mailpit lives in its own compose file (backend/mail/compose.yaml), isolated
-# from the EarnIt application services below — see backend/mail/README.md.
-include:
-  - backend/mail/compose.yaml
-
 services:
   # +++++ NGINX Reverse Proxy (The Front Door) +++++++++++++++++++++++++++++++++++++++++
   proxy:
