@@ -1,14 +1,18 @@
+import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.db.database import AsyncSessionLocal
 from src.models.auth import Child, User
 from src.models.tasks import Task, TaskSubmission, WalletTransaction
 from src.services.tasks._shared import get_child_or_404, get_submission_or_404
+
+_slot_task: asyncio.Task | None = None
 
 logger = logging.getLogger(__name__)
 
@@ -177,3 +181,79 @@ async def list_submissions(
         query = query.where(TaskSubmission.status == status)
     result = await session.execute(query)
     return list(result.scalars().all())
+
+
+# ---------------------------------------------------------------------------
+# Daily duty slot generation (tasks 15 & 16)
+# ---------------------------------------------------------------------------
+
+
+async def generate_daily_duty_slots(session: AsyncSession) -> int:
+    """Insert a pending submission slot for every active duty task that lacks one today.
+
+    Safe to call multiple times — the unique constraint on (task_id, scheduled_date)
+    is the DB-level guard; the pre-check here avoids unnecessary writes.
+    """
+    today = datetime.now(UTC).date()
+    duties = (
+        await session.execute(
+            select(Task).where(Task.task_type == "duty", Task.is_active.is_(True))
+        )
+    ).scalars().all()
+
+    count = 0
+    for duty in duties:
+        existing = (
+            await session.execute(
+                select(TaskSubmission).where(
+                    TaskSubmission.task_id == duty.id,
+                    TaskSubmission.scheduled_date == today,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            session.add(
+                TaskSubmission(
+                    task_id=duty.id,
+                    child_id=duty.child_id,
+                    scheduled_date=today,
+                    status="pending",
+                )
+            )
+            count += 1
+
+    if count:
+        await session.commit()
+        logger.info("Generated %d duty slot(s) for %s", count, today)
+    return count
+
+
+def _seconds_until_next_midnight() -> float:
+    now = datetime.now(UTC)
+    next_midnight = datetime.combine(now.date() + timedelta(days=1), time.min, tzinfo=UTC)
+    return (next_midnight - now).total_seconds()
+
+
+async def _daily_slot_loop() -> None:
+    while True:
+        await asyncio.sleep(_seconds_until_next_midnight())
+        async with AsyncSessionLocal() as session:
+            await generate_daily_duty_slots(session)
+
+
+async def start_daily_slot_job() -> None:
+    """Startup hook: create today's slots immediately, then repeat each midnight."""
+    global _slot_task
+    async with AsyncSessionLocal() as session:
+        await generate_daily_duty_slots(session)
+    _slot_task = asyncio.create_task(_daily_slot_loop())
+    _slot_task.add_done_callback(lambda _: logger.info("Daily slot loop exited"))
+
+
+async def stop_daily_slot_job() -> None:
+    """Cancel the midnight loop (shutdown / test teardown)."""
+    global _slot_task
+    if _slot_task is not None:
+        _slot_task.cancel()
+        await asyncio.gather(_slot_task, return_exceptions=True)
+        _slot_task = None

@@ -10,6 +10,7 @@ from src.api.routes import api_router
 from src.core.config import settings
 from src.logging_config import configure_logging
 from src.services import accounts
+from src.services.tasks import start_daily_slot_job, stop_daily_slot_job
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -21,8 +22,10 @@ async def lifespan(app: FastAPI):
     # Reconstruct a limbo-purge task for every still-unverified account, so pending
     # purges survive a restart (their deadline is derived from users.created_at).
     await accounts.rearm_pending_purges()
+    await start_daily_slot_job()
     yield
     await accounts.cancel_pending_purges()
+    await stop_daily_slot_job()
     logger.info("EarnIt API shutting down")
 
 
