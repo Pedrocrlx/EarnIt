@@ -82,6 +82,23 @@ class BatchApproveResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Child task list (used by GET /children/{child_id}/tasks)
+# ---------------------------------------------------------------------------
+
+
+class ChildTaskResponse(BaseModel):
+    id: UUID
+    title: str
+    description: str | None
+    task_type: str
+    reward_amount: Decimal
+    expires_at: datetime | None
+    submission: SubmissionResponse | None  # today's slot for duties; latest for extra_tasks
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
 # Wallet schemas (task 6)
 # ---------------------------------------------------------------------------
 
