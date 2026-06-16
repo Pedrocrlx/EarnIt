@@ -1,12 +1,16 @@
 from uuid import UUID
 
 import jwt
-from fastapi import Cookie, Depends, HTTPException
+from fastapi import Cookie, Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.database import get_session
 from src.models.auth import User
 from src.security.tokens import decode_token
+
+# auto_error=False so we can fall through to the cookie path without a 403.
+_bearer = HTTPBearer(auto_error=False)
 
 
 def _extract_user_id(payload: dict) -> UUID:
@@ -20,18 +24,23 @@ def _extract_user_id(payload: dict) -> UUID:
 
 
 async def get_current_user(
-    access_token: str | None = Cookie(default=None),
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     session: AsyncSession = Depends(get_session),
 ) -> User:
     """FastAPI dependency for routes that require a full authenticated session.
 
-    Decodes the access_token cookie, validates scope == "full", then confirms
-    the users row still exists (401 if purged) and is_active is true (403 if disabled).
+    Accepts the token from the access_token HttpOnly cookie (browser/production)
+    or an Authorization: Bearer header (Swagger /docs). Reading the cookie via
+    Request avoids exposing it as an OpenAPI parameter, keeping Swagger clean.
     """
-    if access_token is None:
+    token = (credentials.credentials if credentials else None) or request.cookies.get(
+        "access_token"
+    )
+    if token is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        payload = decode_token(access_token)
+        payload = decode_token(token)
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token") from None
     if payload.get("scope") != "full":
