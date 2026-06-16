@@ -5,6 +5,7 @@ import VerificationCode from "@/pages/authentication/VerificationCodePage.tsx";
 import DashboardPage from "@/pages/DashboardPage";
 import ProfileSelectorPage from "@/pages/ProfileSelectorPage";
 import LandingPage from "@/pages/LandingPage";
+import OnboardingPage from "@/pages/OnboardingPage";
 import Layout from "./components/Layout.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
 
@@ -17,6 +18,11 @@ function App() {
           <Route path="/register" element={<RegistrationPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/verification" element={<VerificationCode />} />
+          <Route path="/onboarding" element={
+            
+              <OnboardingPage />
+            
+          } />
           <Route path="/profiles/select" element={
             <ProtectedRoute>
               <ProfileSelectorPage />
