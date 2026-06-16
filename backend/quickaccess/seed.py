@@ -6,6 +6,7 @@ Run from backend/:
     uv run quickaccess/seed.py
     uv run quickaccess/seed.py --email custom@test.com --password Pass123! --family-name Demo
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,7 +21,6 @@ from uuid import UUID
 
 import asyncpg
 import httpx
-
 
 # ── .env loader ───────────────────────────────────────────────────────────────
 
@@ -121,9 +121,7 @@ async def seed(email: str, password: str, family_name: str) -> None:
             _die(f"Registration failed {reg_res.status_code}: {reg_res.text}")
 
         # 3. Derive verification code straight from DB (no email needed)
-        row = await conn.fetchrow(
-            "SELECT id, updated_at FROM users WHERE email = $1", email
-        )
+        row = await conn.fetchrow("SELECT id, updated_at FROM users WHERE email = $1", email)
         await conn.close()
 
         if row is None:

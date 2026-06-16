@@ -103,7 +103,7 @@ async def maybe_complete_onboarding(user: User, session: AsyncSession) -> None:
 
     One-way: never reverts once set.
     """
-    if user.onboarding_completed or user.parent_pin_hash is None:
+    if user.onboarding_completed or user.parent_pin_hash is None or not user.family_name:
         return
     count = await session.scalar(select(func.count()).where(Child.user_id == user.id))
     if count >= settings.MIN_CHILDREN_FOR_ONBOARDING:

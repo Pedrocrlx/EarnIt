@@ -39,6 +39,7 @@ async def update_family_name(
     current_user.family_name = body.family_name
     await session.commit()
     logger.info("Family name updated: user_id=%s", current_user.id)
+    await maybe_complete_onboarding(current_user, session)
     return UpdateFamilyNameResponse(status="success", family_name=body.family_name)
 
 
