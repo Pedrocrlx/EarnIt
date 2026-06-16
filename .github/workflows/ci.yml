@@ -25,7 +25,7 @@ jobs:
         run: python -m pip install --upgrade ruff
 
       - name: Ruff lint
-        run: ruff check format .
+        run: ruff check format src .
 
       - name: Ruff format
         run: ruff format check src . --fix
