@@ -2,8 +2,6 @@ import {
   ClipboardList, 
   TrendingUp, 
   Gift, 
-  CheckCircle2, 
-  Coins, 
   ArrowRight,
   Shield,
   MessageCircle,

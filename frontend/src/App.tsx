@@ -5,6 +5,7 @@ import VerificationCode from "@/pages/authentication/VerificationCodePage.tsx";
 import DashboardPage from "@/pages/DashboardPage";
 import LandingPage from "@/pages/LandingPage";
 import Layout from "./components/Layout.tsx";
+import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
 
 function App() {
   return (
@@ -15,7 +16,11 @@ function App() {
           <Route path="/register" element={<RegistrationPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/verification" element={<VerificationCode />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          } />
         </Routes>
       </Layout>
     </BrowserRouter>

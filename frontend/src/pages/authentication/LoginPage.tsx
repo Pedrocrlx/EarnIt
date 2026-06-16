@@ -1,29 +1,38 @@
-import { LockKeyhole, Mail } from "lucide-react";
+import { LockKeyhole, Mail, Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import Logo from "@/components/Logo";
-
-const formFields = [
-  {
-    id: "email",
-    label: "Email address",
-    type: "email",
-    icon: Mail,
-  },
-  {
-    id: "password",
-    label: "Password",
-    type: "password",
-    icon: LockKeyhole,
-  },
-];
+import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
+  const loginMutation = useMutation({
+    mutationFn: (data: any) => apiFetch("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+    onSuccess: () => {
+      login();
+      navigate("/");
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    loginMutation.mutate({ email, password });
+  };
 
   return (
     <main className="bg-[#f8f9fb]">
@@ -37,36 +46,35 @@ const LoginPage = () => {
           </header>
           <Card className="w-full rounded-xl border-0 bg-white shadow-[0px_8px_10px_-6px_#034e221a,0px_10px_25px_-5px_#034e2226]">
             <CardContent className="px-6 pb-9 pt-9 sm:px-10 sm:pb-8 sm:pt-10">
-              <form className="space-y-6">
-                {formFields.map((field) => {
-                  const Icon = field.icon;
-
-                  return (
-                    <div key={field.id} className="space-y-1">
-                      <Label
-                        htmlFor={field.id}
-                        className=" text-sm font-semibold leading-5 text-[#191c1e]"
-                      >
-                        {field.label}
-                      </Label>
-                      <div className="relative">
-                        <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#404940]" />
-                        <Input
-                          id={field.id}
-                          type={field.type}
-                          defaultValue={field.defaultValue}
-                          className="h-[51px] rounded-lg border-2 border-[#e1e2e4] bg-[#f8f9fb] pl-10 pr-3  text-base font-normal leading-normal text-[#6b7280] placeholder:text-[#6b7280] focus-visible:ring-0 focus-visible:ring-offset-0"
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+              <form className="space-y-6" onSubmit={handleSubmit}>
+                <div className="space-y-1">
+                  <Label htmlFor="email" className="text-sm font-semibold leading-5 text-[#191c1e]">Email address</Label>
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#404940]" />
+                    <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-[51px] rounded-lg border-2 border-[#e1e2e4] bg-[#f8f9fb] pl-10 pr-3 text-base font-normal leading-normal text-[#6b7280]" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="password" className="text-sm font-semibold leading-5 text-[#191c1e]">Password</Label>
+                  <div className="relative">
+                    <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#404940]" />
+                    <Input id="password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} className="h-[51px] rounded-lg border-2 border-[#e1e2e4] bg-[#f8f9fb] pl-10 pr-10 text-base font-normal leading-normal text-[#6b7280]" />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#404940]"
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
 
                 <Button
                   type="submit"
-                  className="h-auto w-full rounded-lg bg-[#dbe957] px-4 py-[18px] shadow-[0px_8px_10px_-6px_#034e221a,0px_10px_25px_-5px_#034e2226] hover:bg-[#d2e24f]  text-sm font-semibold tracking-[0.70px] text-[#5f6800]"
+                  className="h-auto w-full rounded-lg bg-[#dbe957] px-4 py-[18px] shadow-[0px_8px_10px_-6px_#034e221a,0px_10px_25px_-5px_#034e2226] hover:bg-[#d2e24f] text-sm font-semibold tracking-[0.70px] text-[#5f6800]"
+                  disabled={loginMutation.isPending}
                 >
-                  SIGN IN
+                  {loginMutation.isPending ? "SIGNING IN..." : "SIGN IN"}
                 </Button>
                 <div className="space-y-2 pt-3">
                   <Separator className="bg-[#e1e2e4]" />
@@ -77,7 +85,7 @@ const LoginPage = () => {
                     <Button
                       variant="link"
                       onClick={() => navigate("/register")}
-                      className="h-auto p-0  text-sm font-semibold leading-5 text-[#003514] no-underline hover:no-underline"
+                      className="h-auto p-0 text-sm font-semibold leading-5 text-[#003514] no-underline hover:no-underline"
                     >
                       Create an account
                     </Button>

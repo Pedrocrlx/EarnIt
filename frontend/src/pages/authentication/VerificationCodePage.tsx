@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Mail, ArrowRight, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useMutation } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
 
 const OTP_LENGTH = 6;
 
@@ -17,7 +19,8 @@ export const VerificationCode = () => {
   }, []);
 
   const updateDigit = (index: number, value: string) => {
-    const sanitizedValue = value.replace(/\D/g, "").slice(-1);
+    // Allow alphanumeric, sanitize to uppercase
+    const sanitizedValue = value.replace(/[^a-zA-Z0-9]/g, "").slice(-1).toUpperCase();
     const nextCode = [...code];
     nextCode[index] = sanitizedValue;
     setCode(nextCode);
@@ -34,10 +37,13 @@ export const VerificationCode = () => {
       return;
     }
 
+    // Allow alphanumeric, sanitize to uppercase
     const pastedDigits = value
-      .replace(/\D/g, "")
+      .replace(/[^a-zA-Z0-9]/g, "")
       .slice(0, OTP_LENGTH - index)
-      .split("");
+      .split("")
+      .map(char => char.toUpperCase());
+
     if (pastedDigits.length === 0) {
       return;
     }
@@ -101,12 +107,35 @@ export const VerificationCode = () => {
     handleChange(index, pastedText);
   };
 
+  const verifyMutation = useMutation({
+    mutationFn: (data: any) => apiFetch("/auth/verify", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+    onSuccess: () => {
+      navigate("/dashboard");
+    },
+    onError: (error: any) => {
+      alert(error.message || "Verification failed");
+    },
+  });
+
+  const resendMutation = useMutation({
+    mutationFn: () => apiFetch("/auth/verify/resend", {
+      method: "POST",
+    }),
+    onSuccess: () => {
+      alert("A new verification code has been sent.");
+    },
+    onError: (error: any) => {
+      alert(error.message || "Failed to resend code");
+    },
+  });
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isComplete) return;
-    // Handle submission logic here
-    console.log("Submitting code:", code.join(""));
-    navigate("/dashboard");
+    verifyMutation.mutate({ code: code.join("") });
   };
 
   const otpSlots = Array.from({ length: OTP_LENGTH }, (_, index) => index);
@@ -115,7 +144,7 @@ export const VerificationCode = () => {
     <main className="bg-[#f8f9fb] pt-24 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-[448px] space-y-6">
         <section
-          className="bg-white rounded-xl overflow-hidden shadow-[0px_4px_24px_#034e2214] p-10 relative"
+          className="bg-white rounded-xl overflow-hidden shadow-[0px_4px_24px_#034e221a] p-10 relative"
           aria-labelledby="email-verification-title"
         >
           <div className="absolute -top-12 -right-12 w-32 h-32 bg-[#deec5a] rounded-full blur-[32px] opacity-20" />
@@ -156,9 +185,8 @@ export const VerificationCode = () => {
                         inputRefs.current[slotIndex] = element;
                       }}
                       type="text"
-                      inputMode="numeric"
+                      inputMode="text"
                       autoComplete={slotIndex === 0 ? "one-time-code" : "off"}
-                      pattern="[0-9]*"
                       maxLength={1}
                       aria-label={`Digit ${slotIndex + 1}`}
                       value={code[slotIndex]}
@@ -196,9 +224,11 @@ export const VerificationCode = () => {
               </div>
               <button
                 type="button"
+                onClick={() => resendMutation.mutate()}
+                disabled={resendMutation.isPending}
                 className="text-[#003514] font-semibold text-sm hover:underline transition-all"
               >
-                Resend Code
+                {resendMutation.isPending ? "Resending..." : "Resend Code"}
               </button>
             </div>
           </div>

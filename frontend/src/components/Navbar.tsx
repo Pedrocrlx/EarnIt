@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import Logo from "./Logo";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
 const navigationItems = [
   { name: "Features", path: "/#features" },
@@ -11,6 +12,7 @@ const navigationItems = [
 export const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAuthenticated, logout } = useAuth();
 
   const isLoginPage = location.pathname === "/login";
   const isRegisterPage = location.pathname === "/register";
@@ -36,20 +38,35 @@ export const Navbar = () => {
           ))}
         </nav>
         <div className="flex items-center gap-4 sm:gap-6">
-          <Button
-            variant={isRegisterPage ? "default" : "ghost"}
-            onClick={() => navigate("/login")}
-            className={cn(isRegisterPage ? primaryButtonStyle : ghostButtonStyle)}
-          >
-            Log In
-          </Button>
-          <Button
-            variant={isLoginPage || (!isRegisterPage && !isLoginPage) ? "default" : "ghost"}
-            onClick={() => navigate("/register")}
-            className={cn(isLoginPage || (!isRegisterPage && !isLoginPage) ? primaryButtonStyle : ghostButtonStyle)}
-          >
-            Sign Up
-          </Button>
+          {isAuthenticated ? (
+            <Button
+              variant="default"
+              onClick={async () => {
+                await logout();
+                navigate("/");
+              }}
+              className={cn(primaryButtonStyle)}
+            >
+              Logout
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant={isRegisterPage ? "default" : "ghost"}
+                onClick={() => navigate("/login")}
+                className={cn(isRegisterPage ? primaryButtonStyle : ghostButtonStyle)}
+              >
+                Sign In
+              </Button>
+              <Button
+                variant={isLoginPage || (!isRegisterPage && !isLoginPage) ? "default" : "ghost"}
+                onClick={() => navigate("/register")}
+                className={cn(isLoginPage || (!isRegisterPage && !isLoginPage) ? primaryButtonStyle : ghostButtonStyle)}
+              >
+                Sign Up
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </header>
