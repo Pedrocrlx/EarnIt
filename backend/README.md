@@ -63,38 +63,31 @@ When running, services are available at:
 ```
 backend/
 ├── main.py                   # FastAPI app, middleware, exception handlers, lifespan
-├── app/
-│   ├── config.py             # Settings (env-driven), token lifetimes, password/PIN rules
-│   ├── database.py           # Async SQLAlchemy engine + get_session dependency
-│   ├── logging_config.py     # stdlib logging setup (LOG_LEVEL, format) — see Logging
-│   ├── mail.py                # fastapi-mail config (SMTP + Jinja2 templates)
-│   ├── models/models.py      # SQLModel tables: User, Child
-│   ├── schemas/
-│   │   ├── auth.py            # Pydantic request/response schemas + validators
-│   │   └── profiles.py        # Child profile request schemas
-│   ├── security/
-│   │   ├── hashing.py        # bcrypt hashing for passwords/PINs (non-blocking)
-│   │   └── tokens.py         # JWT creation/decoding (access + pending-verification)
-│   ├── services/
-│   │   ├── accounts.py       # Account lifecycle: limbo-purge task + onboarding-completion trigger
-│   │   └── verification/     # Stateless verification codes (no DB rows)
-│   │       ├── core.py       # global HMAC engine (generate/verify/expiry/cooldown)
-│   │       ├── account.py    # account-verification orchestration (+ email)
-│   │       ├── password_reset.py  # password-reset orchestration (+ email)
-│   │       └── pin_reset.py  # PIN-reset orchestration (+ email)
-│   ├── dependencies/auth.py  # get_current_user / get_pending_verification_user / get_password_reset_user guards
-│   ├── routers/
-│   │   ├── auth/              # /api/v1/auth/* endpoints (register, verify, login, logout, forgot/reset password, pin, pin reset)
-│   │   └── profiles.py        # /api/v1/profiles/* endpoints (children, family)
-│   └── templates/email/      # HTML email templates (verification code, etc.)
-├── alembic/                   # DB migrations
-├── mail/                      # Mailpit compose service, isolated — see mail/README.md
-└── tests/                     # pytest suite (httpx AsyncClient against the app)
+├── src/
+│   ├── api/                  # API entry point and routes
+│   │   ├── auth/             # /api/v1/auth/* endpoints
+│   │   ├── profiles.py       # /api/v1/profiles/* endpoints
+│   │   └── routes.py         # Centralized API router inclusion
+│   ├── core/
+│   │   └── config.py         # Settings (env-driven), token lifetimes, password/PIN rules
+│   ├── db/
+│   │   └── database.py       # Async SQLAlchemy engine + get_session dependency
+│   ├── dependencies/         # Dependency injection guards (e.g., auth)
+│   ├── email/                # HTML email templates (verification code, etc.)
+│   ├── logging_config.py     # stdlib logging setup
+│   ├── mail.py               # fastapi-mail config
+│   ├── models/               # SQLModel tables: User, Child
+│   ├── schemas/              # Pydantic request/response schemas
+│   ├── security/             # Hashing, JWT creation/decoding
+│   └── services/             # Core business logic: accounts, verification
+├── alembic/                  # DB migrations
+├── mail/                     # Mailpit compose service
+└── tests/                    # pytest suite
 ```
 
 ## Data Model
 
-Two tables (`app/models/models.py`). Verification codes are **not** a table — they are stateless, derived from `users.updated_at` (see [Auth Flows](#auth-flows-step-by-step)).
+Two tables (`src/models/auth.py`). Verification codes are **not** a table — they are stateless, derived from `users.updated_at` (see [Auth Flows](#auth-flows-step-by-step)).
 
 ### `users` — parent account
 
@@ -128,7 +121,7 @@ Two tables (`app/models/models.py`). Verification codes are **not** a table — 
 
 ## Auth Flows (step by step)
 
-Every flow shares one **stateless verification code** primitive (`app/services/verification/core.py`):
+Every flow shares one **stateless verification code** primitive (`src/services/verification/core.py`):
 
 > A code is `HMAC(SECRET_KEY, "user_id:purpose:updated_at")`, valid for `VERIFICATION_CODE_EXPIRY_MINUTES` (10 min) from the `updated_at` anchor. **Nothing is persisted** — the server recomputes and compares it. The `purpose` (`account_verification` / `password_reset` / `pin_reset`) is baked into the HMAC, so a code from one flow can't be used in another. Because all purposes share the `updated_at` anchor, at most one code is live per account at a time (rotating for any purpose supersedes the rest) — acceptable for MVP, where these flows don't overlap.
 
@@ -202,7 +195,7 @@ All implemented endpoints are covered by tests in `tests/` (one file per feature
 
 ## Logging
 
-Plain stdlib `logging`, configured once in `app/logging_config.py` and applied at
+Plain stdlib `logging`, configured once in `src/logging_config.py` and applied at
 import time in `main.py` (`configure_logging()`, before the `FastAPI` app is
 constructed). Every module gets its own logger via `logging.getLogger(__name__)`
 and inherits the global config — no per-module setup needed.

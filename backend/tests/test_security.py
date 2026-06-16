@@ -7,22 +7,22 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
-from app.dependencies.auth import (
+from src.core.config import settings
+from src.dependencies.auth import (
     get_current_user,
     get_password_reset_user,
     get_pending_verification_user,
 )
-from app.models.models import User
-from app.schemas.auth import PinRequest, RegisterRequest
-from app.security.hashing import hash_secret, verify_secret
-from app.security.tokens import (
+from src.models.auth import User
+from src.schemas.auth import PinRequest, RegisterRequest
+from src.security.hashing import hash_secret, verify_secret
+from src.security.tokens import (
     create_access_token,
     create_password_reset_token,
     create_pending_verification_token,
     decode_token,
 )
-from app.services.verification import core
+from src.services.verification import core
 
 
 def _utcnow() -> datetime:

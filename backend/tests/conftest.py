@@ -8,11 +8,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
-import app.database as app_database
-import app.models.models  # noqa: F401 — registers all tables with SQLModel.metadata
-import app.services.accounts as app_accounts
-from app.config import settings
-from app.database import get_session
+import src.db.database as app_database
+import src.models.auth  # noqa: F401 — registers all tables with SQLModel.metadata
+import src.services.accounts as app_accounts
+from src.core.config import settings
+from src.db.database import get_session
 
 # ---------------------------------------------------------------------------
 # Shared test data & helpers
@@ -129,7 +129,7 @@ async def _cleanup_purge_tasks():
     # /register arms a long-sleeping limbo-purge task; cancel any left pending so
     # they don't leak across tests or warn at event-loop teardown.
     yield
-    from app.services import accounts
+    from src.services import accounts
 
     await accounts.cancel_pending_purges()
 
@@ -142,7 +142,7 @@ def mock_mail(monkeypatch):
     async def _fake_send(message, template_name=None):
         captured.append(message)
 
-    monkeypatch.setattr("app.mail.mail.send_message", _fake_send)
+    monkeypatch.setattr("src.mail.mail.send_message", _fake_send)
     return captured
 
 

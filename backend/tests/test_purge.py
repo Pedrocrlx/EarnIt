@@ -4,10 +4,10 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import app.database as app_database
-from app.config import settings
-from app.models.models import User
-from app.services import accounts
+import src.db.database as app_database
+from src.core.config import settings
+from src.models.auth import User
+from src.services import accounts
 
 
 def _now() -> datetime:

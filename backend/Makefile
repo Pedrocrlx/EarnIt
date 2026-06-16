@@ -1,4 +1,4 @@
-.PHONY: help up-ba down enter-db ruff rm-venv mail-up mail-down mail-logs
+.PHONY: help up-ba down enter-db ruff format lint-fix rm-venv mail-up mail-down mail-logs
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -29,11 +29,15 @@ mail-logs: ## Tail Mailpit logs
 
 ## --- Code quality ---
 
-ruff: ## Run ruff check
-	uv run ruff check .
+format: ## Run ruff formatting
+	uv run ruff format .
+
+lint-fix: ## Run ruff and apply automatic fixes
+	uv run ruff check src . --fix
 
 ## --- Cleanup ---
 
-rm-venv: ## Remove the local virtualenv
+cache: ## Remove the local virtualenv and __pycache__ directories
 	sudo rm -rf .venv/
-
+	sudo rm -rf */__pycache__
+	sudo rm -rf .ruff_cache/
