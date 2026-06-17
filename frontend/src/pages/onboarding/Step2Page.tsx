@@ -3,6 +3,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/context/useAuth";
+import { apiFetch } from "@/lib/api";
 
 type ChildProfile = {
   id: number;
@@ -16,10 +18,24 @@ const createChild = (id: number): ChildProfile => ({
   birthDate: "",
 });
 
+const getInitialChildren = () => {
+  const savedCount = Number(
+    window.sessionStorage.getItem("earnit:onboarding:child-count") ?? "1",
+  );
+  const childCount = Number.isFinite(savedCount)
+    ? Math.min(Math.max(savedCount, 1), 10)
+    : 1;
+
+  return Array.from({ length: childCount }, (_, index) => createChild(index + 1));
+};
+
 const OnboardingStep2Page = () => {
   const navigate = useNavigate();
-  const [nextChildId, setNextChildId] = useState(2);
-  const [children, setChildren] = useState<ChildProfile[]>([createChild(1)]);
+  const { familyProfile, refreshSession } = useAuth();
+  const [children, setChildren] = useState<ChildProfile[]>(getInitialChildren);
+  const [nextChildId, setNextChildId] = useState(children.length + 1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const addChild = () => {
     setChildren((currentChildren) => [
@@ -44,11 +60,61 @@ const OnboardingStep2Page = () => {
     field: keyof Omit<ChildProfile, "id">,
     value: string,
   ) => {
+    setError("");
     setChildren((currentChildren) =>
       currentChildren.map((child) =>
         child.id === id ? { ...child, [field]: value } : child,
       ),
     );
+  };
+
+  const saveChildren = async () => {
+    setError("");
+
+    const activeChildren = children.map((child) => ({
+      name: child.firstName.trim(),
+      birth_date: child.birthDate || null,
+    }));
+
+    if (activeChildren.some((child) => !child.name)) {
+      setError("Enter a first name for each child.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const alreadyCreated =
+        window.sessionStorage.getItem("earnit:onboarding:children-created") ===
+        "true";
+      const hasExistingChildren = (familyProfile?.children.length ?? 0) > 0;
+
+      if (!alreadyCreated && !hasExistingChildren) {
+        await Promise.all(
+          activeChildren.map((child) =>
+            apiFetch("/profiles/children", {
+              method: "POST",
+              body: JSON.stringify(child),
+            }),
+          ),
+        );
+        window.sessionStorage.setItem(
+          "earnit:onboarding:children-created",
+          "true",
+        );
+      }
+
+      await refreshSession();
+      navigate("/onboarding/step3");
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to save child profiles.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -150,13 +216,11 @@ const OnboardingStep2Page = () => {
                       </label>
                       <Input
                         id={`child-${child.id}-birth-date`}
-                        type="text"
-                        inputMode="numeric"
+                        type="date"
                         value={child.birthDate}
                         onChange={(event) =>
                           updateChild(child.id, "birthDate", event.target.value)
                         }
-                        placeholder="mm/dd/yyyy"
                         className="h-14 rounded-xl border-2 border-transparent bg-[#f3f4f6] px-4 text-base text-[#191c1e] placeholder:text-[#6b7280] focus-visible:border-[#003514] focus-visible:ring-0"
                       />
                     </div>
@@ -176,6 +240,12 @@ const OnboardingStep2Page = () => {
             </span>
             Add Another Child
           </button>
+
+          {error && (
+            <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+              {error}
+            </p>
+          )}
         </form>
 
         <div className="grid w-full gap-4 sm:grid-cols-2">
@@ -190,9 +260,11 @@ const OnboardingStep2Page = () => {
           </Button>
           <Button
             type="button"
-            className="h-auto rounded-full bg-[#d4e251] px-10 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.08),0px_4px_6px_-4px_rgba(0,0,0,0.08)] hover:bg-[#cfdc42]"
+            onClick={saveChildren}
+            disabled={isSubmitting}
+            className="h-auto rounded-full bg-[#d4e251] px-10 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.08),0px_4px_6px_-4px_rgba(0,0,0,0.08)] hover:bg-[#cfdc42] disabled:opacity-60"
           >
-            Continue
+            {isSubmitting ? "Saving..." : "Continue"}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>

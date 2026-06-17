@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useMutation } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/context/useAuth";
 
 type VerifyCodeRequest = {
   code: string;
@@ -17,12 +18,14 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-const OTP_LENGTH = 6;
+const OTP_LENGTH = 8;
 
 export const VerificationCode = () => {
   const [code, setCode] = useState<string[]>(Array(OTP_LENGTH).fill(""));
+  const [message, setMessage] = useState("");
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const isComplete = useMemo(() => code.every((digit) => digit !== ""), [code]);
 
@@ -124,11 +127,14 @@ export const VerificationCode = () => {
       method: "POST",
       body: JSON.stringify(data),
     }),
-    onSuccess: () => {
-      navigate("/dashboard");
+    onSuccess: async () => {
+      const profile = await login();
+      navigate(profile?.onboarding_completed ? "/profile" : "/onboarding/step1", {
+        replace: true,
+      });
     },
     onError: (error: unknown) => {
-      alert(getErrorMessage(error, "Verification failed"));
+      setMessage(getErrorMessage(error, "Verification failed"));
     },
   });
 
@@ -137,16 +143,17 @@ export const VerificationCode = () => {
       method: "POST",
     }),
     onSuccess: () => {
-      alert("A new verification code has been sent.");
+      setMessage("A new verification code has been sent.");
     },
     onError: (error: unknown) => {
-      alert(getErrorMessage(error, "Failed to resend code"));
+      setMessage(getErrorMessage(error, "Failed to resend code"));
     },
   });
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isComplete) return;
+    setMessage("");
     verifyMutation.mutate({ code: code.join("") });
   };
 
@@ -181,7 +188,7 @@ export const VerificationCode = () => {
             <form className="w-full space-y-8" onSubmit={handleSubmit}>
               <fieldset className="flex justify-between gap-2">
                 <legend className="sr-only">
-                  Enter the 6-digit verification code
+                  Enter the 8-character verification code
                 </legend>
                 {otpSlots.map((slotIndex) => {
                   const isFilled = code[slotIndex] !== "";
@@ -218,14 +225,20 @@ export const VerificationCode = () => {
                 })}
               </fieldset>
 
+              {message && (
+                <p className="rounded-lg bg-[#f3f4f6] px-4 py-3 text-center text-sm font-semibold text-[#003514]">
+                  {message}
+                </p>
+              )}
+
               <Button
                 type="submit"
-                disabled={!isComplete}
+                disabled={!isComplete || verifyMutation.isPending}
                 className={`w-full h-14 rounded-lg bg-[#deec5a] hover:bg-[#d7e652] text-[#1a1d00] font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
                   !isComplete && "opacity-50 cursor-not-allowed"
                 }`}
               >
-                Verify
+                {verifyMutation.isPending ? "Verifying..." : "Verify"}
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </form>

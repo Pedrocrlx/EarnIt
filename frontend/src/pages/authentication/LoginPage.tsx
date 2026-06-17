@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import Logo from "@/components/Logo";
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/useAuth";
 
 type LoginCredentials = {
@@ -22,21 +22,44 @@ const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const loginMutation = useMutation({
     mutationFn: (data: LoginCredentials) => apiFetch("/auth/login", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-    onSuccess: () => {
-      login();
-      navigate("/profiles/select");
-      navigate("/onboarding/step1", { replace: true });
+    onSuccess: async () => {
+      const profile = await login();
+      navigate(profile?.onboarding_completed ? "/profile" : "/onboarding/step1", {
+        replace: true,
+      });
+    },
+    onError: (error: unknown) => {
+      if (
+        error instanceof ApiError &&
+        error.status === 403 &&
+        typeof error.data === "object" &&
+        error.data !== null &&
+        "detail" in error.data &&
+        typeof error.data.detail === "object" &&
+        error.data.detail !== null &&
+        "error" in error.data.detail &&
+        error.data.detail.error === "account_unverified"
+      ) {
+        navigate("/verification", { replace: true });
+        return;
+      }
+
+      setFormError(
+        error instanceof Error ? error.message : "Unable to sign in.",
+      );
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
     loginMutation.mutate({ email, password });
   };
 
@@ -75,6 +98,12 @@ const LoginPage = () => {
                   </div>
                 </div>
 
+                {formError && (
+                  <p className="rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    {formError}
+                  </p>
+                )}
+
                 <Button
                   type="submit"
                   className="h-auto w-full rounded-lg bg-[#dbe957] px-4 py-[18px] shadow-[0px_8px_10px_-6px_#034e221a,0px_10px_25px_-5px_#034e2226] hover:bg-[#d2e24f] text-sm font-semibold tracking-[0.70px] text-[#5f6800]"
@@ -86,7 +115,7 @@ const LoginPage = () => {
                   <Separator className="bg-[#e1e2e4]" />
                   <div className="flex items-center justify-center gap-1 pt-0.5 text-center">
                     <span className=" text-base font-normal leading-6 text-[#404940]">
-                      Dont'have an account ?
+                      Don&apos;t have an account?
                     </span>
                     <Button
                       variant="link"

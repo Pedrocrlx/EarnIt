@@ -1,15 +1,52 @@
 import { ArrowRight, ChevronDown, UsersRound } from "lucide-react";
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/context/useAuth";
+import { apiFetch } from "@/lib/api";
 
 const childCountOptions = Array.from({ length: 10 }, (_, index) => index + 1);
 
 const OnboardingStep1Page = () => {
   const navigate = useNavigate();
-  const [familyName, setFamilyName] = useState("");
+  const { familyProfile, refreshSession } = useAuth();
+  const [familyName, setFamilyName] = useState(familyProfile?.family_name ?? "");
   const [childCount, setChildCount] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+
+    const trimmedFamilyName = familyName.trim();
+
+    if (!trimmedFamilyName || !childCount) {
+      setError("Enter your family name and number of children.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await apiFetch("/profiles/family-name", {
+        method: "PATCH",
+        body: JSON.stringify({ family_name: trimmedFamilyName }),
+      });
+      window.sessionStorage.setItem("earnit:onboarding:child-count", childCount);
+      await refreshSession();
+      navigate("/onboarding/step2");
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to save family setup.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-[#f8f9fb] px-4 py-10 sm:px-6 sm:py-14 lg:py-20">
@@ -44,7 +81,10 @@ const OnboardingStep1Page = () => {
           </p>
         </div>
 
-        <form className="w-full rounded-[32px] bg-white p-6 shadow-[0px_10px_40px_-10px_rgba(3,78,34,0.08)] sm:p-8">
+        <form
+          onSubmit={handleSubmit}
+          className="w-full rounded-[32px] bg-white p-6 shadow-[0px_10px_40px_-10px_rgba(3,78,34,0.08)] sm:p-8"
+        >
           <div className="space-y-5">
             <div className="space-y-1.5">
               <label
@@ -58,7 +98,10 @@ const OnboardingStep1Page = () => {
                 <Input
                   id="family-name"
                   value={familyName}
-                  onChange={(event) => setFamilyName(event.target.value)}
+                  onChange={(event) => {
+                    setFamilyName(event.target.value);
+                    setError("");
+                  }}
                   placeholder="e.g. The Robinsons"
                   className="h-14 rounded-xl border-2 border-transparent bg-[#f3f4f6] pl-11 pr-4 text-base text-[#191c1e] placeholder:text-[#6b7280] focus-visible:border-[#003514] focus-visible:ring-0"
                 />
@@ -76,7 +119,10 @@ const OnboardingStep1Page = () => {
                 <select
                   id="children-count"
                   value={childCount}
-                  onChange={(event) => setChildCount(event.target.value)}
+                  onChange={(event) => {
+                    setChildCount(event.target.value);
+                    setError("");
+                  }}
                   className="h-14 w-full appearance-none rounded-xl border-2 border-transparent bg-[#f3f4f6] px-4 text-base text-[#191c1e] outline-none transition-colors placeholder:text-[#6b7280] focus:border-[#003514] focus:ring-0"
                 >
                   <option value="">Select number</option>
@@ -89,17 +135,25 @@ const OnboardingStep1Page = () => {
                 <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6b7280]" />
               </div>
             </div>
+
+            {error && (
+              <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                {error}
+              </p>
+            )}
+          </div>
+
+          <div className="mt-10 flex justify-center">
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="h-auto rounded-full bg-[#d4e251] px-10 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.08),0px_4px_6px_-4px_rgba(0,0,0,0.08)] hover:bg-[#cfdc42] disabled:opacity-60"
+            >
+              {isSubmitting ? "Saving..." : "Continue"}
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
           </div>
         </form>
-
-        <Button
-          type="button"
-          onClick={() => navigate("/onboarding/step2")}
-          className="h-auto rounded-full bg-[#d4e251] px-10 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.08),0px_4px_6px_-4px_rgba(0,0,0,0.08)] hover:bg-[#cfdc42]"
-        >
-          Continue
-          <ArrowRight className="ml-2 h-4 w-4" />
-        </Button>
       </section>
     </main>
   );

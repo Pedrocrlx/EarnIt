@@ -18,8 +18,15 @@ export const Navbar = () => {
   const isRegisterPage = location.pathname === "/register";
   const isVerificationPage = location.pathname === "/verification";
   const isOnboardingPage = location.pathname.startsWith("/onboarding");
+  const isProfileSelectorPage = location.pathname === "/profile";
 
-  if (isLoginPage || isRegisterPage || isVerificationPage || isOnboardingPage) {
+  if (
+    isLoginPage ||
+    isRegisterPage ||
+    isVerificationPage ||
+    isOnboardingPage ||
+    isProfileSelectorPage
+  ) {
     return null;
   }
 

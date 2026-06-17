@@ -22,6 +22,7 @@ const RegistrationPage = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const registerMutation = useMutation({
     mutationFn: (data: RegisterCredentials) => apiFetch("/auth/register", {
@@ -29,15 +30,20 @@ const RegistrationPage = () => {
       body: JSON.stringify(data),
     }),
     onSuccess: () => {
-      // For MVP, if pending verification, navigate to login or verify page
       navigate("/verification");
+    },
+    onError: (error: unknown) => {
+      setFormError(
+        error instanceof Error ? error.message : "Unable to create account.",
+      );
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
     if (password !== confirmPassword) {
-      alert("Passwords do not match");
+      setFormError("Passwords do not match.");
       return;
     }
     registerMutation.mutate({ email, password });
@@ -91,6 +97,12 @@ const RegistrationPage = () => {
                     </button>
                   </div>
                 </div>
+
+                {formError && (
+                  <p className="rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    {formError}
+                  </p>
+                )}
 
                 <Button
                   type="submit"
