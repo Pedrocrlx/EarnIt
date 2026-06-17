@@ -1,3 +1,10 @@
+"""Password/PIN hashing — async bcrypt wrappers.
+
+bcrypt is deliberately slow (that's its security property), which would block
+the event loop if run inline. Both helpers offload the work to the default
+thread pool so request handling stays responsive under concurrent logins.
+"""
+
 import asyncio
 
 import bcrypt

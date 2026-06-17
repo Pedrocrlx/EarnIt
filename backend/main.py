@@ -1,3 +1,11 @@
+"""Application entry point — builds and wires the FastAPI app.
+
+Owns the cross-cutting setup that every request relies on: the lifespan hooks
+(dev seeding, re-arming limbo purges, the daily duty-slot job), global
+exception handlers that normalise error bodies, the OpenAPI tag descriptions,
+CORS, and mounting the versioned API router. Run with ``uvicorn main:app``.
+"""
+
 import logging
 from contextlib import asynccontextmanager
 
@@ -19,6 +27,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Run startup and shutdown work around the app's serving lifetime.
+
+    On startup: optionally seed the dev user, re-arm any pending limbo-purge
+    tasks, and start the daily duty-slot job. On shutdown (after ``yield``):
+    cancel those background tasks so the process exits cleanly.
+    """
     logger.info("EarnIt API starting up")
     if settings.DISABLE_AUTH:
         logger.warning("DISABLE_AUTH=true — JWT auth is OFF; all requests run as %s", DEV_USER_EMAIL)
@@ -56,6 +70,7 @@ app = FastAPI(
 # Routes that want a more specific message catch IntegrityError themselves first.
 @app.exception_handler(IntegrityError)
 async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    """Turn an uncaught DB uniqueness violation into a clean 409 response."""
     return JSONResponse(status_code=409, content={"detail": "Resource already exists."})
 
 
@@ -69,6 +84,7 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
 # debugging, check whether this handler is firing as expected.
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    """Serialise HTTPException, preserving dict details as the top-level body."""
     content = exc.detail if isinstance(exc.detail, dict) else {"detail": exc.detail}
     return JSONResponse(status_code=exc.status_code, content=content, headers=exc.headers)
 

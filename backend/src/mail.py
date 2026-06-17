@@ -1,3 +1,10 @@
+"""Email transport — the shared FastMail client and its SMTP configuration.
+
+Exposes a single ``mail`` instance used by every email-sending code path
+(account verification, password reset, PIN reset). Templates live in
+``src/email/`` and are rendered with Jinja2 by fastapi-mail.
+"""
+
 from pathlib import Path
 
 from fastapi_mail import (

@@ -1,4 +1,4 @@
-.PHONY: help up-ba down enter-db ruff format lint-fix rm-venv mail-up mail-down mail-logs seed
+.PHONY: help up-ba down enter-db ruff format lint-fix rm-venv mail-up mail-down mail-logs
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -12,12 +12,6 @@ down: ## Stop and remove the Docker containers and volumes
 	docker compose down -v
 
 ## --- Database ---
-
-seed: ## Seed a dev account and print its access_token (pass EMAIL= PASS= NAME= to override)
-	uv run quickaccess/seed.py \
-		$(if $(EMAIL),--email $(EMAIL)) \
-		$(if $(PASS),--password $(PASS)) \
-		$(if $(NAME),--family-name $(NAME))
 
 enter-db: ## Enter the PostgreSQL database and list tables
 	docker compose exec db psql -U earn_it_user -d earn_it_db -c "\dt"

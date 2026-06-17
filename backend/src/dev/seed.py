@@ -1,3 +1,11 @@
+"""Dev fixtures — seed a ready-to-use parent and child for local runs.
+
+When ``DISABLE_AUTH`` is on, ``get_current_user`` returns this seeded dev user
+instead of decoding a token, so the API is usable without logging in. Run as a
+module (``python -m src.dev.seed``) to seed manually, or it runs on startup.
+NEVER enable this path in production.
+"""
+
 import asyncio
 import logging
 from datetime import UTC, date, datetime

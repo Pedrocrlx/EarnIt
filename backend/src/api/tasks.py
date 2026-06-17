@@ -1,3 +1,11 @@
+"""Parent-facing task endpoints — task CRUD and submission review.
+
+Routes under ``/api/v1/tasks`` let a parent create, list, update, and
+soft-delete tasks, then review the submissions their children make (list,
+approve, reject, and batch-approve). All routes require an authenticated
+parent session and operate only on that parent's own tasks/children.
+"""
+
 import logging
 from uuid import UUID
 

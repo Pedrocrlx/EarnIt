@@ -1,3 +1,10 @@
+"""Task schemas — request/response models for tasks, submissions, wallet.
+
+Defines the validated bodies the parent and child endpoints accept and the
+shapes they return. The create-task validator encodes the core business rule:
+duties carry no reward, extra tasks must reward more than zero.
+"""
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
@@ -12,6 +19,8 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class TaskCreateRequest(BaseModel):
+    """Body for ``POST /tasks`` — a new duty or extra task for a child."""
+
     child_id: UUID
     title: str = Field(min_length=1, max_length=150)
     description: str | None = None
@@ -34,6 +43,7 @@ class TaskCreateRequest(BaseModel):
 
     @model_validator(mode="after")
     def check_reward_rules(self) -> "TaskCreateRequest":
+        """Tie reward to task type: duties pay 0, extra tasks pay > 0."""
         if self.task_type == "duty" and self.reward_amount != Decimal("0.00"):
             raise ValueError("Duty tasks must have reward_amount of 0")
         if self.task_type == "extra_task" and self.reward_amount <= 0:
@@ -42,6 +52,8 @@ class TaskCreateRequest(BaseModel):
 
 
 class TaskUpdateRequest(BaseModel):
+    """Body for ``PATCH /tasks/{id}`` — all fields optional (partial update)."""
+
     title: str | None = Field(default=None, min_length=1, max_length=150)
     description: str | None = None
     expires_at: datetime | None = None
@@ -59,6 +71,8 @@ class TaskUpdateRequest(BaseModel):
 
 
 class TaskResponse(BaseModel):
+    """Serialised ``Task`` returned by the task endpoints."""
+
     id: UUID
     user_id: UUID
     child_id: UUID
@@ -80,6 +94,8 @@ class TaskResponse(BaseModel):
 
 
 class RejectRequest(BaseModel):
+    """Body for rejecting a submission — an optional note for the child."""
+
     rejection_note: str | None = None
 
     model_config = {
@@ -90,6 +106,8 @@ class RejectRequest(BaseModel):
 
 
 class SubmissionResponse(BaseModel):
+    """Serialised ``TaskSubmission`` returned by the submission endpoints."""
+
     id: UUID
     task_id: UUID
     child_id: UUID
@@ -103,6 +121,8 @@ class SubmissionResponse(BaseModel):
 
 
 class BatchApproveRequest(BaseModel):
+    """Body for approve-all — optionally scope to a single child."""
+
     child_id: UUID | None = None
 
     model_config = {
@@ -113,6 +133,8 @@ class BatchApproveRequest(BaseModel):
 
 
 class BatchApproveResponse(BaseModel):
+    """Response for approve-all — count of submissions approved."""
+
     approved: int
 
 
@@ -122,6 +144,8 @@ class BatchApproveResponse(BaseModel):
 
 
 class ChildTaskResponse(BaseModel):
+    """A task as the child sees it, with its current submission attached."""
+
     id: UUID
     title: str
     description: str | None
@@ -139,6 +163,8 @@ class ChildTaskResponse(BaseModel):
 
 
 class WalletTransactionResponse(BaseModel):
+    """Serialised ``WalletTransaction`` — one ledger entry."""
+
     id: UUID
     child_id: UUID
     task_submission_id: UUID | None
@@ -151,6 +177,8 @@ class WalletTransactionResponse(BaseModel):
 
 
 class WalletBalanceResponse(BaseModel):
+    """A child's wallet — current balance plus full transaction history."""
+
     child_id: UUID
     balance: Decimal
     transactions: list[WalletTransactionResponse]

@@ -1,3 +1,11 @@
+"""Child-facing endpoints — the kid's task list, submissions, and wallet.
+
+Routes under ``/api/v1/children/{child_id}`` let a child view their assigned
+tasks, submit a completion (duty or extra task), resubmit a rejected one, and
+read their wallet balance and history. Every route is scoped to the
+authenticated parent and 404s if the child does not belong to them.
+"""
+
 import logging
 from datetime import UTC, datetime
 from uuid import UUID

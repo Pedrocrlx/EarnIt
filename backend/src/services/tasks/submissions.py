@@ -1,3 +1,11 @@
+"""Submission service — the submit/review lifecycle and reward crediting.
+
+Covers a child submitting a task, a parent approving/rejecting (single or
+batch), and resubmitting a rejected one. Approving a rewarded extra task writes
+a wallet credit. Also owns the background job that, each midnight, generates a
+fresh submission slot for every active duty so it's ready to be completed.
+"""
+
 import asyncio
 import logging
 from datetime import UTC, date, datetime, time, timedelta
@@ -20,6 +28,13 @@ logger = logging.getLogger(__name__)
 async def submit_task(
     task_id: UUID, child_id: UUID, user: User, session: AsyncSession
 ) -> TaskSubmission:
+    """Record a child's completion of a task.
+
+    Duties stamp today's pre-generated slot (409 if already submitted today);
+    extra tasks create a new pending submission (409 if one is already pending
+    or approved). The local import of ``get_task_or_404`` avoids a circular
+    import between this module and ``crud``.
+    """
     from src.services.tasks.crud import get_task_or_404
 
     task = await get_task_or_404(task_id, user, session)
@@ -69,6 +84,11 @@ async def submit_task(
 async def resubmit_task(
     submission_id: UUID, child_id: UUID, user: User, session: AsyncSession
 ) -> TaskSubmission:
+    """Reset a rejected submission back to pending for another review.
+
+    Clears the rejection note and review timestamp and re-stamps
+    ``submitted_at``. Raises 409 unless the submission is currently rejected.
+    """
     await get_child_or_404(child_id, user, session)
     submission = await session.get(TaskSubmission, submission_id)
     if submission is None or submission.child_id != child_id:
@@ -87,6 +107,11 @@ async def resubmit_task(
 async def approve_submission(
     submission_id: UUID, user: User, session: AsyncSession
 ) -> TaskSubmission:
+    """Approve one pending submission, crediting the wallet if rewarded.
+
+    A rewarded extra task writes a ``credit`` wallet transaction; duties (zero
+    reward) just flip status. Raises 409 unless the submission is pending.
+    """
     submission = await get_submission_or_404(submission_id, user, session)
     if submission.status != "pending":
         raise HTTPException(status_code=409, detail="Submission is not pending")
@@ -112,6 +137,11 @@ async def approve_submission(
 async def reject_submission(
     submission_id: UUID, rejection_note: str | None, user: User, session: AsyncSession
 ) -> TaskSubmission:
+    """Reject one pending submission, attaching an optional note for the child.
+
+    Raises 409 unless the submission is pending. No wallet entry is written; the
+    child may later resubmit via ``resubmit_task``.
+    """
     submission = await get_submission_or_404(submission_id, user, session)
     if submission.status != "pending":
         raise HTTPException(status_code=409, detail="Submission is not pending")
@@ -126,6 +156,11 @@ async def reject_submission(
 async def batch_approve(
     user: User, session: AsyncSession, child_id: UUID | None = None
 ) -> int:
+    """Approve every pending submission for the parent (or one child).
+
+    Crediting follows the same rule as single approval — rewarded extra tasks
+    write a wallet credit. Returns the number of submissions approved.
+    """
     children_q = select(Child.id).where(Child.user_id == user.id)
     if child_id is not None:
         children_q = children_q.where(Child.id == child_id)
@@ -171,6 +206,10 @@ async def list_submissions(
     child_id: UUID | None = None,
     status: str | None = None,
 ) -> list[TaskSubmission]:
+    """List submissions across the parent's children, optionally filtered.
+
+    Scopes to one child via ``child_id`` and/or one ``status`` when provided.
+    """
     children_q = select(Child.id).where(Child.user_id == user.id)
     if child_id is not None:
         children_q = children_q.where(Child.id == child_id)
@@ -229,12 +268,14 @@ async def generate_daily_duty_slots(session: AsyncSession) -> int:
 
 
 def _seconds_until_next_midnight() -> float:
+    """Seconds from now until the next UTC midnight (the loop's sleep)."""
     now = datetime.now(UTC)
     next_midnight = datetime.combine(now.date() + timedelta(days=1), time.min, tzinfo=UTC)
     return (next_midnight - now).total_seconds()
 
 
 async def _daily_slot_loop() -> None:
+    """Sleep until each midnight, then generate that day's duty slots forever."""
     while True:
         await asyncio.sleep(_seconds_until_next_midnight())
         async with AsyncSessionLocal() as session:

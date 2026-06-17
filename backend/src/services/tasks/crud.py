@@ -1,3 +1,10 @@
+"""Task CRUD service — create, fetch, list, update, and soft-delete tasks.
+
+The write paths re-check child/task ownership (via ``_shared`` and
+``get_task_or_404``) so a parent can only act on their own records. Deletes are
+soft (``is_active = False``) to keep submission history intact.
+"""
+
 import logging
 from datetime import UTC, datetime
 from uuid import UUID
@@ -15,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 async def create_task(body: TaskCreateRequest, user: User, session: AsyncSession) -> Task:
+    """Create a task for one of the parent's children (404 if not theirs)."""
     await get_child_or_404(body.child_id, user, session)
     task = Task(
         user_id=user.id,
@@ -32,6 +40,7 @@ async def create_task(body: TaskCreateRequest, user: User, session: AsyncSession
 
 
 async def get_task_or_404(task_id: UUID, user: User, session: AsyncSession) -> Task:
+    """Return the task if it belongs to ``user``, else raise 404."""
     task = await session.get(Task, task_id)
     if task is None or task.user_id != user.id:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -45,6 +54,10 @@ async def list_tasks(
     task_type: str | None = None,
     is_active: bool | None = None,
 ) -> list[Task]:
+    """List the parent's tasks, optionally filtered by child/type/active.
+
+    Each provided filter narrows the result; omitted filters match all values.
+    """
     query = select(Task).where(Task.user_id == user.id)
     if child_id is not None:
         query = query.where(Task.child_id == child_id)
@@ -57,6 +70,7 @@ async def list_tasks(
 
 
 async def update_task(task: Task, body: TaskUpdateRequest, session: AsyncSession) -> Task:
+    """Apply a partial update — only the fields present in ``body`` change."""
     if body.title is not None:
         task.title = body.title
     if body.description is not None:
@@ -72,6 +86,7 @@ async def update_task(task: Task, body: TaskUpdateRequest, session: AsyncSession
 
 
 async def soft_delete_task(task: Task, session: AsyncSession) -> Task:
+    """Deactivate a task (``is_active = False``); history is preserved."""
     task.is_active = False
     task.updated_at = datetime.now(UTC)
     await session.commit()

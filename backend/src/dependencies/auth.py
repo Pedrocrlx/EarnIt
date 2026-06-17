@@ -1,3 +1,11 @@
+"""Auth dependencies — resolve the current user from a JWT for each request.
+
+Provides two FastAPI dependencies: ``get_current_user`` (full session, used by
+all protected routes) and ``get_pending_verification_user`` (the limited
+verify/resend scope). Both accept the token from a Bearer header or the
+matching HttpOnly cookie, and translate any failure into the right 401/403.
+"""
+
 from uuid import UUID
 
 import jwt
@@ -21,6 +29,11 @@ _bearer = HTTPBearer(auto_error=False)
 
 
 def _extract_user_id(payload: dict) -> UUID:
+    """Pull the ``sub`` claim from a decoded token and parse it as a UUID.
+
+    Raises 401 if the claim is missing or not a valid UUID — both indicate a
+    malformed or tampered token rather than a merely expired one.
+    """
     sub = payload.get("sub")
     if not sub:
         raise HTTPException(status_code=401, detail="Invalid token")

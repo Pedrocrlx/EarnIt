@@ -1,3 +1,11 @@
+"""Tasks service — business logic behind the task/submission/wallet routes.
+
+Re-exports the public functions from the focused submodules so callers import
+from one place: ``crud`` (task lifecycle), ``submissions`` (submit/review +
+the daily duty-slot job), and ``wallet`` (balance and history). Cross-cutting
+ownership checks live in ``_shared``.
+"""
+
 from src.services.tasks.crud import (
     create_task,
     get_task_or_404,
