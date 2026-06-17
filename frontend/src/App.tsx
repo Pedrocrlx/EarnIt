@@ -20,6 +20,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/verification" element={<VerificationCode />} />
           <Route path="/onboarding" element={<Navigate to="/onboarding/step1" replace />} />
+          <Route path="/profile" element={<ProfileSelectorPage />} />
           <Route
             path="/onboarding/step1"
             element={
@@ -27,7 +28,7 @@ function App() {
                 <OnboardingStep1Page />
               </ProtectedRoute>
             }
-                  />                  
+          />
           <Route
             path="/onboarding/step2"
             element={
