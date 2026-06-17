@@ -9,8 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlmodel import SQLModel
 
 import src.db.database as app_database
-import src.models.auth  # noqa: F401 — registers all tables with SQLModel.metadata
+import src.models.auth  # noqa: F401 — registers auth tables with SQLModel.metadata
+import src.models.tasks  # noqa: F401 — registers task tables with SQLModel.metadata
 import src.services.accounts as app_accounts
+import src.services.tasks.submissions as app_tasks_submissions
 from src.core.config import settings
 from src.db.database import get_session
 
@@ -102,13 +104,16 @@ async def db_engine():
     test_session_factory = async_sessionmaker(engine, expire_on_commit=False)
     original_database_factory = app_database.AsyncSessionLocal
     original_accounts_factory = app_accounts.AsyncSessionLocal
+    original_submissions_factory = app_tasks_submissions.AsyncSessionLocal
     app_database.AsyncSessionLocal = test_session_factory
     app_accounts.AsyncSessionLocal = test_session_factory
+    app_tasks_submissions.AsyncSessionLocal = test_session_factory
 
     yield engine
 
     app_database.AsyncSessionLocal = original_database_factory
     app_accounts.AsyncSessionLocal = original_accounts_factory
+    app_tasks_submissions.AsyncSessionLocal = original_submissions_factory
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.drop_all)
     await engine.dispose()
@@ -122,6 +127,15 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession]:
         await session.execute(text("DELETE FROM children"))
         await session.execute(text("DELETE FROM users"))
         await session.commit()
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _force_auth_on():
+    """Ensure DISABLE_AUTH is always off during tests, regardless of config.py or .env."""
+    original = settings.DISABLE_AUTH
+    settings.DISABLE_AUTH = False
+    yield
+    settings.DISABLE_AUTH = original
 
 
 @pytest_asyncio.fixture(autouse=True)

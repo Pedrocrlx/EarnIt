@@ -9,7 +9,7 @@ This directory contains the FastAPI backend for the EarnIt application.
 - **ORM:** SQLModel
 - **Migrations:** Alembic
 - **Mail:** fastapi-mail (SMTP, dev via Mailpit)
-- **Background work:** asyncio tasks (durable limbo-purge, re-armed on startup)
+- **Background work:** asyncio tasks (durable limbo-purge + daily duty-slot generation, both re-armed on startup)
 - **Package Manager:** [uv](https://github.com/astral-sh/uv)
 
 ## Getting Started
@@ -66,7 +66,9 @@ backend/
 ├── src/
 │   ├── api/                  # API entry point and routes
 │   │   ├── auth/             # /api/v1/auth/* endpoints
+│   │   ├── children.py       # /api/v1/children/* endpoints (child task/wallet view)
 │   │   ├── profiles.py       # /api/v1/profiles/* endpoints
+│   │   ├── tasks.py          # /api/v1/tasks/* endpoints (parent task management)
 │   │   └── routes.py         # Centralized API router inclusion
 │   ├── core/
 │   │   └── config.py         # Settings (env-driven), token lifetimes, password/PIN rules
@@ -76,10 +78,10 @@ backend/
 │   ├── email/                # HTML email templates (verification code, etc.)
 │   ├── logging_config.py     # stdlib logging setup
 │   ├── mail.py               # fastapi-mail config
-│   ├── models/               # SQLModel tables: User, Child
+│   ├── models/               # SQLModel tables: User, Child, Task, TaskSubmission, WalletTransaction
 │   ├── schemas/              # Pydantic request/response schemas
 │   ├── security/             # Hashing, JWT creation/decoding
-│   └── services/             # Core business logic: accounts, verification
+│   └── services/             # Core business logic: accounts, verification, tasks (crud/submissions/wallet)
 ├── alembic/                  # DB migrations
 ├── mail/                     # Mailpit compose service
 └── tests/                    # pytest suite
@@ -118,6 +120,50 @@ Two tables (`src/models/auth.py`). Verification codes are **not** a table — th
 | `created_at` / `updated_at` | datetime (tz) | |
 
 > Two columns pull double duty: `created_at` anchors the limbo purge, and `updated_at` anchors the verification code — rotating `updated_at` mints a fresh code and invalidates the old one.
+
+### `tasks` — task definitions (N per child, `src/models/tasks.py`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID (PK) | |
+| `user_id` | UUID (FK → `users.id`) | parent who created it — `ON DELETE CASCADE` |
+| `child_id` | UUID (FK → `children.id`) | assigned child — `ON DELETE CASCADE` |
+| `title` | varchar(150) | |
+| `description` | text, nullable | |
+| `task_type` | varchar(20) | `duty` \| `extra_task` |
+| `reward_amount` | numeric(10,2) | always `0.00` for duties; > 0 for extra_tasks |
+| `expires_at` | timestamptz, nullable | optional expiry for extra_tasks |
+| `is_active` | bool, default `true` | soft-delete; inactive tasks stop generating slots |
+| `created_at` / `updated_at` | timestamptz | |
+
+### `task_submissions` — submission slots (`src/models/tasks.py`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID (PK) | |
+| `task_id` | UUID (FK → `tasks.id`) | `ON DELETE CASCADE` |
+| `child_id` | UUID (FK → `children.id`) | denormalised for query ease — `ON DELETE CASCADE` |
+| `scheduled_date` | date, nullable | set for auto-generated duty slots; `NULL` for extra_tasks |
+| `submitted_at` | timestamptz, nullable | `NULL` = not yet submitted (duty slots start `NULL`) |
+| `status` | varchar(20) | `pending` \| `approved` \| `rejected` |
+| `reviewed_at` | timestamptz, nullable | stamped when a parent approves or rejects |
+| `rejection_note` | text, nullable | free-text from the parent on rejection |
+
+Unique constraint: `(task_id, scheduled_date)` — one duty slot per task per day.
+
+### `wallet_transactions` — earnings ledger (`src/models/tasks.py`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID (PK) | |
+| `child_id` | UUID (FK → `children.id`) | `ON DELETE CASCADE` |
+| `task_submission_id` | UUID (FK → `task_submissions.id`), nullable | `ON DELETE SET NULL` — keeps ledger intact if submission deleted |
+| `amount` | numeric(10,2) | always positive |
+| `transaction_type` | varchar(20) | `credit` \| `debit` |
+| `description` | text, nullable | |
+| `created_at` | timestamptz | |
+
+> **Points display:** all amounts are stored as euros (`numeric(10,2)`). The frontend converts to points at **1 pt = €0.01** (multiply by 100). The API always returns euro values — no backend involvement in the conversion.
 
 ## Auth Flows (step by step)
 
@@ -218,3 +264,82 @@ The full request/response contract for the frontend is documented in **[`docs/ap
 - **Two-stage session model:** after `POST /auth/register` (or a login against an unverified account) the client is in a *pending verification* state — only `/auth/verify` and `/auth/verify/resend` are reachable. Once `/auth/verify` succeeds, the cookie is swapped for a full `access_token` session.
 - **Structured 403 errors** (`account_disabled`, `account_unverified`) are returned as top-level JSON (`{"error": "...", "message": "...", ...}`), not nested under `"detail"` — see `docs/api-contract.md` for the exact shapes per endpoint.
 - **Dev tooling:** verification codes are never returned by the API or logged — during local development, read them from the Mailpit UI at `http://localhost:8025`.
+
+## Task Management Flows (step by step)
+
+All task-management endpoints require a full `access_token` session (parent). `child_id` path parameters are validated against `current_user.id` — a parent can only read/write their own children's data; cross-user access returns `404`.
+
+### 1. Parent — task CRUD (`/api/v1/tasks`)
+
+1. **`POST /api/v1/tasks`** `{ child_id, title, description?, task_type, reward_amount?, expires_at? }` *(`access_token` required)*
+   - Validates `child_id` belongs to the authenticated parent.
+   - Enforces reward rules: `duty` → `reward_amount` must be `0`; `extra_task` → `reward_amount` must be > 0.
+   - Creates the `tasks` row. → `201 TaskResponse`
+2. **`GET /api/v1/tasks`** *(`access_token` required)*
+   - Query params: `child_id?`, `task_type?` (`duty` | `extra_task`), `is_active?` (bool).
+   - Returns all matching tasks owned by the authenticated parent. → `200 list[TaskResponse]`
+3. **`PATCH /api/v1/tasks/{task_id}`** `{ title?, description?, expires_at?, is_active? }` *(`access_token` required)*
+   - `404` if the task doesn't exist or belongs to another user. Partial update — only provided fields are changed. → `200 TaskResponse`
+4. **`DELETE /api/v1/tasks/{task_id}`** *(`access_token` required)*
+   - Soft-delete: sets `is_active = false`. Inactive tasks stop generating daily slots but existing submissions are preserved. → `200 TaskResponse`
+
+### 2. Parent — submission review (`/api/v1/tasks/submissions`)
+
+1. **`GET /api/v1/tasks/submissions`** *(`access_token` required)*
+   - Query params: `child_id?`, `status?` (`pending` | `approved` | `rejected`).
+   - Returns all submissions for the parent's children, newest first. → `200 list[SubmissionResponse]`
+2. **`POST /api/v1/tasks/submissions/{submission_id}/approve`** *(`access_token` required)*
+   - `404` if submission doesn't belong to the parent's child · `409` if already approved or not in `pending` state.
+   - Stamps `reviewed_at`, sets `status = approved`. If `reward_amount > 0`, atomically inserts a `wallet_transactions (credit)` row in the same transaction. → `200 SubmissionResponse`
+3. **`POST /api/v1/tasks/submissions/{submission_id}/reject`** `{ rejection_note? }` *(`access_token` required)*
+   - `404` if submission doesn't belong to the parent's child · `409` if not in `pending` state.
+   - Stamps `reviewed_at`, sets `status = rejected`, stores `rejection_note`. → `200 SubmissionResponse`
+4. **`POST /api/v1/tasks/submissions/approve-all`** `{ child_id? }` *(`access_token` required)*
+   - Batch-approves all `pending` submissions for the parent (optionally filtered to one child). Each approval atomically credits the wallet if `reward_amount > 0`. → `200 { approved: N }`
+
+> **Router ordering note:** `approve-all` is registered *before* `/{submission_id}/approve` in FastAPI to prevent the literal string `"approve-all"` being matched as a UUID path parameter.
+
+### 3. Child — task & wallet view (`/api/v1/children/{child_id}/...`)
+
+1. **`GET /api/v1/children/{child_id}/tasks`** *(`access_token` required)*
+   - Returns the child's active tasks enriched with submission state:
+     - **Duties:** today's slot (`scheduled_date = today`), or `null` if the background job hasn't run yet.
+     - **Extra tasks:** the latest submission (any status), or `null` if never submitted.
+   - → `200 list[ChildTaskResponse]`
+2. **`POST /api/v1/children/{child_id}/tasks/{task_id}/submit`** *(`access_token` required)*
+   - For `duty`: stamps `submitted_at = now()` on today's slot, sets `status = pending`. `409` if already submitted or no slot exists for today.
+   - For `extra_task`: creates a new `task_submissions` row with `status = pending`. `409` if a `pending` or `approved` submission already exists.
+   - → `201 SubmissionResponse`
+3. **`PATCH /api/v1/children/{child_id}/submissions/{submission_id}`** *(`access_token` required)*
+   - Resubmit after a parent rejection. Resets `status → pending`, clears `rejection_note`, stamps `submitted_at = now()` on the **same** submission row (no new row created).
+   - `404` if submission doesn't belong to the child · `409` if status is not `rejected`. → `200 SubmissionResponse`
+4. **`GET /api/v1/children/{child_id}/wallet`** *(`access_token` required)*
+   - Returns `{ child_id, balance, transactions[] }`. Balance is computed as `SUM(amount) WHERE type=credit` − `SUM(amount) WHERE type=debit` via a single DB query.
+   - → `200 WalletBalanceResponse`
+
+### 4. Daily duty-slot background job
+
+On every app startup (`lifespan` in `main.py`), `start_daily_slot_job()` runs:
+1. Immediately calls `generate_daily_duty_slots()` once — creates today's `task_submissions` rows for all active duties (idempotent: skips any `(task_id, scheduled_date)` that already exists).
+2. Spawns an `asyncio.Task` (`_slot_task`) that loops, sleeping until the next UTC midnight, and repeats step 1 daily.
+
+The task reference is stored at module level in `src/services/tasks/submissions.py` to prevent garbage collection. `stop_daily_slot_job()` cancels it cleanly on shutdown. Tests call `generate_daily_duty_slots(session)` directly (bypassing the background loop).
+
+## Epic 2 (Task Management) — Progress
+
+Implementation follows `backend/main-spec.md`, split into 37 numbered tasks:
+
+| Group | Scope | Status |
+|---|---|---|
+| Models (1–3) | `tasks`, `task_submissions`, `wallet_transactions` tables + Alembic migration | ✅ Done |
+| Schemas (4–6) | `TaskCreateRequest/Response`, `SubmissionResponse`, `WalletBalanceResponse`, etc. | ✅ Done |
+| Task CRUD services (7–8) | `create_task`, `list_tasks`, `update_task`, `soft_delete_task` | ✅ Done |
+| Submission services (9–12) | `submit_task`, `resubmit_task`, `approve_submission`, `reject_submission` | ✅ Done |
+| Wallet services (13–14) | `get_balance`, `get_transaction_history` | ✅ Done |
+| Background job (15–16) | `generate_daily_duty_slots`, `start/stop_daily_slot_job`, lifespan wiring | ✅ Done |
+| Task CRUD API (17–20) | `POST/GET /tasks`, `PATCH/DELETE /tasks/{id}` | ✅ Done |
+| Submission review API (21–24) | `GET /submissions`, `approve`, `reject`, `approve-all` | ✅ Done |
+| Child task view API (25–28) | `GET /{child_id}/tasks`, `submit`, `resubmit`, `GET /{child_id}/wallet` | ✅ Done |
+| Tests (29–37) | 31 tests covering CRUD, submit, approve, reject/resubmit, batch approve, wallet, duty slots | ✅ Done |
+
+All 31 task-management tests pass alongside the existing 109 auth/profile tests (140 total).

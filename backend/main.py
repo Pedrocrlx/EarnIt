@@ -8,8 +8,10 @@ from sqlalchemy.exc import IntegrityError
 
 from src.api.routes import api_router
 from src.core.config import settings
+from src.dev.seed import DEV_USER_EMAIL, seed_dev_fixtures
 from src.logging_config import configure_logging
 from src.services import accounts
+from src.services.tasks import start_daily_slot_job, stop_daily_slot_job
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -18,15 +20,35 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("EarnIt API starting up")
+    if settings.DISABLE_AUTH:
+        logger.warning("DISABLE_AUTH=true — JWT auth is OFF; all requests run as %s", DEV_USER_EMAIL)
+        await seed_dev_fixtures()
     # Reconstruct a limbo-purge task for every still-unverified account, so pending
     # purges survive a restart (their deadline is derived from users.created_at).
     await accounts.rearm_pending_purges()
+    await start_daily_slot_job()
     yield
     await accounts.cancel_pending_purges()
+    await stop_daily_slot_job()
     logger.info("EarnIt API shutting down")
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,
+    swagger_ui_parameters={"persistAuthorization": True},
+    openapi_tags=[
+        {"name": "auth/basic",        "description": "Session management — register, login, logout"},
+        {"name": "auth/validations",  "description": "Code and PIN checks — email verify, forgot-password/verify, verify-pin"},
+        {"name": "auth/resets",       "description": "Password and PIN recovery — set, forgot, reset"},
+        {"name": "profiles/family",   "description": "Family summary — parent profile and children list"},
+        {"name": "profiles/children", "description": "Child profile management — create and deactivate"},
+        {"name": "tasks/management",  "description": "Task CRUD — parent creates and manages tasks"},
+        {"name": "tasks/submissions", "description": "Submission review — parent approves or rejects"},
+        {"name": "children/tasks",    "description": "Child task view — list tasks and submit completions"},
+        {"name": "children/wallet",   "description": "Child wallet — balance and transaction history"},
+        {"name": "system",            "description": "Health check"},
+    ],
+)
 
 
 # Catch any unhandled database uniqueness failures and return a clean 409.

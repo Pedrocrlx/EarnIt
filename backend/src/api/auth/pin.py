@@ -20,7 +20,7 @@ from src.services.verification import core
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["auth/resets"])
 
 
 @router.post("/pin")
@@ -42,7 +42,7 @@ async def set_pin(
     return {"status": "success", "message": "Parental security PIN established."}
 
 
-@router.post("/verify-pin")
+@router.post("/verify-pin", tags=["auth/validations"])
 async def verify_pin(
     body: PinRequest,
     current_user: User = Depends(get_current_user),

@@ -23,7 +23,7 @@ from src.services.verification import core, pin_reset
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["auth/resets"])
 
 
 @router.post("/forgot-pin")

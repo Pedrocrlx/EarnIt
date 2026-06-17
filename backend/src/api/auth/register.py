@@ -22,7 +22,7 @@ from src.services.verification import account
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["auth/basic"])
 
 
 @router.post("/register", status_code=201)

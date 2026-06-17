@@ -27,6 +27,16 @@ class RegisterRequest(BaseModel):
     password: str
     family_name: str | None = None
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "email": "maria.silva@example.com",
+                "password": "SecurePass123!",
+                "family_name": "Família Silva",
+            }
+        }
+    }
+
     @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
@@ -37,22 +47,50 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "email": "maria.silva@example.com",
+                "password": "SecurePass123!",
+            }
+        }
+    }
+
 
 class VerifyCodeRequest(BaseModel):
     code: str
 
+    model_config = {"json_schema_extra": {"example": {"code": "482910"}}}
+
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
+    model_config = {
+        "json_schema_extra": {"example": {"email": "maria.silva@example.com"}}
+    }
 
 
 class ResetPasswordVerifyRequest(BaseModel):
     email: EmailStr
     code: str
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "email": "maria.silva@example.com",
+                "code": "293847",
+            }
+        }
+    }
+
 
 class ResetPasswordRequest(BaseModel):
     new_password: str
+
+    model_config = {
+        "json_schema_extra": {"example": {"new_password": "NewSecurePass456!"}}
+    }
 
     @field_validator("new_password")
     @classmethod
@@ -70,6 +108,8 @@ def _validate_pin_format(v: str) -> str:
 class PinRequest(BaseModel):
     pin: str
 
+    model_config = {"json_schema_extra": {"example": {"pin": "1234"}}}
+
     @field_validator("pin")
     @classmethod
     def validate_pin(cls, v: str) -> str:
@@ -79,6 +119,10 @@ class PinRequest(BaseModel):
 class ResetPinRequest(BaseModel):
     code: str
     new_pin: str
+
+    model_config = {
+        "json_schema_extra": {"example": {"code": "748291", "new_pin": "5678"}}
+    }
 
     @field_validator("new_pin")
     @classmethod

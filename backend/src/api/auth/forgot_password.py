@@ -22,7 +22,7 @@ from src.services.verification import core, password_reset
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["auth/resets"])
 
 _GENERIC_REQUEST_RESPONSE = {
     "status": "success",
@@ -49,7 +49,7 @@ async def forgot_password(
     return _GENERIC_REQUEST_RESPONSE
 
 
-@router.post("/forgot-password/verify")
+@router.post("/forgot-password/verify", tags=["auth/validations"])
 async def forgot_password_verify(
     body: ResetPasswordVerifyRequest,
     response: Response,
