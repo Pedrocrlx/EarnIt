@@ -102,6 +102,12 @@ make up-ba      # Start API, DB, and Mailpit
 make down       # Stop the stack
 ```
 
+Run `make help` to list every target. Two cleanup targets are available:
+```bash
+make clean      # Remove Python and tool caches (__pycache__, .ruff_cache, .pytest_cache); keeps the virtualenv
+make full-clean    # Full cleanup — everything in clean plus the local .venv (reinstall with uv sync)
+```
+
 The `api` container talks to `db` over the compose network (`POSTGRES_HOST=db`,
 set in `compose.yaml`) regardless of the `POSTGRES_HOST` in `.env` — `.env` itself
 targets local/pytest (`POSTGRES_HOST=localhost`). On a fresh database, apply

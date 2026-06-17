@@ -1,4 +1,4 @@
-.PHONY: help up-ba down enter-db ruff format lint-fix rm-venv mail-up mail-down mail-logs
+.PHONY: help up-ba down enter-db ruff format lint-fix mail-up mail-down mail-logs clean cleanup
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -37,7 +37,9 @@ lint-fix: ## Run ruff and apply automatic fixes
 
 ## --- Cleanup ---
 
-cache: ## Remove the local virtualenv and __pycache__ directories
-	sudo rm -rf .venv/
-	sudo rm -rf */__pycache__
-	sudo rm -rf .ruff_cache/
+clean: ## Remove Python and tool caches (keeps the virtualenv)
+	sudo find . -type d -name __pycache__ -prune -exec rm -rf {} +
+	sudo rm -rf .ruff_cache .pytest_cache
+
+full-clean: clean ## Full cleanup — everything in clean plus the local virtualenv
+	sudo rm -rf .venv
