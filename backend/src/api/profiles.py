@@ -18,12 +18,29 @@ from src.core.config import settings
 from src.db.database import get_session
 from src.dependencies.auth import get_current_user
 from src.models.auth import Child, User
-from src.schemas.profiles import ChildCreateRequest
+from src.schemas.profiles import (
+    ChildCreateRequest,
+    UpdateFamilyNameRequest,
+    UpdateFamilyNameResponse,
+)
 from src.services.accounts import maybe_complete_onboarding
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/profiles", tags=["profiles"])
+
+
+@router.patch("/family-name")
+async def update_family_name(
+    body: UpdateFamilyNameRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> UpdateFamilyNameResponse:
+    current_user.family_name = body.family_name
+    await session.commit()
+    logger.info("Family name updated: user_id=%s", current_user.id)
+    await maybe_complete_onboarding(current_user, session)
+    return UpdateFamilyNameResponse(status="success", family_name=body.family_name)
 
 
 @router.post("/children", status_code=201)
@@ -33,7 +50,7 @@ async def create_child(
     session: AsyncSession = Depends(get_session),
 ):
     count = await session.scalar(select(func.count()).where(Child.user_id == current_user.id))
-    if count and count >= settings.MAX_CHILDREN_PER_USER:
+    if count >= settings.MAX_CHILDREN_PER_USER:
         logger.info("Child profile creation blocked: cap reached (user_id=%s)", current_user.id)
         raise HTTPException(
             status_code=409,
