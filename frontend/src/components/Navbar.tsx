@@ -16,6 +16,12 @@ export const Navbar = () => {
 
   const isLoginPage = location.pathname === "/login";
   const isRegisterPage = location.pathname === "/register";
+  const isVerificationPage = location.pathname === "/verification";
+  const isOnboardingPage = location.pathname.startsWith("/onboarding");
+
+  if (isLoginPage || isRegisterPage || isVerificationPage || isOnboardingPage) {
+    return null;
+  }
 
   const primaryButtonStyle = "h-auto rounded-full bg-[#deec5a] px-4 py-2 text-xs font-bold leading-5 text-[#1a1d00] shadow-[0px_4px_0px_#5b630080] hover:bg-[#d7e652] sm:text-sm";
   const ghostButtonStyle = "h-auto px-4 py-2 text-xs font-semibold leading-5 text-[#003514] shadow-none hover:bg-transparent hover:text-[#003514] sm:text-sm";

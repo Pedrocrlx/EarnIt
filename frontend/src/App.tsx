@@ -1,11 +1,12 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import RegistrationPage from "@/pages/authentication/RegistrationPage.tsx";
 import LoginPage from "@/pages/authentication/LoginPage";
 import VerificationCode from "@/pages/authentication/VerificationCodePage.tsx";
 import DashboardPage from "@/pages/DashboardPage";
 import ProfileSelectorPage from "@/pages/ProfileSelectorPage";
 import LandingPage from "@/pages/LandingPage";
-import OnboardingPage from "@/pages/OnboardingPage";
+import OnboardingStep1Page from "@/pages/onboarding/Step1Page";
+import OnboardingStep2Page from "@/pages/onboarding/Step2Page";
 import Layout from "./components/Layout.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
 
@@ -18,21 +19,31 @@ function App() {
           <Route path="/register" element={<RegistrationPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/verification" element={<VerificationCode />} />
-          <Route path="/onboarding" element={
-            
-              <OnboardingPage />
-            
-          } />
-          <Route path="/profiles/select" element={
-            <ProtectedRoute>
-              <ProfileSelectorPage />
-            </ProtectedRoute>
-          } />
-          <Route path="/dashboard" element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          } />
+          <Route path="/onboarding" element={<Navigate to="/onboarding/step1" replace />} />
+          <Route
+            path="/onboarding/step1"
+            element={
+              <ProtectedRoute>
+                <OnboardingStep1Page />
+              </ProtectedRoute>
+            }
+                  />                  
+          <Route
+            path="/onboarding/step2"
+            element={
+              <ProtectedRoute>
+                <OnboardingStep2Page />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </Layout>
     </BrowserRouter>

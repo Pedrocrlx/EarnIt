@@ -31,6 +31,7 @@ const LoginPage = () => {
     onSuccess: () => {
       login();
       navigate("/profiles/select");
+      navigate("/onboarding/step1", { replace: true });
     },
   });
 
