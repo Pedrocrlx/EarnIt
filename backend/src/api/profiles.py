@@ -43,7 +43,7 @@ async def update_family_name(
     return UpdateFamilyNameResponse(status="success", family_name=body.family_name)
 
 
-@router.post("/children", status_code=201)
+@router.post("/children", status_code=201, tags=["profiles/children"])
 async def create_child(
     body: ChildCreateRequest,
     current_user: User = Depends(get_current_user),
