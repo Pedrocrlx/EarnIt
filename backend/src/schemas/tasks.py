@@ -22,7 +22,7 @@ class TaskCreateRequest(BaseModel):
     model_config = {
         "json_schema_extra": {
             "example": {
-                "child_id": "550e8400-e29b-41d4-a716-446655440000",
+                "child_id": "00000000-0000-0000-0000-000000000001",
                 "title": "Lavar a loiça",
                 "description": "Lavar e arrumar a loiça do jantar",
                 "task_type": "extra_task",
@@ -107,7 +107,7 @@ class BatchApproveRequest(BaseModel):
 
     model_config = {
         "json_schema_extra": {
-            "example": {"child_id": "550e8400-e29b-41d4-a716-446655440000"}
+            "example": {"child_id": "00000000-0000-0000-0000-000000000001"}
         }
     }
 

@@ -8,10 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.db.database import get_session
+from src.dev.seed import DEV_USER_EMAIL
 from src.models.auth import User
 from src.security.tokens import decode_token
-
-_DEV_USER_EMAIL = "dev@earnit.local"
 
 # auto_error=False: don't raise when no Bearer header is present — we fall back
 # to the cookie instead so browser clients keep working unchanged. The side
@@ -49,7 +48,7 @@ async def get_current_user(
     seeded dev user directly.
     """
     if settings.DISABLE_AUTH:
-        user = await session.scalar(select(User).where(User.email == _DEV_USER_EMAIL))
+        user = await session.scalar(select(User).where(User.email == DEV_USER_EMAIL))
         if user is None:
             raise HTTPException(status_code=500, detail="Dev user not seeded — restart with DISABLE_AUTH=true")
         return user

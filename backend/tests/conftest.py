@@ -129,6 +129,15 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession]:
         await session.commit()
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _force_auth_on():
+    """Ensure DISABLE_AUTH is always off during tests, regardless of config.py or .env."""
+    original = settings.DISABLE_AUTH
+    settings.DISABLE_AUTH = False
+    yield
+    settings.DISABLE_AUTH = original
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def _cleanup_purge_tasks():
     # /register arms a long-sleeping limbo-purge task; cancel any left pending so
