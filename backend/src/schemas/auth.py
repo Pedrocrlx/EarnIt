@@ -71,25 +71,19 @@ class ForgotPasswordRequest(BaseModel):
     }
 
 
-class ResetPasswordVerifyRequest(BaseModel):
+class ResetPasswordRequest(BaseModel):
     email: EmailStr
     code: str
+    new_password: str
 
     model_config = {
         "json_schema_extra": {
             "example": {
                 "email": "maria.silva@example.com",
                 "code": "293847",
+                "new_password": "NewSecurePass456!",
             }
         }
-    }
-
-
-class ResetPasswordRequest(BaseModel):
-    new_password: str
-
-    model_config = {
-        "json_schema_extra": {"example": {"new_password": "NewSecurePass456!"}}
     }
 
     @field_validator("new_password")

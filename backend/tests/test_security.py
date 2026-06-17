@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.config import settings
 from src.dependencies.auth import (
     get_current_user,
-    get_password_reset_user,
     get_pending_verification_user,
 )
 from src.models.auth import User
@@ -20,7 +19,6 @@ from src.schemas.auth import PinRequest, RegisterRequest
 from src.security.hashing import hash_secret, verify_secret
 from src.security.tokens import (
     create_access_token,
-    create_password_reset_token,
     create_pending_verification_token,
     decode_token,
 )
@@ -358,47 +356,3 @@ async def test_get_pending_verification_user_purged_account_raises(db_session: A
         await get_pending_verification_user(request=_req(), credentials=_creds(token), session=db_session)
     assert exc_info.value.status_code == 401
 
-
-# ---------------------------------------------------------------------------
-# Auth dependency — get_password_reset_user
-# ---------------------------------------------------------------------------
-
-
-async def test_get_password_reset_user_valid(db_session: AsyncSession):
-    user = await _persist_user(db_session)
-
-    result = await get_password_reset_user(
-        request=_req(),
-        credentials=_creds(create_password_reset_token(user.id)),
-        session=db_session,
-    )
-    assert result.id == user.id
-
-
-async def test_get_password_reset_user_no_cookie_raises():
-    with pytest.raises(HTTPException) as exc_info:
-        await get_password_reset_user(request=_req(), credentials=None, session=None)  # type: ignore[arg-type]
-    assert exc_info.value.status_code == 401
-
-
-async def test_get_password_reset_user_invalid_token_raises(db_session: AsyncSession):
-    with pytest.raises(HTTPException) as exc_info:
-        await get_password_reset_user(request=_req(), credentials=_creds("not-a-jwt"), session=db_session)
-    assert exc_info.value.status_code == 401
-    assert exc_info.value.detail == "Invalid or expired token"
-
-
-async def test_get_password_reset_user_wrong_scope_raises(db_session: AsyncSession):
-    # A full access_token (scope=full) must NOT pass the password-reset guard
-    token = create_access_token(uuid4())
-    with pytest.raises(HTTPException) as exc_info:
-        await get_password_reset_user(request=_req(), credentials=_creds(token), session=db_session)
-    assert exc_info.value.status_code == 401
-    assert exc_info.value.detail == "Invalid token scope"
-
-
-async def test_get_password_reset_user_purged_account_raises(db_session: AsyncSession):
-    token = create_password_reset_token(uuid4())  # user does not exist in DB
-    with pytest.raises(HTTPException) as exc_info:
-        await get_password_reset_user(request=_req(), credentials=_creds(token), session=db_session)
-    assert exc_info.value.status_code == 401

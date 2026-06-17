@@ -37,9 +37,10 @@ app = FastAPI(
     lifespan=lifespan,
     swagger_ui_parameters={"persistAuthorization": True},
     openapi_tags=[
-        {"name": "auth/basic",        "description": "Session management — register, login, logout"},
-        {"name": "auth/validations",  "description": "Code and PIN checks — email verify, forgot-password/verify, verify-pin"},
-        {"name": "auth/resets",       "description": "Password and PIN recovery — set, forgot, reset"},
+        {"name": "auth/session",      "description": "Session management — register, login, logout"},
+        {"name": "auth/verification", "description": "Email verification — confirm and resend the account code"},
+        {"name": "auth/pin",          "description": "Parental PIN — set, update, and verify the dashboard PIN"},
+        {"name": "auth/recovery",     "description": "Account recovery — reset forgotten password or PIN by email"},
         {"name": "profiles/family",   "description": "Family summary — parent profile and children list"},
         {"name": "profiles/children", "description": "Child profile management — create and deactivate"},
         {"name": "tasks/management",  "description": "Task CRUD — parent creates and manages tasks"},

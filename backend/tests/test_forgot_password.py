@@ -2,14 +2,30 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import VALID_USER, extract_cookie, register_and_verify
+from tests.conftest import VALID_USER, register_and_verify
 
 _LOGIN_URL = "/api/v1/auth/login"
 _FORGOT_URL = "/api/v1/auth/forgot-password"
-_FORGOT_VERIFY_URL = "/api/v1/auth/forgot-password/verify"
 _RESET_URL = "/api/v1/auth/reset-password"
 
 _NEW_PASSWORD = "NewPassword456!"
+
+_WARP = "UPDATE users SET updated_at = NOW() - INTERVAL '11 minutes'"
+
+
+async def _open_reset_window(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+) -> str:
+    """Register, verify, expire the account-verification window, request a reset code.
+
+    Returns the reset code from the email so callers don't have to index mock_mail
+    themselves.
+    """
+    await register_and_verify(client, mock_mail)
+    await db_session.execute(text(_WARP))
+    await db_session.commit()
+    await client.post(_FORGOT_URL, json={"email": VALID_USER["email"]})
+    return mock_mail[-1].template_body["code"]
 
 
 # ---------------------------------------------------------------------------
@@ -18,9 +34,11 @@ _NEW_PASSWORD = "NewPassword456!"
 
 
 async def test_forgot_password_known_verified_account_returns_200_and_sends_email(
-    client: AsyncClient, mock_mail
+    client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
     await register_and_verify(client, mock_mail)
+    await db_session.execute(text(_WARP))
+    await db_session.commit()
 
     res = await client.post(_FORGOT_URL, json={"email": VALID_USER["email"]})
     assert res.status_code == 200
@@ -60,55 +78,37 @@ async def test_forgot_password_disabled_account_returns_same_response(
     assert len(mock_mail) == 1
 
 
-# ---------------------------------------------------------------------------
-# /forgot-password/verify
-# ---------------------------------------------------------------------------
-
-
-async def test_forgot_password_verify_correct_code_sets_cookie(client: AsyncClient, mock_mail):
-    await register_and_verify(client, mock_mail)
-    await client.post(_FORGOT_URL, json={"email": VALID_USER["email"]})
-    code = mock_mail[1].template_body["code"]
-
-    res = await client.post(_FORGOT_VERIFY_URL, json={"email": VALID_USER["email"], "code": code})
-    assert res.status_code == 200
-    body = res.json()
-    assert body["status"] == "success"
-    assert extract_cookie(res, "password_reset_token") is not None
-
-
-async def test_forgot_password_verify_wrong_code_returns_400(client: AsyncClient, mock_mail):
-    await register_and_verify(client, mock_mail)
-    await client.post(_FORGOT_URL, json={"email": VALID_USER["email"]})
-
-    res = await client.post(
-        _FORGOT_VERIFY_URL, json={"email": VALID_USER["email"], "code": "WRONGCOD"}
-    )
-    assert res.status_code == 400
-    assert res.json() == {"detail": "Invalid or expired code."}
-
-
-async def test_forgot_password_verify_expired_code_returns_400(
+async def test_forgot_password_rate_limits_within_active_window(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
     await register_and_verify(client, mock_mail)
-    await client.post(_FORGOT_URL, json={"email": VALID_USER["email"]})
-    code = mock_mail[1].template_body["code"]
-
-    await db_session.execute(text("UPDATE users SET updated_at = NOW() - INTERVAL '11 minutes'"))
+    await db_session.execute(text(_WARP))
     await db_session.commit()
 
-    res = await client.post(_FORGOT_VERIFY_URL, json={"email": VALID_USER["email"], "code": code})
-    assert res.status_code == 400
-    assert res.json() == {"detail": "Invalid or expired code."}
+    res1 = await client.post(_FORGOT_URL, json={"email": VALID_USER["email"]})
+    assert res1.status_code == 200
+
+    # Window is now open — second request must be rate-limited.
+    res2 = await client.post(_FORGOT_URL, json={"email": VALID_USER["email"]})
+    assert res2.status_code == 429
+    body = res2.json()
+    assert "retry_after_seconds" in body
+    assert body["retry_after_seconds"] > 0
+    assert len(mock_mail) == 2  # registration code + one reset code (not two)
 
 
-async def test_forgot_password_verify_unknown_email_returns_400(client: AsyncClient, mock_mail):
-    res = await client.post(
-        _FORGOT_VERIFY_URL, json={"email": "nobody@example.com", "code": "WRONGCOD"}
-    )
-    assert res.status_code == 400
-    assert res.json() == {"detail": "Invalid or expired code."}
+async def test_forgot_password_allows_new_request_after_expiry(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    await _open_reset_window(client, mock_mail, db_session)
+
+    # Expire the reset window, then request another code.
+    await db_session.execute(text(_WARP))
+    await db_session.commit()
+
+    res = await client.post(_FORGOT_URL, json={"email": VALID_USER["email"]})
+    assert res.status_code == 200
+    assert len(mock_mail) == 3  # registration + first reset + second reset
 
 
 # ---------------------------------------------------------------------------
@@ -116,20 +116,14 @@ async def test_forgot_password_verify_unknown_email_returns_400(client: AsyncCli
 # ---------------------------------------------------------------------------
 
 
-async def test_reset_password_with_valid_cookie_allows_new_login(client: AsyncClient, mock_mail):
-    await register_and_verify(client, mock_mail)
-    await client.post(_FORGOT_URL, json={"email": VALID_USER["email"]})
-    code = mock_mail[1].template_body["code"]
-
-    verify_res = await client.post(
-        _FORGOT_VERIFY_URL, json={"email": VALID_USER["email"], "code": code}
-    )
-    reset_token = extract_cookie(verify_res, "password_reset_token")
+async def test_reset_password_correct_code_allows_new_login(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    code = await _open_reset_window(client, mock_mail, db_session)
 
     res = await client.post(
         _RESET_URL,
-        json={"new_password": _NEW_PASSWORD},
-        cookies={"password_reset_token": reset_token},
+        json={"email": VALID_USER["email"], "code": code, "new_password": _NEW_PASSWORD},
     )
     assert res.status_code == 200
     assert res.json() == {"status": "success", "message": "Password has been reset."}
@@ -146,24 +140,67 @@ async def test_reset_password_with_valid_cookie_allows_new_login(client: AsyncCl
     assert new_login.status_code == 200
 
 
-async def test_reset_password_without_cookie_returns_401(client: AsyncClient):
-    res = await client.post(_RESET_URL, json={"new_password": _NEW_PASSWORD})
-    assert res.status_code == 401
-
-
-async def test_reset_password_weak_password_returns_422(client: AsyncClient, mock_mail):
-    await register_and_verify(client, mock_mail)
-    await client.post(_FORGOT_URL, json={"email": VALID_USER["email"]})
-    code = mock_mail[1].template_body["code"]
-
-    verify_res = await client.post(
-        _FORGOT_VERIFY_URL, json={"email": VALID_USER["email"], "code": code}
-    )
-    reset_token = extract_cookie(verify_res, "password_reset_token")
+async def test_reset_password_wrong_code_returns_400(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    await _open_reset_window(client, mock_mail, db_session)
 
     res = await client.post(
         _RESET_URL,
-        json={"new_password": "weak"},
-        cookies={"password_reset_token": reset_token},
+        json={"email": VALID_USER["email"], "code": "WRONGCOD", "new_password": _NEW_PASSWORD},
+    )
+    assert res.status_code == 400
+    assert res.json() == {"detail": "Invalid or expired code."}
+
+
+async def test_reset_password_expired_code_returns_400(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    code = await _open_reset_window(client, mock_mail, db_session)
+
+    # Push the anchor past its window.
+    await db_session.execute(text(_WARP))
+    await db_session.commit()
+
+    res = await client.post(
+        _RESET_URL,
+        json={"email": VALID_USER["email"], "code": code, "new_password": _NEW_PASSWORD},
+    )
+    assert res.status_code == 400
+    assert res.json() == {"detail": "Invalid or expired code."}
+
+
+async def test_reset_password_unknown_email_returns_400(client: AsyncClient):
+    res = await client.post(
+        _RESET_URL,
+        json={"email": "nobody@example.com", "code": "WRONGCOD", "new_password": _NEW_PASSWORD},
+    )
+    assert res.status_code == 400
+    assert res.json() == {"detail": "Invalid or expired code."}
+
+
+async def test_reset_password_code_cannot_be_replayed(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    code = await _open_reset_window(client, mock_mail, db_session)
+
+    payload = {"email": VALID_USER["email"], "code": code, "new_password": _NEW_PASSWORD}
+
+    first = await client.post(_RESET_URL, json=payload)
+    assert first.status_code == 200
+
+    # Same code replayed — the anchor was bumped on success, so it must fail.
+    second = await client.post(_RESET_URL, json=payload)
+    assert second.status_code == 400
+
+
+async def test_reset_password_weak_password_returns_422(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    code = await _open_reset_window(client, mock_mail, db_session)
+
+    res = await client.post(
+        _RESET_URL,
+        json={"email": VALID_USER["email"], "code": code, "new_password": "weak"},
     )
     assert res.status_code == 422

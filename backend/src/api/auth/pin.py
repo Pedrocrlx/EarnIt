@@ -20,15 +20,22 @@ from src.services.verification import core
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["auth/resets"])
+router = APIRouter(tags=["auth/pin"])
 
 
-@router.post("/pin")
+@router.post("/pin", summary="Set or update the parental PIN")
 async def set_pin(
     body: PinRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    """Create or replace the 4-digit parental PIN.
+
+    Also serves as the PIN-update endpoint — no separate "change PIN" route exists.
+    The PIN is used as a UX-layer gate for the parent dashboard (verified via
+    `POST /verify-pin`). May complete the onboarding flow if ≥1 child profile already
+    exists. Requires an active authenticated session.
+    """
     # Upsert: this is also how the PIN is changed later, not just set during onboarding.
     current_user.parent_pin_hash = await hash_secret(body.pin)
     current_user.pin_set_at = core.now()
@@ -42,11 +49,18 @@ async def set_pin(
     return {"status": "success", "message": "Parental security PIN established."}
 
 
-@router.post("/verify-pin", tags=["auth/validations"])
+@router.post("/verify-pin", tags=["auth/pin"], summary="Verify the parental PIN")
 async def verify_pin(
     body: PinRequest,
     current_user: User = Depends(get_current_user),
 ):
+    """Confirm the parent's 4-digit PIN.
+
+    Returns 200 if correct — the frontend uses this as a gate to render the parent
+    dashboard. No new token or elevated scope is issued; access is controlled purely
+    on the client side after a successful response. Returns 428 if no PIN has been
+    set yet, 401 if the PIN is wrong.
+    """
     if current_user.parent_pin_hash is None:
         raise HTTPException(status_code=428, detail="Parental PIN has not been set.")
 

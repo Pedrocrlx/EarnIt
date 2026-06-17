@@ -22,16 +22,23 @@ from src.services.verification import account, core
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["auth/validations"])
+router = APIRouter(tags=["auth/verification"])
 
 
-@router.post("/verify")
+@router.post("/verify", summary="Verify email address")
 async def verify_account(
     body: VerifyCodeRequest,
     response: Response,
     current_user: User = Depends(get_pending_verification_user),
     session: AsyncSession = Depends(get_session),
 ):
+    """Redeem the email verification code sent by `/register`.
+
+    Requires the `pending_verification_token` cookie. On success, swaps it for a
+    full `access_token` session cookie and cancels the pending account-deletion timer.
+    Returns 410 if the code window has expired — call `/verify/resend` to get a fresh
+    code. Returns 400 for an incorrect code.
+    """
     # Already-verified check comes first so the client gets a clear signal.
     if current_user.email_verified_at is not None:
         raise HTTPException(status_code=409, detail="Account already verified.")
@@ -75,12 +82,19 @@ async def verify_account(
     }
 
 
-@router.post("/verify/resend")
+@router.post("/verify/resend", summary="Resend verification code")
 async def resend_verification(
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_pending_verification_user),
     session: AsyncSession = Depends(get_session),
 ):
+    """Issue a new email verification code.
+
+    Requires the `pending_verification_token` cookie. Rate-limited: can only be called
+    once the previous code window has expired. Returns 429 with `retry_after_seconds`
+    if a valid code is still active. Rotates the code anchor so the old code is
+    immediately invalidated.
+    """
     now = core.now()
 
     # Anti-spam: a fresh code can only be issued once the current window has closed.

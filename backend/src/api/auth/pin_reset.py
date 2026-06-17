@@ -23,15 +23,22 @@ from src.services.verification import core, pin_reset
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["auth/resets"])
+router = APIRouter(tags=["auth/recovery"])
 
 
-@router.post("/forgot-pin")
+@router.post("/forgot-pin", summary="Request a PIN reset code")
 async def forgot_pin(
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    """Send a PIN reset code to the authenticated parent's email.
+
+    Rate-limited: returns 429 with `retry_after_seconds` if a valid code is already
+    active. Unlike `/forgot-password`, the caller holds a full session so failures are
+    reported directly instead of being collapsed into a generic response. Continue with
+    `POST /reset-pin` to set a new PIN.
+    """
     now = core.now()
 
     # Anti-spam: a fresh code can only be issued once the current window has closed.
@@ -60,12 +67,18 @@ async def forgot_pin(
     }
 
 
-@router.post("/reset-pin")
+@router.post("/reset-pin", summary="Set a new PIN from reset code")
 async def reset_pin(
     body: ResetPinRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    """Redeem a PIN reset code and set a new 4-digit PIN.
+
+    Requires a valid code issued by `POST /forgot-pin`. Returns 410 if the code window
+    has expired, 400 if the code is wrong. The old code is invalidated on success
+    (anchor rotation prevents replay). May complete onboarding if conditions are met.
+    """
     now = core.now()
     if not pin_reset.is_window_open(current_user, now):
         logger.info("PIN reset failed: code expired (user_id=%s)", current_user.id)

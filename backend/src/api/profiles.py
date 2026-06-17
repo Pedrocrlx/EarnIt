@@ -30,12 +30,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/profiles")
 
 
-@router.patch("/family-name")
+@router.patch("/family-name", tags=["profiles/family"], summary="Set the family display name")
 async def update_family_name(
     body: UpdateFamilyNameRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> UpdateFamilyNameResponse:
+    """Update the parent's family display name.
+
+    Part of the onboarding flow. May mark onboarding as complete if a PIN and at
+    least one child profile are already set.
+    """
     current_user.family_name = body.family_name
     await session.commit()
     logger.info("Family name updated: user_id=%s", current_user.id)
@@ -43,12 +48,19 @@ async def update_family_name(
     return UpdateFamilyNameResponse(status="success", family_name=body.family_name)
 
 
-@router.post("/children", status_code=201, tags=["profiles/children"])
+@router.post("/children", status_code=201, tags=["profiles/children"], summary="Add a child profile")
 async def create_child(
     body: ChildCreateRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    """Create a child profile linked to the authenticated parent.
+
+    Each parent can have up to `MAX_CHILDREN_PER_USER` active children (default 10);
+    returns 409 (`children_cap_reached`) if the limit is hit. The returned `id` is
+    the `child_id` used by task, submission, and wallet endpoints. May complete
+    onboarding if the parental PIN is already set.
+    """
     count = await session.scalar(select(func.count()).where(Child.user_id == current_user.id))
     if count >= settings.MAX_CHILDREN_PER_USER:
         logger.info("Child profile creation blocked: cap reached (user_id=%s)", current_user.id)
@@ -82,12 +94,18 @@ async def create_child(
     }
 
 
-@router.patch("/children/{child_id}", tags=["profiles/children"])
+@router.patch("/children/{child_id}", tags=["profiles/children"], summary="Deactivate a child profile")
 async def deactivate_child(
     child_id: UUID,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    """Soft-delete a child profile by setting `is_active = false`.
+
+    Tasks and submission history are preserved. No new duty slots will be generated
+    for an inactive child. Returns 404 if the child does not belong to the current
+    user, 409 if the profile is already inactive.
+    """
     child = await session.get(Child, child_id)
     if child is None or child.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Child profile not found.")
@@ -107,11 +125,16 @@ async def deactivate_child(
     }
 
 
-@router.get("/family", tags=["profiles/family"])
+@router.get("/family", tags=["profiles/family"], summary="Get family summary")
 async def get_family(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    """Return the authenticated parent's profile with all their child profiles.
+
+    Includes both active and inactive children. Use the child `id` values returned
+    here as the `child_id` path parameter for task, submission, and wallet endpoints.
+    """
     result = await session.execute(select(Child).where(Child.user_id == current_user.id))
     children = result.scalars().all()
 

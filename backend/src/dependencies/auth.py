@@ -95,24 +95,3 @@ async def get_pending_verification_user(
         raise HTTPException(status_code=401)
     return user
 
-
-async def get_password_reset_user(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    session: AsyncSession = Depends(get_session),
-) -> User:
-    """FastAPI dependency for the reset-password route (scope == "password_reset" only)."""
-    token = credentials.credentials if credentials else request.cookies.get("password_reset_token")
-    if token is None:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = decode_token(token)
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
-    if payload.get("scope") != "password_reset":
-        raise HTTPException(status_code=401, detail="Invalid token scope")
-    user_id = _extract_user_id(payload)
-    user = await session.get(User, user_id)
-    if user is None:
-        raise HTTPException(status_code=401)
-    return user

@@ -38,6 +38,10 @@ def is_window_open(user: User, at: datetime | None = None) -> bool:
     return not core.is_expired(user.updated_at, at)
 
 
+def seconds_until_resend(user: User, at: datetime | None = None) -> int:
+    return core.seconds_until_resend(user.updated_at, at)
+
+
 def verify(user: User, submitted: str) -> bool:
     """Check a submitted code against the user's current anchor (code only)."""
     return core.verify_code(user.id, PURPOSE, user.updated_at, submitted)

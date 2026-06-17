@@ -22,16 +22,24 @@ from src.services.verification import account
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["auth/basic"])
+router = APIRouter(tags=["auth/session"])
 
 
-@router.post("/register", status_code=201)
+@router.post("/register", status_code=201, summary="Register a parent account")
 async def register(
     body: RegisterRequest,
     response: Response,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
 ):
+    """Create a new parent account.
+
+    The account starts unverified — a one-time 8-character code is emailed and must
+    be redeemed via `POST /verify` before the account can be used. The account is
+    automatically deleted if not verified within the configured window
+    (`ACCOUNT_LIMBO_PURGE_HOURS`). Returns a `pending_verification_token` cookie
+    required by the `/verify` and `/verify/resend` endpoints.
+    """
     password_hash = await hash_secret(body.password)
     user = User(
         email=str(body.email),
