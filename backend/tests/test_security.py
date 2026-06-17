@@ -1,9 +1,11 @@
 from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import jwt
 import pytest
 from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +25,17 @@ from src.security.tokens import (
     decode_token,
 )
 from src.services.verification import core
+
+
+def _req() -> MagicMock:
+    """Minimal mock Request with empty cookies (tests use Bearer credentials instead)."""
+    r = MagicMock()
+    r.cookies = {}
+    return r
+
+
+def _creds(token: str) -> HTTPAuthorizationCredentials:
+    return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
 
 def _utcnow() -> datetime:
@@ -217,20 +230,20 @@ def test_pin_non_digit_raises():
 async def test_get_current_user_valid(db_session: AsyncSession):
     user = await _persist_user(db_session, email_verified_at=datetime.now(UTC))
 
-    result = await get_current_user(access_token=create_access_token(user.id), session=db_session)
+    result = await get_current_user(request=_req(), credentials=_creds(create_access_token(user.id)), session=db_session)
     assert result.id == user.id
 
 
 async def test_get_current_user_no_cookie_raises():
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(access_token=None, session=None)  # type: ignore[arg-type]
+        await get_current_user(request=_req(), credentials=None, session=None)  # type: ignore[arg-type]
     assert exc_info.value.status_code == 401
 
 
 async def test_get_current_user_purged_account_raises(db_session: AsyncSession):
     token = create_access_token(uuid4())  # user does not exist in DB
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(access_token=token, session=db_session)
+        await get_current_user(request=_req(), credentials=_creds(token), session=db_session)
     assert exc_info.value.status_code == 401
 
 
@@ -238,7 +251,7 @@ async def test_get_current_user_disabled_account_raises(db_session: AsyncSession
     user = await _persist_user(db_session, is_active=False, email_verified_at=datetime.now(UTC))
 
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(access_token=create_access_token(user.id), session=db_session)
+        await get_current_user(request=_req(), credentials=_creds(create_access_token(user.id)), session=db_session)
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail["error"] == "account_disabled"
 
@@ -247,13 +260,13 @@ async def test_get_current_user_wrong_scope_raises(db_session: AsyncSession):
     # A pending_verification_token (scope=verify) must NOT pass the full-session guard
     token = create_pending_verification_token(uuid4())
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(access_token=token, session=db_session)
+        await get_current_user(request=_req(), credentials=_creds(token), session=db_session)
     assert exc_info.value.status_code == 401
 
 
 async def test_get_current_user_invalid_token_raises(db_session: AsyncSession):
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(access_token="not-a-jwt", session=db_session)
+        await get_current_user(request=_req(), credentials=_creds("not-a-jwt"), session=db_session)
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Invalid or expired token"
 
@@ -268,14 +281,14 @@ def _token_with_invalid_sub(scope: str) -> str:
 
 async def test_get_current_user_missing_sub_raises(db_session: AsyncSession):
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(access_token=_token_without_sub("full"), session=db_session)
+        await get_current_user(request=_req(), credentials=_creds(_token_without_sub("full")), session=db_session)
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Invalid token"
 
 
 async def test_get_current_user_non_uuid_sub_raises(db_session: AsyncSession):
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(access_token=_token_with_invalid_sub("full"), session=db_session)
+        await get_current_user(request=_req(), credentials=_creds(_token_with_invalid_sub("full")), session=db_session)
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Invalid token"
 
@@ -289,7 +302,8 @@ async def test_get_pending_verification_user_valid(db_session: AsyncSession):
     user = await _persist_user(db_session)
 
     result = await get_pending_verification_user(
-        pending_verification_token=create_pending_verification_token(user.id),
+        request=_req(),
+        credentials=_creds(create_pending_verification_token(user.id)),
         session=db_session,
     )
     assert result.id == user.id
@@ -297,14 +311,14 @@ async def test_get_pending_verification_user_valid(db_session: AsyncSession):
 
 async def test_get_pending_verification_user_no_cookie_raises():
     with pytest.raises(HTTPException) as exc_info:
-        await get_pending_verification_user(pending_verification_token=None, session=None)  # type: ignore[arg-type]
+        await get_pending_verification_user(request=_req(), credentials=None, session=None)  # type: ignore[arg-type]
     assert exc_info.value.status_code == 401
 
 
 async def test_get_pending_verification_user_invalid_token_raises(db_session: AsyncSession):
     with pytest.raises(HTTPException) as exc_info:
         await get_pending_verification_user(
-            pending_verification_token="not-a-jwt", session=db_session
+            request=_req(), credentials=_creds("not-a-jwt"), session=db_session
         )
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Invalid or expired token"
@@ -314,7 +328,7 @@ async def test_get_pending_verification_user_wrong_scope_raises(db_session: Asyn
     # A full access_token (scope=full) must NOT pass the pending-verification guard
     token = create_access_token(uuid4())
     with pytest.raises(HTTPException) as exc_info:
-        await get_pending_verification_user(pending_verification_token=token, session=db_session)
+        await get_pending_verification_user(request=_req(), credentials=_creds(token), session=db_session)
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Invalid token scope"
 
@@ -322,7 +336,7 @@ async def test_get_pending_verification_user_wrong_scope_raises(db_session: Asyn
 async def test_get_pending_verification_user_purged_account_raises(db_session: AsyncSession):
     token = create_pending_verification_token(uuid4())  # user does not exist in DB
     with pytest.raises(HTTPException) as exc_info:
-        await get_pending_verification_user(pending_verification_token=token, session=db_session)
+        await get_pending_verification_user(request=_req(), credentials=_creds(token), session=db_session)
     assert exc_info.value.status_code == 401
 
 
@@ -335,7 +349,8 @@ async def test_get_password_reset_user_valid(db_session: AsyncSession):
     user = await _persist_user(db_session)
 
     result = await get_password_reset_user(
-        password_reset_token=create_password_reset_token(user.id),
+        request=_req(),
+        credentials=_creds(create_password_reset_token(user.id)),
         session=db_session,
     )
     assert result.id == user.id
@@ -343,13 +358,13 @@ async def test_get_password_reset_user_valid(db_session: AsyncSession):
 
 async def test_get_password_reset_user_no_cookie_raises():
     with pytest.raises(HTTPException) as exc_info:
-        await get_password_reset_user(password_reset_token=None, session=None)  # type: ignore[arg-type]
+        await get_password_reset_user(request=_req(), credentials=None, session=None)  # type: ignore[arg-type]
     assert exc_info.value.status_code == 401
 
 
 async def test_get_password_reset_user_invalid_token_raises(db_session: AsyncSession):
     with pytest.raises(HTTPException) as exc_info:
-        await get_password_reset_user(password_reset_token="not-a-jwt", session=db_session)
+        await get_password_reset_user(request=_req(), credentials=_creds("not-a-jwt"), session=db_session)
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Invalid or expired token"
 
@@ -358,7 +373,7 @@ async def test_get_password_reset_user_wrong_scope_raises(db_session: AsyncSessi
     # A full access_token (scope=full) must NOT pass the password-reset guard
     token = create_access_token(uuid4())
     with pytest.raises(HTTPException) as exc_info:
-        await get_password_reset_user(password_reset_token=token, session=db_session)
+        await get_password_reset_user(request=_req(), credentials=_creds(token), session=db_session)
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Invalid token scope"
 
@@ -366,5 +381,5 @@ async def test_get_password_reset_user_wrong_scope_raises(db_session: AsyncSessi
 async def test_get_password_reset_user_purged_account_raises(db_session: AsyncSession):
     token = create_password_reset_token(uuid4())  # user does not exist in DB
     with pytest.raises(HTTPException) as exc_info:
-        await get_password_reset_user(password_reset_token=token, session=db_session)
+        await get_password_reset_user(request=_req(), credentials=_creds(token), session=db_session)
     assert exc_info.value.status_code == 401

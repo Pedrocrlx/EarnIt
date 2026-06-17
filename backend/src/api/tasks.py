@@ -30,7 +30,7 @@ from src.services.tasks import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
+router = APIRouter(prefix="/api/v1/tasks")
 
 
 # ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@ router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 # ---------------------------------------------------------------------------
 
 
-@router.post("", status_code=201, response_model=TaskResponse)
+@router.post("", status_code=201, response_model=TaskResponse, tags=["tasks/management"])
 async def create_task_endpoint(
     body: TaskCreateRequest,
     current_user: User = Depends(get_current_user),
@@ -48,7 +48,7 @@ async def create_task_endpoint(
     return TaskResponse.model_validate(task)
 
 
-@router.get("", response_model=list[TaskResponse])
+@router.get("", response_model=list[TaskResponse], tags=["tasks/management"])
 async def list_tasks_endpoint(
     child_id: UUID | None = None,
     task_type: str | None = None,
@@ -60,7 +60,7 @@ async def list_tasks_endpoint(
     return [TaskResponse.model_validate(t) for t in tasks]
 
 
-@router.patch("/{task_id}", response_model=TaskResponse)
+@router.patch("/{task_id}", response_model=TaskResponse, tags=["tasks/management"])
 async def update_task_endpoint(
     task_id: UUID,
     body: TaskUpdateRequest,
@@ -72,7 +72,7 @@ async def update_task_endpoint(
     return TaskResponse.model_validate(task)
 
 
-@router.delete("/{task_id}", response_model=TaskResponse)
+@router.delete("/{task_id}", response_model=TaskResponse, tags=["tasks/management"])
 async def delete_task_endpoint(
     task_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -90,7 +90,7 @@ async def delete_task_endpoint(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/submissions", response_model=list[SubmissionResponse])
+@router.get("/submissions", response_model=list[SubmissionResponse], tags=["tasks/submissions"])
 async def list_submissions_endpoint(
     child_id: UUID | None = None,
     status: str | None = None,
@@ -101,7 +101,7 @@ async def list_submissions_endpoint(
     return [SubmissionResponse.model_validate(s) for s in subs]
 
 
-@router.post("/submissions/approve-all", response_model=BatchApproveResponse)
+@router.post("/submissions/approve-all", response_model=BatchApproveResponse, tags=["tasks/submissions"])
 async def batch_approve_endpoint(
     body: BatchApproveRequest = BatchApproveRequest(),
     current_user: User = Depends(get_current_user),
@@ -111,7 +111,7 @@ async def batch_approve_endpoint(
     return BatchApproveResponse(approved=count)
 
 
-@router.post("/submissions/{submission_id}/approve", response_model=SubmissionResponse)
+@router.post("/submissions/{submission_id}/approve", response_model=SubmissionResponse, tags=["tasks/submissions"])
 async def approve_submission_endpoint(
     submission_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -121,7 +121,7 @@ async def approve_submission_endpoint(
     return SubmissionResponse.model_validate(sub)
 
 
-@router.post("/submissions/{submission_id}/reject", response_model=SubmissionResponse)
+@router.post("/submissions/{submission_id}/reject", response_model=SubmissionResponse, tags=["tasks/submissions"])
 async def reject_submission_endpoint(
     submission_id: UUID,
     body: RejectRequest = RejectRequest(),

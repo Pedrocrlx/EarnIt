@@ -23,10 +23,10 @@ from src.services.accounts import maybe_complete_onboarding
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/profiles", tags=["profiles"])
+router = APIRouter(prefix="/api/v1/profiles")
 
 
-@router.post("/children", status_code=201)
+@router.post("/children", status_code=201, tags=["profiles/children"])
 async def create_child(
     body: ChildCreateRequest,
     current_user: User = Depends(get_current_user),
@@ -65,7 +65,7 @@ async def create_child(
     }
 
 
-@router.patch("/children/{child_id}")
+@router.patch("/children/{child_id}", tags=["profiles/children"])
 async def deactivate_child(
     child_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -90,7 +90,7 @@ async def deactivate_child(
     }
 
 
-@router.get("/family")
+@router.get("/family", tags=["profiles/family"])
 async def get_family(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),

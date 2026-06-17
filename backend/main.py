@@ -29,7 +29,22 @@ async def lifespan(app: FastAPI):
     logger.info("EarnIt API shutting down")
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,
+    swagger_ui_parameters={"persistAuthorization": True},
+    openapi_tags=[
+        {"name": "auth/basic",        "description": "Session management — register, login, logout"},
+        {"name": "auth/validations",  "description": "Code and PIN checks — email verify, forgot-password/verify, verify-pin"},
+        {"name": "auth/resets",       "description": "Password and PIN recovery — set, forgot, reset"},
+        {"name": "profiles/family",   "description": "Family summary — parent profile and children list"},
+        {"name": "profiles/children", "description": "Child profile management — create and deactivate"},
+        {"name": "tasks/management",  "description": "Task CRUD — parent creates and manages tasks"},
+        {"name": "tasks/submissions", "description": "Submission review — parent approves or rejects"},
+        {"name": "children/tasks",    "description": "Child task view — list tasks and submit completions"},
+        {"name": "children/wallet",   "description": "Child wallet — balance and transaction history"},
+        {"name": "system",            "description": "Health check"},
+    ],
+)
 
 
 # Catch any unhandled database uniqueness failures and return a clean 409.

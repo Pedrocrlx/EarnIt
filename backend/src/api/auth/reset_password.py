@@ -20,7 +20,7 @@ from src.services.verification import core
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["auth/resets"])
 
 
 @router.post("/reset-password")

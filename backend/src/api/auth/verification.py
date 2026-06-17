@@ -22,7 +22,7 @@ from src.services.verification import account, core
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["auth/validations"])
 
 
 @router.post("/verify")

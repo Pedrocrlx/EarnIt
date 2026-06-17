@@ -11,7 +11,7 @@ from src.api.auth import (
     verification,
 )
 
-router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+router = APIRouter(prefix="/api/v1/auth")
 router.include_router(register.router)
 router.include_router(verification.router)
 router.include_router(login.router)

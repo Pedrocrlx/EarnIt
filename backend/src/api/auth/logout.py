@@ -12,7 +12,7 @@ from src.models.auth import User
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["auth/basic"])
 
 
 @router.post("/logout")

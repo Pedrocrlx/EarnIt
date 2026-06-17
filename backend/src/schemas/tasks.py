@@ -19,6 +19,19 @@ class TaskCreateRequest(BaseModel):
     reward_amount: Decimal = Field(default=Decimal("0.00"), ge=0)
     expires_at: datetime | None = None
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "child_id": "550e8400-e29b-41d4-a716-446655440000",
+                "title": "Lavar a loiça",
+                "description": "Lavar e arrumar a loiça do jantar",
+                "task_type": "extra_task",
+                "reward_amount": "1.50",
+                "expires_at": None,
+            }
+        }
+    }
+
     @model_validator(mode="after")
     def check_reward_rules(self) -> "TaskCreateRequest":
         if self.task_type == "duty" and self.reward_amount != Decimal("0.00"):
@@ -33,6 +46,16 @@ class TaskUpdateRequest(BaseModel):
     description: str | None = None
     expires_at: datetime | None = None
     is_active: bool | None = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "title": "Arrumar o quarto",
+                "description": "Arrumar antes do almoço",
+                "is_active": True,
+            }
+        }
+    }
 
 
 class TaskResponse(BaseModel):
@@ -59,6 +82,12 @@ class TaskResponse(BaseModel):
 class RejectRequest(BaseModel):
     rejection_note: str | None = None
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {"rejection_note": "A foto não está clara, tenta outra vez!"}
+        }
+    }
+
 
 class SubmissionResponse(BaseModel):
     id: UUID
@@ -75,6 +104,12 @@ class SubmissionResponse(BaseModel):
 
 class BatchApproveRequest(BaseModel):
     child_id: UUID | None = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {"child_id": "550e8400-e29b-41d4-a716-446655440000"}
+        }
+    }
 
 
 class BatchApproveResponse(BaseModel):

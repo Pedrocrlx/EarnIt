@@ -21,7 +21,7 @@ from src.services.tasks._shared import get_child_or_404
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/children", tags=["children"])
+router = APIRouter(prefix="/api/v1/children")
 
 
 # ---------------------------------------------------------------------------
@@ -29,7 +29,7 @@ router = APIRouter(prefix="/api/v1/children", tags=["children"])
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{child_id}/tasks", response_model=list[ChildTaskResponse])
+@router.get("/{child_id}/tasks", response_model=list[ChildTaskResponse], tags=["children/tasks"])
 async def list_child_tasks(
     child_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -108,7 +108,7 @@ async def list_child_tasks(
     return items
 
 
-@router.post("/{child_id}/tasks/{task_id}/submit", status_code=201, response_model=SubmissionResponse)
+@router.post("/{child_id}/tasks/{task_id}/submit", status_code=201, response_model=SubmissionResponse, tags=["children/tasks"])
 async def submit_task_endpoint(
     child_id: UUID,
     task_id: UUID,
@@ -119,7 +119,7 @@ async def submit_task_endpoint(
     return SubmissionResponse.model_validate(sub)
 
 
-@router.patch("/{child_id}/submissions/{submission_id}", response_model=SubmissionResponse)
+@router.patch("/{child_id}/submissions/{submission_id}", response_model=SubmissionResponse, tags=["children/tasks"])
 async def resubmit_task_endpoint(
     child_id: UUID,
     submission_id: UUID,
@@ -130,7 +130,7 @@ async def resubmit_task_endpoint(
     return SubmissionResponse.model_validate(sub)
 
 
-@router.get("/{child_id}/wallet", response_model=WalletBalanceResponse)
+@router.get("/{child_id}/wallet", response_model=WalletBalanceResponse, tags=["children/wallet"])
 async def get_wallet(
     child_id: UUID,
     current_user: User = Depends(get_current_user),

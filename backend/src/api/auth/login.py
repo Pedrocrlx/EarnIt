@@ -22,7 +22,7 @@ from src.services.verification import account
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["auth/basic"])
 
 # A throwaway hash with the same bcrypt cost as a real one. When the email isn't
 # registered we still run one verify against this, so the response time doesn't
