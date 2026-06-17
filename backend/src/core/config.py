@@ -56,5 +56,10 @@ class Settings(BaseSettings):
     # --- Logging ---
     LOG_LEVEL: str = "INFO"
 
+    # --- Dev ---
+    # Disables JWT auth and returns a seeded dev user on every request.
+    # NEVER enable in production.
+    DISABLE_AUTH: bool = False
+
 
 settings = Settings()

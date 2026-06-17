@@ -1,24 +1,52 @@
 import logging
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from src.api.routes import api_router
 from src.core.config import settings
+from src.db.database import AsyncSessionLocal
 from src.logging_config import configure_logging
+from src.models.auth import User
+from src.security.hashing import hash_secret
 from src.services import accounts
 from src.services.tasks import start_daily_slot_job, stop_daily_slot_job
 
 configure_logging()
 logger = logging.getLogger(__name__)
 
+_DEV_USER_EMAIL = "dev@earnit.local"
+
+
+async def _seed_dev_user() -> None:
+    async with AsyncSessionLocal() as session:
+        exists = await session.scalar(select(User).where(User.email == _DEV_USER_EMAIL))
+        if exists:
+            return
+        user = User(
+            email=_DEV_USER_EMAIL,
+            family_name="Dev Family",
+            password_hash=await hash_secret("dev-no-login"),
+            is_active=True,
+            email_verified_at=datetime.now(UTC),
+            onboarding_completed=True,
+        )
+        session.add(user)
+        await session.commit()
+        logger.warning("DISABLE_AUTH: seeded dev user %s (id=%s)", _DEV_USER_EMAIL, user.id)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("EarnIt API starting up")
+    if settings.DISABLE_AUTH:
+        logger.warning("DISABLE_AUTH=true — JWT auth is OFF; all requests run as %s", _DEV_USER_EMAIL)
+        await _seed_dev_user()
     # Reconstruct a limbo-purge task for every still-unverified account, so pending
     # purges survive a restart (their deadline is derived from users.created_at).
     await accounts.rearm_pending_purges()
