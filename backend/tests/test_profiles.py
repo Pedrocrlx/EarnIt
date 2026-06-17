@@ -8,6 +8,7 @@ from tests.conftest import VALID_USER, register_and_verify
 _PIN_URL = "/api/v1/auth/pin"
 _CHILDREN_URL = "/api/v1/profiles/children"
 _FAMILY_URL = "/api/v1/profiles/family"
+_FAMILY_NAME_URL = "/api/v1/profiles/family-name"
 
 _OTHER = {"email": "other@example.com", "password": "Password123!", "family_name": "Costa"}
 _PIN = "1234"
@@ -209,3 +210,137 @@ async def test_deactivate_child_of_another_user_returns_404(client: AsyncClient,
 async def test_deactivate_child_without_access_token_returns_401(client: AsyncClient):
     res = await client.patch(f"{_CHILDREN_URL}/00000000-0000-0000-0000-000000000000")
     assert res.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# PATCH /profiles/family-name
+# ---------------------------------------------------------------------------
+
+
+async def test_update_family_name_returns_200_with_new_name(client: AsyncClient, mock_mail):
+    access_token = await register_and_verify(client, mock_mail)
+
+    res = await client.patch(
+        _FAMILY_NAME_URL,
+        json={"family_name": "Santos"},
+        cookies={"access_token": access_token},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "success"
+    assert body["family_name"] == "Santos"
+
+
+async def test_update_family_name_reflected_in_get_family(client: AsyncClient, mock_mail):
+    access_token = await register_and_verify(client, mock_mail)
+
+    await client.patch(
+        _FAMILY_NAME_URL,
+        json={"family_name": "Ferreira"},
+        cookies={"access_token": access_token},
+    )
+
+    res = await client.get(_FAMILY_URL, cookies={"access_token": access_token})
+    assert res.status_code == 200
+    assert res.json()["family_name"] == "Ferreira"
+
+
+async def test_update_family_name_empty_string_returns_422(client: AsyncClient, mock_mail):
+    access_token = await register_and_verify(client, mock_mail)
+
+    res = await client.patch(
+        _FAMILY_NAME_URL,
+        json={"family_name": ""},
+        cookies={"access_token": access_token},
+    )
+    assert res.status_code == 422
+
+
+async def test_update_family_name_without_access_token_returns_401(client: AsyncClient):
+    res = await client.patch(_FAMILY_NAME_URL, json={"family_name": "Santos"})
+    assert res.status_code == 401
+
+
+async def test_onboarding_completes_when_family_name_set_last(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    # Register without a family_name so onboarding cannot complete yet.
+    access_token = await register_and_verify(
+        client, mock_mail, email="nofamily@example.com", family_name=None
+    )
+
+    # Set PIN and add a child — both conditions met except family_name.
+    await client.post(_PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token})
+    await client.post(_CHILDREN_URL, json={"name": "Leo"}, cookies={"access_token": access_token})
+
+    onboarding = (
+        await db_session.execute(
+            text("SELECT onboarding_completed FROM users WHERE email = 'nofamily@example.com'")
+        )
+    ).scalar_one()
+    assert onboarding is False
+
+    # Setting the family name is the final step — onboarding should now flip.
+    await client.patch(
+        _FAMILY_NAME_URL,
+        json={"family_name": "Rodrigues"},
+        cookies={"access_token": access_token},
+    )
+
+    onboarding = (
+        await db_session.execute(
+            text("SELECT onboarding_completed FROM users WHERE email = 'nofamily@example.com'")
+        )
+    ).scalar_one()
+    assert onboarding is True
+
+
+# ---------------------------------------------------------------------------
+# MIN_CHILDREN_FOR_ONBOARDING behaviour
+# ---------------------------------------------------------------------------
+
+
+async def test_onboarding_completes_with_pin_only_when_min_children_is_zero(
+    client: AsyncClient, mock_mail, db_session: AsyncSession, monkeypatch
+):
+    monkeypatch.setattr(settings, "MIN_CHILDREN_FOR_ONBOARDING", 0)
+    access_token = await register_and_verify(client, mock_mail)
+
+    await client.post(_PIN_URL, json={"pin": "1234"}, cookies={"access_token": access_token})
+
+    onboarding = (
+        await db_session.execute(
+            text("SELECT onboarding_completed FROM users WHERE email = :email"),
+            {"email": VALID_USER["email"]},
+        )
+    ).scalar_one()
+    assert onboarding is True
+
+
+async def test_onboarding_requires_two_children_when_min_children_is_two(
+    client: AsyncClient, mock_mail, db_session: AsyncSession, monkeypatch
+):
+    monkeypatch.setattr(settings, "MIN_CHILDREN_FOR_ONBOARDING", 2)
+    access_token = await register_and_verify(client, mock_mail)
+
+    await client.post(_PIN_URL, json={"pin": "1234"}, cookies={"access_token": access_token})
+
+    # First child — PIN already set, but only 1 child < 2 required.
+    await client.post(_CHILDREN_URL, json={"name": "Leo"}, cookies={"access_token": access_token})
+    onboarding = (
+        await db_session.execute(
+            text("SELECT onboarding_completed FROM users WHERE email = :email"),
+            {"email": VALID_USER["email"]},
+        )
+    ).scalar_one()
+    assert onboarding is False
+
+    # Second child — now meets the threshold.
+    await client.post(_CHILDREN_URL, json={"name": "Mia"}, cookies={"access_token": access_token})
+    onboarding = (
+        await db_session.execute(
+            text("SELECT onboarding_completed FROM users WHERE email = :email"),
+            {"email": VALID_USER["email"]},
+        )
+    ).scalar_one()
+    assert onboarding is True

@@ -8,12 +8,11 @@ class ChildCreateRequest(BaseModel):
     birth_date: date | None = None
     avatar_url: str | None = None
 
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "name": "João Silva",
-                "birth_date": "2016-03-15",
-                "avatar_url": "https://example.com/avatars/joao.png",
-            }
-        }
-    }
+
+class UpdateFamilyNameRequest(BaseModel):
+    family_name: str = Field(min_length=1, max_length=150)
+
+
+class UpdateFamilyNameResponse(BaseModel):
+    status: str
+    family_name: str

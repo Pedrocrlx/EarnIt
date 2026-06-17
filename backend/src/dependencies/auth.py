@@ -1,9 +1,8 @@
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, HTTPException, Request
+from fastapi import Cookie, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
@@ -12,11 +11,7 @@ from src.dev.seed import DEV_USER_EMAIL
 from src.models.auth import User
 from src.security.tokens import decode_token
 
-# auto_error=False: don't raise when no Bearer header is present — we fall back
-# to the cookie instead so browser clients keep working unchanged. The side
-# effect of declaring this here is that FastAPI auto-generates the bearerAuth
-# security scheme in the OpenAPI spec, surfacing the "Authorize" button in
-# Swagger UI so the API is fully testable without a browser.
+# auto_error=False so we can fall through to the cookie path without a 403.
 _bearer = HTTPBearer(auto_error=False)
 
 
@@ -37,23 +32,13 @@ async def get_current_user(
 ) -> User:
     """FastAPI dependency for routes that require a full authenticated session.
 
-    Accepts the token from either:
-    - Authorization: Bearer <token> header (Swagger / API clients)
-    - access_token HttpOnly cookie (browser clients)
-
-    Decodes the token, validates scope == "full", then confirms the users row
-    still exists (401 if purged) and is_active is true (403 if disabled).
-
-    When DISABLE_AUTH=true (dev only), skips all token checks and returns the
-    seeded dev user directly.
+    Accepts the token from the access_token HttpOnly cookie (browser/production)
+    or an Authorization: Bearer header (Swagger /docs). Reading the cookie via
+    Request avoids exposing it as an OpenAPI parameter, keeping Swagger clean.
     """
-    if settings.DISABLE_AUTH:
-        user = await session.scalar(select(User).where(User.email == DEV_USER_EMAIL))
-        if user is None:
-            raise HTTPException(status_code=500, detail="Dev user not seeded — restart with DISABLE_AUTH=true")
-        return user
-
-    token = credentials.credentials if credentials else request.cookies.get("access_token")
+    token = (credentials.credentials if credentials else None) or request.cookies.get(
+        "access_token"
+    )
     if token is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:

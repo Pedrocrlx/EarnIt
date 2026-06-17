@@ -227,23 +227,32 @@ def test_pin_non_digit_raises():
 # ---------------------------------------------------------------------------
 
 
+class _FakeRequest:
+    """Minimal stand-in for starlette.requests.Request used by get_current_user."""
+
+    def __init__(self, token: str | None = None):
+        self.cookies: dict[str, str] = {"access_token": token} if token else {}
+
+
 async def test_get_current_user_valid(db_session: AsyncSession):
     user = await _persist_user(db_session, email_verified_at=datetime.now(UTC))
 
-    result = await get_current_user(request=_req(), credentials=_creds(create_access_token(user.id)), session=db_session)
+    result = await get_current_user(
+        request=_FakeRequest(create_access_token(user.id)), credentials=None, session=db_session
+    )
     assert result.id == user.id
 
 
 async def test_get_current_user_no_cookie_raises():
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(request=_req(), credentials=None, session=None)  # type: ignore[arg-type]
+        await get_current_user(request=_FakeRequest(), credentials=None, session=None)  # type: ignore[arg-type]
     assert exc_info.value.status_code == 401
 
 
 async def test_get_current_user_purged_account_raises(db_session: AsyncSession):
     token = create_access_token(uuid4())  # user does not exist in DB
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(request=_req(), credentials=_creds(token), session=db_session)
+        await get_current_user(request=_FakeRequest(token), credentials=None, session=db_session)
     assert exc_info.value.status_code == 401
 
 
@@ -251,7 +260,9 @@ async def test_get_current_user_disabled_account_raises(db_session: AsyncSession
     user = await _persist_user(db_session, is_active=False, email_verified_at=datetime.now(UTC))
 
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(request=_req(), credentials=_creds(create_access_token(user.id)), session=db_session)
+        await get_current_user(
+            request=_FakeRequest(create_access_token(user.id)), credentials=None, session=db_session
+        )
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail["error"] == "account_disabled"
 
@@ -260,13 +271,15 @@ async def test_get_current_user_wrong_scope_raises(db_session: AsyncSession):
     # A pending_verification_token (scope=verify) must NOT pass the full-session guard
     token = create_pending_verification_token(uuid4())
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(request=_req(), credentials=_creds(token), session=db_session)
+        await get_current_user(request=_FakeRequest(token), credentials=None, session=db_session)
     assert exc_info.value.status_code == 401
 
 
 async def test_get_current_user_invalid_token_raises(db_session: AsyncSession):
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(request=_req(), credentials=_creds("not-a-jwt"), session=db_session)
+        await get_current_user(
+            request=_FakeRequest("not-a-jwt"), credentials=None, session=db_session
+        )
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Invalid or expired token"
 
@@ -281,14 +294,20 @@ def _token_with_invalid_sub(scope: str) -> str:
 
 async def test_get_current_user_missing_sub_raises(db_session: AsyncSession):
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(request=_req(), credentials=_creds(_token_without_sub("full")), session=db_session)
+        await get_current_user(
+            request=_FakeRequest(_token_without_sub("full")), credentials=None, session=db_session
+        )
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Invalid token"
 
 
 async def test_get_current_user_non_uuid_sub_raises(db_session: AsyncSession):
     with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(request=_req(), credentials=_creds(_token_with_invalid_sub("full")), session=db_session)
+        await get_current_user(
+            request=_FakeRequest(_token_with_invalid_sub("full")),
+            credentials=None,
+            session=db_session,
+        )
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Invalid token"
 

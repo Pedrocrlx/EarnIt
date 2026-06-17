@@ -49,6 +49,7 @@ class Settings(BaseSettings):
 
     # --- Profiles ---
     MAX_CHILDREN_PER_USER: int = 10
+    MIN_CHILDREN_FOR_ONBOARDING: int = 1
 
     # --- Parental PIN ---
     PARENT_PIN_LENGTH: int = 4
