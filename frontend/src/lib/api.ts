@@ -47,25 +47,48 @@ const getErrorMessage = (data: unknown) => {
   return "API request failed";
 };
 
-export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+const parseResponseBody = async (response: Response): Promise<unknown> => {
+  if (response.status === 204) {
+    return undefined;
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  return text || undefined;
+};
+
+const buildHeaders = (options: RequestInit) => {
+  const headers = new Headers(options.headers);
+  const bodyIsFormData = options.body instanceof FormData;
+
+  if (!headers.has("Content-Type") && !bodyIsFormData) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  return headers;
+};
+
+export async function apiFetch<T = unknown>(
+  endpoint: string,
+  options: RequestInit = {},
+): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
-  const defaultHeaders = {
-    "Content-Type": "application/json",
-  };
 
   const response = await fetch(url, {
     ...options,
     credentials: options.credentials ?? "include",
-    headers: {
-      ...defaultHeaders,
-      ...options.headers,
-    },
+    headers: buildHeaders(options),
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    const errorData = await parseResponseBody(response).catch(() => ({}));
     throw new ApiError(getErrorMessage(errorData), response.status, errorData);
   }
 
-  return response.json();
+  return parseResponseBody(response) as Promise<T>;
 }

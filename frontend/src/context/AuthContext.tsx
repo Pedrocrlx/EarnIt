@@ -5,13 +5,15 @@ import { AuthContext } from "@/context/auth-context";
 import type { AuthStatus, FamilyProfile } from "@/context/auth-context";
 import { apiFetch } from "@/lib/api";
 
+const fetchFamilyProfile = () => apiFetch<FamilyProfile>("/profiles/family");
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [familyProfile, setFamilyProfile] = useState<FamilyProfile | null>(null);
 
   const refreshSession = useCallback(async () => {
     try {
-      const profile = await apiFetch<FamilyProfile>("/profiles/family");
+      const profile = await fetchFamilyProfile();
       setFamilyProfile(profile);
       setStatus("authenticated");
       return profile;
@@ -27,18 +29,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const loadSession = async () => {
       try {
-        const profile = await apiFetch<FamilyProfile>("/profiles/family");
-        if (!isMounted) {
-          return;
+        const profile = await fetchFamilyProfile();
+        if (isMounted) {
+          setFamilyProfile(profile);
+          setStatus("authenticated");
         }
-        setFamilyProfile(profile);
-        setStatus("authenticated");
       } catch {
-        if (!isMounted) {
-          return;
+        if (isMounted) {
+          setFamilyProfile(null);
+          setStatus("unauthenticated");
         }
-        setFamilyProfile(null);
-        setStatus("unauthenticated");
       }
     };
 
