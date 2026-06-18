@@ -39,7 +39,9 @@ def generate_code(user_id: UUID, purpose: str, anchor: datetime) -> str:
     message = f"{user_id}:{purpose}:{anchor.isoformat()}".encode()
     digest = hmac.new(settings.SECRET_KEY.encode(), message, hashlib.sha256).digest()
     charset = settings.VERIFICATION_CODE_CHARSET
-    return "".join(charset[b % len(charset)] for b in digest[: settings.VERIFICATION_CODE_LENGTH])
+    return "".join(
+        charset[b % len(charset)] for b in digest[: settings.VERIFICATION_CODE_LENGTH]
+    )
 
 
 def expires_at(anchor: datetime) -> datetime:

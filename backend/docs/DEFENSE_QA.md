@@ -189,8 +189,8 @@ correct pattern.
 `@app.on_event` is deprecated in modern FastAPI/Starlette in favor of the
 `lifespan` async context manager (`main.py`'s `lifespan(app)`), which is the
 currently-recommended pattern and also makes shutdown logic (the `yield`'s
-"after" half) explicit and symmetric — here, `rearm_pending_purges()` on
-startup and `cancel_pending_purges()` on shutdown.
+"after" half) explicit and symmetric — here, `start_daily_maintenance()` on
+startup and `stop_daily_maintenance()` on shutdown.
 
 **Q25. Why does FastAPI need a custom `HTTPException` handler at all — doesn't it already return JSON for exceptions?**
 By default FastAPI wraps every `HTTPException.detail` as `{"detail": ...}`,
@@ -271,17 +271,17 @@ migrations.
 Soft-delete already covers the "don't lose a child's data" concern
 (`is_active=False` on `Child`, never a hard delete from the API). `CASCADE` on
 the FK is about *referential integrity if a `users` row is ever hard-deleted*
-(e.g. GDPR-style account erasure, or the limbo-purge background task deleting
-an unverified account) — in that case its children rows should disappear too,
+(e.g. GDPR-style account erasure, or the limbo-purge sweep deleting an
+unverified account) — in that case its children rows should disappear too,
 not become orphaned rows pointing at a nonexistent user.
 
-**Q35. Where does the limbo-purge task rely on that `CASCADE`?**
-`app/services/accounts.py`'s `_discard_if_unverified` does
-`await session.delete(user)` for an unverified account — the docstring notes
-"CASCADE removes any owned children rows." In practice a limbo (unverified)
-account can't have children yet (creating a child requires a full
-`access_token` session, which requires verification), but the cascade is
-correctness-by-construction rather than relying on that invariant.
+**Q35. Where does the limbo-purge sweep rely on that `CASCADE`?**
+`app/services/accounts.py`'s `purge_expired_limbo_accounts` issues a bulk
+`DELETE` over `users` — the DB-level `CASCADE` removes owned children rows
+without the ORM loading them. In practice a limbo (unverified) account can't
+have children yet (creating a child requires a full `access_token` session,
+which requires verification), but the cascade is correctness-by-construction
+rather than relying on that invariant.
 
 **Q36. Why are `is_active` fields `bool` with explicit defaults rather than nullable?**
 Both `users.is_active` and `children.is_active` default to `true` and are
@@ -292,8 +292,8 @@ non-null boolean with a sensible default keeps every read site's logic binary.
 
 **Q37. Why does `User` have both `created_at` and `updated_at`, and why call out that they're "anchors"?**
 They're ordinary audit columns, but they're *also* reused as security
-primitives: `created_at` is the deadline anchor for the limbo-purge task
-(`_limbo_deadline = created_at + ACCOUNT_LIMBO_PURGE_HOURS`), and `updated_at`
+primitives: `created_at` is the deadline basis for the limbo-purge sweep
+(deletes where `created_at < now() - ACCOUNT_LIMBO_PURGE_HOURS`), and `updated_at`
 is the anchor for the stateless verification-code HMAC (see Section 13).
 README calls this out explicitly: "Two columns pull double duty." Reusing
 existing audit columns avoids adding purpose-built columns (e.g.
@@ -377,13 +377,14 @@ and then immediately return attributes of the just-committed object (e.g.
 post-commit) — `expire_on_commit=False` keeps those attributes accessible
 without a second query.
 
-**Q47. Why is there a separate `AsyncSessionLocal` (in `app/database.py`) used by `app/services/accounts.py`, distinct from the per-request `get_session` dependency?**
-The limbo-purge background tasks (`_purge_after_limbo`, `rearm_pending_purges`)
-run *outside* any HTTP request — there's no FastAPI dependency injection
-context to hand them a session. `AsyncSessionLocal` is the raw
-`async_sessionmaker` they instantiate directly with
+**Q47. Why is there a separate `AsyncSessionLocal` (in `app/database.py`) used by the daily maintenance loop, distinct from the per-request `get_session` dependency?**
+The maintenance loop (`src/services/tasks/submissions.py`'s `_run_maintenance` —
+duty-slot generation + limbo-purge sweep) runs *outside* any HTTP request, so
+there's no FastAPI dependency-injection context to hand it a session.
+`AsyncSessionLocal` is the raw `async_sessionmaker` it instantiates directly with
 `async with AsyncSessionLocal() as session:`, independent of any request
-lifecycle.
+lifecycle. (The service functions themselves take a `session` parameter, so
+they're equally callable from a request or the loop.)
 
 **Q48. Why `select(func.count())` instead of `len((await session.execute(select(Child))).all())` to check the children cap / onboarding trigger?**
 `func.count()` runs `SELECT COUNT(*)` *in the database* — Postgres returns a
@@ -598,13 +599,15 @@ and docstrings intentionally use proper typographic dashes/quotes (e.g. "Famíli
 Silva", or em-dashes in error messages) for readability. Ignoring these rules
 avoids Ruff flagging correct typography as a bug.
 
-**Q73. Why `line-length = 100` instead of the traditional 79 or Black's 88?**
-100 is a common modern middle ground — modern monitors comfortably fit
-100-character lines side-by-side, and FastAPI route signatures with multiple
-typed `Depends(...)` parameters plus return-type annotations get long quickly;
-79 would force awkward wrapping on almost every endpoint definition. 88
-(Black's default) was considered too tight for the same reason; 100 reduces
-unnecessary wrapping without going to "anything goes" widths like 120.
+**Q73. Why `line-length = 88` instead of the traditional 79 or a wider 100/120?**
+88 is the Ruff/Black default, so we stay on the out-of-the-box convention that
+most Python tooling and contributors already expect — no surprise when someone
+runs `ruff format` with stock settings. 79 (PEP 8) is tight enough to force
+awkward wrapping on almost every FastAPI route signature; 88 gives a little
+more room while still keeping lines narrow enough to view two files
+side-by-side. The extra wrapping it does cause on long route decorators and
+signatures is applied mechanically by `ruff format`, so it costs nothing to
+maintain.
 
 **Q74. Why `quote-style = "double"` under `[tool.ruff.format]`?**
 This is Ruff's formatter equivalent of Black's default — picking one quote
@@ -718,24 +721,23 @@ transaction would mean the test setup and the app code under test aren't using
 independent sessions the way they do in prod, which could mask
 session-isolation bugs. Explicit cleanup is simpler and closer to reality.
 
-**Q88. Why is `_cleanup_purge_tasks` an `autouse=True` fixture?**
-Because `/register` (used by almost every test, directly or via
-`register_and_verify`) calls `schedule_limbo_purge`, which creates a real
-`asyncio.Task` that sleeps for up to `ACCOUNT_LIMBO_PURGE_HOURS` (24h). If
-left running, these tasks pile up across the test session and emit
-"coroutine was never awaited"/pending-task warnings at event-loop teardown —
-or worse, hold references that interfere with the next test's cleanup.
-`autouse=True` means *every* test gets this cleanup without each test file
-remembering to request it.
+**Q88. Do the limbo-purge background tasks leak across tests — is there cleanup for them?**
+Not anymore, and none is needed. The old per-account design had `/register`
+spawn a real `asyncio.Task` sleeping up to 24h, so an `autouse` fixture
+(`_cleanup_purge_tasks`) had to cancel them after every test to avoid
+pending-task warnings at event-loop teardown. The sweep design arms nothing per
+registration: the only background task is the single daily maintenance loop, and
+it's started from the app's `lifespan`, which the `AsyncClient` test transport
+doesn't run. So tests spawn no background tasks and the cleanup fixture is gone.
 
-**Q89. Why does `_cleanup_purge_tasks` import `from app.services import accounts` *inside* the fixture function rather than at module level?**
-The comment-free reason is avoiding a module-level import cycle/cost at
-collection time, but more importantly it's a defensive/local import pattern —
-`conftest.py` is loaded for every test session regardless of which tests run,
-so keeping this import scoped to where it's used (a single fixture) avoids
-making `accounts` an implicit dependency of `conftest.py` itself for tests
-that never touch it. (In practice it's a minor style choice; either would
-work.)
+**Q89. Then how do tests exercise the purge, if the loop never runs?**
+They call the service function directly: `test_purge.py` constructs users with
+backdated `created_at`, calls `await accounts.purge_expired_limbo_accounts(db_session)`,
+and asserts the row count and that the right rows survived. This is the same
+pattern as the duty-slot tests calling `generate_daily_duty_slots(session)`
+directly — testing the unit of work, not the scheduling wrapper around it. (Note
+the bulk `DELETE` bypasses the session identity map, so the tests call
+`db_session.expunge_all()` before reading rows back.)
 
 **Q90. What does the `mock_mail` fixture actually do, and why monkeypatch `send_message` specifically?**
 `monkeypatch.setattr("app.mail.mail.send_message", _fake_send)` replaces the
@@ -808,13 +810,32 @@ Returning the full verify-response would make every call site repeat
 "params, not options" simplification of the common case.
 
 **Q98. How many tests exist in total, and how are they organized?**
-109 tests across one file per feature area (`test_registration.py`,
-`test_login_logout.py`, `test_pin.py`, `test_profiles.py`,
-`test_forgot_password.py`, plus others for verification/resend and pin-reset
-flows) — mirroring the router split in `app/routers/auth/`. Each file groups
-tests by endpoint with `# ---...---` section-header comments (e.g.
-`test_forgot_password.py` has `/forgot-password`, `/forgot-password/verify`,
-`/reset-password` sections).
+142 tests in two tiers. **Unit/service tests** live flat in `tests/`
+(`test_security.py`, `test_purge.py`, `test_email_templates.py`, ~45 tests) and
+cover critical modules in isolation. **API tests** live in `tests/api/` (~97
+tests), one file per feature area (`test_registration.py`, `test_login_logout.py`,
+`test_pin.py`, `test_profiles.py`, `test_forgot_password.py`, plus
+verification/resend, pin-reset and tasks) — mirroring the router split in
+`app/routers/auth/`. Each API file groups tests by endpoint with `# ---...---`
+section-header comments (e.g. `test_forgot_password.py` has `/forgot-password`,
+`/forgot-password/verify`, `/reset-password` sections). `make test` runs the unit
+tier, `make test-api` the API tier, `make test-all` both.
+
+**Q98b. The brief (NFR-05) only requires unit tests for critical modules. Why maintain a whole second `tests/api/` suite?**
+Two reasons. First, it's an explicit *bonus* the brief offers — §5.3 lists
+"Integration-level testing beyond unit tests" under Bonus (not mandatory) — so the
+suite directly claims marks that NFR-05 alone doesn't. Second, and the real
+motivation: the unit tier proves the *pieces* work (HMAC codes, bcrypt, the purge
+sweep, the auth dependencies) but can't prove the *wiring* — that a request to a
+real endpoint returns the right status, sets the right cookie, enforces ownership
+(404 vs 403), collapses anti-enumeration responses, and fires cross-endpoint side
+effects like the onboarding trigger. Those are exactly the behaviours a marker (or
+a frontend integrating against the API) actually depends on, and they only emerge
+when router + dependency + service + ORM + DB run together. The cost is contained —
+shared `conftest.py` fixtures, mocked mail, one auto-created `*_test` database — so
+the regression safety on the public contract is cheap to keep. The directory is
+named `tests/api/` (not `integration/`) because every test in it drives the HTTP
+API; that's more precise than the catch-all "integration."
 
 **Q99. Give an example of a test that needed direct SQL (`text(...)`) rather than going through the API — why?**
 `test_forgot_password_disabled_account_returns_same_response` does
@@ -898,14 +919,32 @@ users`) runs regardless of *how* rows were inserted — whether via the API
 `children` are wiped after every test that uses either fixture, so even
 "raw SQL setup" rows are cleaned up automatically.
 
-**Q109. Is there any test for the `/healthz` endpoint or the limbo-purge background task's actual firing (not just its cancellation)?**
-Not currently — `_cleanup_purge_tasks` ensures purge tasks don't leak across
-tests, but no test fast-forwards time (or shortens `ACCOUNT_LIMBO_PURGE_HOURS`)
-to assert an unverified account is actually *deleted* after its deadline, nor
-is there a `/healthz` test. These are reasonable gaps for a future test pass —
-the purge *logic* (`_discard_if_unverified`) is straightforward enough to unit
-test directly without waiting 24 (simulated) hours, by calling it directly with
-a session and asserting the user row is gone.
+**Q109. Is there any test for the `/health` endpoint or the limbo-purge actually deleting rows?**
+The purge *is* tested directly: `test_purge.py` backdates `created_at`, calls
+`purge_expired_limbo_accounts(session)`, and asserts the unverified-and-overdue
+rows are deleted while verified or not-yet-overdue rows survive (plus the CASCADE
+to children) — no need to wait or fast-forward 24h, since the cutoff is a plain
+`WHERE` clause. What's *not* covered is the scheduling wrapper (that the midnight
+loop fires) and a `/health` test; both are reasonable gaps — the loop is a thin
+`asyncio.sleep`-until-midnight wrapper around the tested unit of work.
+
+**Q109b. The test run prints ~260 `DeprecationWarning`s from httpx about per-request `cookies=`. Why are they left unfixed?**
+"Deprecated" means the call still works but the library has announced it will be
+removed in a future (major) version — it's a countdown, not an error. These come
+only from test code: the suite passes a one-off auth cookie per request as
+`client.post(url, cookies={"access_token": token})` (the Q97 pattern); httpx now
+prefers cookies set on the client instance. They're left as-is for three reasons:
+(1) it's **test-only** — no production code passes per-request cookies, so nothing
+a user or grader runs is affected; (2) the migration is **not mechanical** —
+client-level cookies persist across *all* later requests, but many tests
+deliberately scope one specific token to one call to prove rejection of the wrong
+scope/expired token, so moving cookies onto the client risks a false green at each
+of the ~109 sites; (3) **cost vs. benefit** — 109 careful edits to silence a
+warning that currently works isn't worth it. The right time to migrate is when an
+httpx upgrade actually removes the kwarg, where the resulting hard failure is the
+safety net showing which sites still need changing. Suppressing the warning with a
+pytest `filterwarnings` entry was rejected: it would hide the very signal that
+tells us when the deprecation becomes a removal.
 
 ---
 
@@ -1091,7 +1130,7 @@ provider.
 
 **Q131. Why does email-sending happen via `background_tasks.add_task(...)` rather than `await`ing it directly in the route handler?**
 Several routes (`forgot_password`, `forgot_pin`, registration/resend) call
-`background_tasks.add_task(password_reset.send_current_code, user)` (etc.) —
+`background_tasks.add_task(flows.send_code, user, core.PURPOSE_PASSWORD_RESET)` (etc.) —
 FastAPI's `BackgroundTasks` runs this *after* the response has been sent to
 the client. The user doesn't need to wait for an SMTP round-trip (even to a
 local Mailpit, that's extra latency) before getting their `200 success`
@@ -1112,17 +1151,33 @@ vs. resetting a forgotten password vs. resetting a PIN they may not have
 requested) — wording like "If you didn't request this, ignore this email" is
 purpose-specific and matters for security communication (e.g. a PIN-reset
 email should make clear what action it's tied to, since the recipient already
-has a full account). Three small templates keep each message's copy accurate
-without conditional logic inside one template.
+has a full account). Keeping a template per purpose holds each message's copy
+accurate without conditional logic inside one template. The three are now thin:
+each is ~4 lines that `{% extends "_base.html" %}` and fill only the title and
+the two purpose-specific sentences — the shared chrome and styles live once in
+`_base.html` (see Q133b).
 
-**Q134. How does `app/services/verification/{account,password_reset,pin_reset}.py`'s `send_current_code` know which template to use?**
-Each module is purpose-specific (mirrored structure per the summary) and
-constructs its own `MessageSchema(template_name="<purpose>_code.html",
-template_body={"code": ..., ...})`, calling `mail.send_message(message,
-template_name=...)`. The "which template" decision is made by *which module's*
-`send_current_code` is called from the router — `forgot_password.py` calls
-`password_reset.send_current_code`, `pin_reset.py`'s router calls
-`pin_reset.send_current_code`, etc.
+**Q133b. Why share the chrome via a Jinja base template (`_base.html`) rather than a shared CSS file linked from each template?**
+Because external stylesheets don't work in email. Mail clients (Gmail especially)
+strip `<link rel="stylesheet">` and external CSS, which is why the styles are
+inlined in a `<head><style>` block in the first place — a shared `.css` would
+render the messages unstyled in most inboxes. The duplication that *is* avoidable
+is the chrome (the `<style>` block + wrapper/header/footer), and the right tool is
+the one already in the stack: Jinja2 template inheritance. `_base.html` owns the
+shell and exposes `{% block title %}/{% block intro %}/{% block ignore_note %}`;
+each purpose template extends it. fastapi-mail renders through Jinja, so `extends`
+resolves against the same `TEMPLATE_FOLDER` at send time and produces the same
+self-contained HTML — the styles still end up inlined in `<head>`, just authored
+once. (Because send is mocked in tests, `tests/test_email_templates.py` renders
+each template through Jinja directly so a broken `{% extends %}` fails loudly.)
+
+**Q134. How does `app/services/verification/flows.py`'s `send_code` know which template (and subject) to use?**
+`flows.send_code(user, purpose)` looks the purpose up in the module-level
+`_EMAILS` dict — `{purpose: (subject, template_filename)}` — and builds the
+`MessageSchema(subject=..., template_body={"code": ..., ...})`, calling
+`mail.send_message(message, template_name=...)`. The "which template" decision
+is data, not code: the caller passes `core.PURPOSE_PASSWORD_RESET` /
+`core.PURPOSE_PIN_RESET` / `core.PURPOSE_ACCOUNT` and the dict resolves it.
 
 **Q135. Why is the code never included in the API JSON response, only the email?**
 That *is* the security property: if `/auth/forgot-password` returned the code
@@ -1271,23 +1326,24 @@ token type used on this endpoint); `sub` claim isn't a valid UUID → 401
 `account_disabled`. Each is a distinct way the "is this a valid, currently-usable
 full session" question can fail.
 
-**Q151. Why does `_extract_user_id` exist as a *shared* helper across all three dependencies, rather than each dependency parsing `sub` itself?**
-All three dependencies (`get_current_user`, `get_pending_verification_user`,
-`get_password_reset_user`) need to do the same thing with the `sub` claim:
-parse it as a `UUID`, returning the same 401 "Invalid token" if it's malformed.
-A shared helper means that error message/behavior can't drift between the
-three — fixing or improving it happens once.
+**Q151. How do the two auth dependencies avoid duplicating the token-handling logic?**
+Both `get_current_user` (scope `"full"`, `access_token` cookie) and
+`get_pending_verification_user` (scope `"verify"`, `pending_verification_token`
+cookie) share one private helper, `_user_from_token(request, credentials, session,
+*, scope, cookie_name)`. It does the whole common sequence — pull the token from
+the Bearer header or the named cookie, decode it, enforce the expected `scope`,
+parse `sub` as a `UUID` (via `_extract_user_id`), and load the user (401 if the
+row is gone) — so the two dependencies can't drift on error messages or behaviour.
+Each dependency then adds only what's unique to it: `get_current_user` the
+DISABLE_AUTH dev short-circuit and the `is_active` 403; `get_pending_verification_user`
+nothing further.
 
-**Q152. Why does `get_current_user` check `is_active` but `get_pending_verification_user` and `get_password_reset_user` don't (per the summary)?**
+**Q152. Why does `get_current_user` check `is_active` but `get_pending_verification_user` doesn't?**
 A disabled (`is_active=False`) account shouldn't be usable for *anything*
-requiring a full session — hence the check in `get_current_user`. But
-`get_pending_verification_user` is used by `/auth/verify` for an account that
-hasn't even completed registration yet (no meaningful "disabled" state applies
-mid-registration), and `get_password_reset_user` is a narrow, short-lived,
-single-purpose token (Q143) for an account that — by the time it reaches
-`forgot-password/verify` — has already been confirmed `is_active` by the
-`forgot_password` endpoint itself (Q-Section-14). Re-checking `is_active`
-there would be redundant.
+requiring a full session — hence the check layered on top of `_user_from_token`
+in `get_current_user`. But `get_pending_verification_user` is used by `/auth/verify`
+for an account that hasn't even completed registration yet, where no meaningful
+"disabled" state applies mid-registration — so it takes the helper's result as-is.
 
 **Q153. Why is `set_access_cookie`/`set_pending_cookie`/`set_password_reset_cookie`/`clear_*` centralized in `app/routers/auth/_shared.py` instead of inlined in each router?**
 Every cookie's `httponly`/`secure`/`samesite`/`path`/`max_age` combination is
@@ -1479,15 +1535,19 @@ distinction. (Note: `/forgot-password/verify` deliberately *collapses* both
 into the same `400` for anti-enumeration reasons — Section 14 — showing the
 same primitives support both styles depending on the caller's needs.)
 
-**Q173. Why do `password_reset.py`/`pin_reset.py`/`account.py` each have their own `rotate`/`is_window_open`/`send_current_code`/`verify` functions instead of one shared `verification_flow(purpose)` function parameterized by purpose?**
-Each purpose has *different side effects* beyond the shared HMAC math:
-`account.ensure_active` also (re)arms/disarms limbo-purge tasks;
-`pin_reset.rotate` doesn't touch `password_hash`; each `send_current_code`
-picks a different email template (Q134) and may include different template
-variables. A single parameterized function would need a large
-if/elif-per-purpose body — three small, purpose-named modules sharing the
-`core` engine (composition) is more readable than one function with
-purpose-conditional branches.
+**Q173. Why is there one shared `flows.py` (functions parameterized by `purpose`) rather than a separate `account.py`/`password_reset.py`/`pin_reset.py` module per purpose?**
+Because the per-purpose differences turned out to be pure *data*, not behaviour.
+`rotate`, `is_window_open`, and `seconds_until_resend` are byte-for-byte
+identical across purposes (they only touch `user.updated_at`); `verify` and
+`send_code` differ solely by the `purpose` string and the email subject/template
+— which live in a `_EMAILS = {purpose: (subject, template)}` dict. So `flows.py`
+exposes `rotate(user, session)`, `verify(user, purpose, code)`,
+`send_code(user, purpose)`, and `ensure_active(user, session, purpose)`; the
+router passes `core.PURPOSE_*`. No `if/elif`-per-purpose body appears anywhere —
+the dict lookup replaces it. (Earlier this *was* three near-identical modules;
+they were collapsed because the duplication had no behavioural justification.
+Any purpose-specific follow-up — e.g. stamping `email_verified_at` on account
+verification — lives in the *router*, not the flow, so it never forced a split.)
 
 **Q174. What does "rotate" mean concretely, and why is it the verb used (vs. "generate" or "issue")?**
 "Rotate" = `user.updated_at = core.now()` (bump the anchor) — which
@@ -1610,89 +1670,66 @@ owner could never register. The limbo-purge deletes such unverified accounts
 after `ACCOUNT_LIMBO_PURGE_HOURS` (24h), "freeing the email... as if never
 registered" (per `backend/README.md`).
 
-**Q186. Why an `asyncio.Task` per pending account ("self-disarming promise") instead of a periodic cron-style sweep (e.g. "every hour, DELETE unverified accounts older than 24h")?**
-A periodic sweep would need to run as a *separate process/scheduler* (cron,
-Celery beat, APScheduler) — additional infrastructure for what's otherwise a
-single-process FastAPI app. The `asyncio.Task` approach needs *no* extra
-infrastructure: each registration spawns a task that `asyncio.sleep`s until
-its own deadline, all within the same process already running the API. The
-docstring's framing — "self-disarming promises" — captures that each task is
-*specific to one account* and "defuses" itself on verification (Q187),
-rather than a generic sweep re-checking everything repeatedly.
+**Q186. How is the purge implemented?**
+`accounts.purge_expired_limbo_accounts(session)` runs a single statement —
+`DELETE FROM users WHERE email_verified_at IS NULL AND created_at < now() -
+ACCOUNT_LIMBO_PURGE_HOURS` — and returns the row count. There is no per-account
+state, no in-memory registry, and no timers: the `WHERE` clause *is* the whole
+policy, re-evaluated each time the sweep runs.
 
-**Q187. What does "defuse" mean here, and why is it described as an *optimization*, not the actual safety mechanism?**
-"Defuse" = `cancel_limbo_purge(user_id)`, called when a user verifies — it
-cancels the in-memory `asyncio.Task` immediately, so it doesn't uselessly wake
-up at its deadline only to find `email_verified_at` is now set and no-op. The
-*actual* safety mechanism is `_discard_if_unverified`'s fire-time re-check
-(`if user is None or user.email_verified_at is not None: return False`) — even
-if `cancel_limbo_purge` were never called (e.g. a multi-process deployment
-where the verifying request landed on a *different* worker than the one
-holding the task), the task would still wake up, re-check, and correctly do
-nothing. Defusing is purely "don't bother waking up for nothing"; correctness
-doesn't depend on it.
+**Q187. Why a periodic sweep instead of an `asyncio.Task` per pending account that sleeps until its own deadline?**
+An earlier version did exactly that ("self-disarming promises"): one task per
+registration, a `dict[UUID, Task]` registry to keep strong references, a
+fire-time re-check, a `cancel_limbo_purge` on verify, and a `rearm_pending_purges`
+on startup to rebuild tasks lost on restart. That's a lot of concurrency
+bookkeeping — weak-ref hazards, restart re-arming, a cancel path — to delete a
+row a few hours earlier than a sweep would. The app *already* runs a daily
+background loop (for duty-slot generation), so the sweep is just one more
+`DELETE` on that existing tick. No new infrastructure, no per-account state to
+get wrong.
 
-**Q188. The module comment says the registry holds "strong references... asyncio keeps only weak refs" — what would break without `_pending: dict[UUID, asyncio.Task]`?**
-`asyncio.create_task()` schedules a task, but if *nothing* holds a reference to
-the returned `Task` object, it can be garbage-collected before it completes —
-Python's docs explicitly warn about this ("Save a reference to the result").
-A GC'd task simply stops running silently — an account meant to be purged in
-24h might never be, with no error. `_pending` exists specifically to keep that
-reference alive for the task's full lifetime (`task.add_done_callback(...)`
-removes it from the dict once done, so the dict doesn't grow unboundedly
-either).
+**Q188. Where does the sweep run, and how often?**
+It rides the daily maintenance loop in `src/services/tasks/submissions.py`
+(`_run_maintenance` → `generate_daily_duty_slots` + `purge_expired_limbo_accounts`),
+started once from `main.py`'s `lifespan` (`start_daily_maintenance`) and repeating
+each UTC midnight. One loop does both jobs; `stop_daily_maintenance` cancels it on
+shutdown.
 
-**Q189. Why is `_pending` keyed by `user_id` (`UUID`) rather than, say, a list of tasks?**
-Keying by `user_id` lets `cancel_limbo_purge(user_id)` find and cancel *that
-specific account's* task in O(1) when it verifies — a list would require
-scanning to find "the task for this user" (and tasks don't inherently carry
-their associated user_id without extra bookkeeping). The key *is* the
-bookkeeping.
+**Q189. With a daily sweep, an account can outlive its 24h deadline by up to a day. Is that a problem?**
+No. The deadline exists to eventually free an abandoned email, not to delete at
+a precise instant — "within a day or so of 24h" is fine for this. If tighter
+bounds were ever needed, the loop's cadence is a one-line change (sleep interval),
+not an architectural one.
 
-**Q190. Walk through `rearm_pending_purges` — why is it needed, and what would happen without it?**
-On every process restart (deploy, crash, `docker compose restart`), all
-in-memory `asyncio.Task`s — including pending limbo-purges — are lost (they
-were never persisted; only their *trigger condition*, `users.created_at`, is
-in the DB). Without `rearm_pending_purges`, an account that registered 23
-hours before a restart would simply *never* get purged — its deadline passed
-silently with no task to act on it. `rearm_pending_purges` (called in
-`main.py`'s `lifespan` startup) queries all `email_verified_at IS NULL` users
-and calls `schedule_limbo_purge` for each — reconstructing every pending task
-from durable state (`created_at`).
+**Q190. With the old design, verifying "defused" the purge task. What replaces that now?**
+Nothing is needed. A verified account has `email_verified_at` set, so it simply
+no longer matches the sweep's `WHERE email_verified_at IS NULL` clause — it can
+never be deleted. There's no task to cancel, so `/auth/verify` does no purge-related
+work at all.
 
-**Q191. What happens if `rearm_pending_purges` finds an account whose 24h deadline has *already passed* (e.g. the server was down for 2 days)?**
-`_purge_after_limbo` computes `remaining = (deadline - now()).total_seconds()`
-— if `remaining <= 0`, `asyncio.sleep` is skipped entirely (`if remaining > 0:`)
-and `_discard_if_unverified` runs immediately. So an overdue account gets
-purged essentially right away on the next startup, rather than the purge being
-lost or delayed further.
+**Q191. What happens across a process restart — is anything lost?**
+Nothing to lose: there's no in-memory state. Whatever rows are overdue when the
+next sweep runs get deleted then. An account that registered 23h before a restart
+(or a server down for two days) is handled by the first post-startup pass —
+`start_daily_maintenance` runs one immediately on boot.
 
-**Q192. Why does `cancel_pending_purges` use `asyncio.gather(*tasks, return_exceptions=True)` after cancelling — why not just call `.cancel()` and move on?**
-`.cancel()` only *requests* cancellation — it doesn't synchronously stop the
-task; the task raises `CancelledError` the next time it's scheduled, which
-happens asynchronously. `cancel_pending_purges` is called on app shutdown
-(`lifespan`'s post-`yield`) and in the test `_cleanup_purge_tasks` fixture —
-both contexts want to *wait* until all tasks have actually finished
-unwinding before proceeding (shutdown completing cleanly; the next test
-starting with no leftover tasks). `return_exceptions=True` ensures the
-expected `CancelledError` from each cancelled task doesn't propagate as an
-unhandled exception from `gather` itself.
+**Q192. The sweep is a bulk `DELETE` — any gotcha there?**
+Yes, in tests: a Core/bulk `DELETE` bypasses the ORM identity map, so a session
+that already loaded those rows won't see them gone until expired. `test_purge.py`
+calls `db_session.expunge_all()` before reading back. In production each request
+uses a fresh session, so it doesn't arise. Children are removed by the DB-level
+`ON DELETE CASCADE` on `children.user_id` — the bulk `DELETE` triggers it without
+the ORM loading any child rows.
 
-**Q193. Is there a race condition where a user verifies *while* their purge task is mid-execution (e.g. just past `asyncio.sleep`, about to call `_discard_if_unverified`)?**
-In principle, yes — but it's benign by construction: `_discard_if_unverified`
-re-fetches the user (`session.get(User, user_id)`) and checks
-`email_verified_at is not None` *at that moment*. If verification committed
-first, the purge sees `email_verified_at` set and returns `False` (no delete).
-If the purge's `session.get` + check happens first but verification is
-concurrently committing, standard DB transaction isolation means one of the
-two operations' effects will be consistently visible to the other — worst case
-is a narrow window where verification *just barely* loses the race and the
-account gets deleted moments after being verified, which would be a genuine
-(if extremely unlikely, given the 24h vs. millisecond timescales) edge case.
-This wasn't specifically tested but is an inherent tradeoff of avoiding
-DB-level locking for a 24-hour-granularity check.
+**Q193. Is there a race where a user verifies at the same moment the sweep runs?**
+Benign and far narrower than before. The sweep's `DELETE ... WHERE
+email_verified_at IS NULL` and the verify path's `UPDATE ... SET email_verified_at`
+are each single committed statements; standard DB isolation orders them. If verify
+commits first, the row no longer matches the `DELETE`. If the `DELETE` commits
+first, the row is gone and verify's `UPDATE` affects zero rows. Given 24h vs.
+millisecond timescales, the overlap is effectively nil.
 
-**Q194. Why is the purge a hard `DELETE` (via `session.delete(user)`) rather than a soft-delete (`is_active=False`), consistent with how `Child` deactivation works?**
+**Q194. Why is the purge a hard `DELETE` rather than a soft-delete (`is_active=False`), consistent with how `Child` deactivation works?**
 Soft-delete (`is_active=False`) preserves the row — but the entire point of
 purging is to *free the email* (the `UNIQUE` constraint on `users.email`
 applies to soft-deleted rows just as much as active ones). A soft-deleted
@@ -1911,16 +1948,15 @@ while `pin_reset.py` is specifically the *email-based recovery* path for a
 forgotten PIN. The split mirrors a genuine difference in auth requirements and
 threat model between the two halves, not just file-size management.
 
-**Q216. Why does `app/services/verification/` exist as a *package* (with `core.py` + three purpose modules) rather than three flat files at `app/services/`?**
-Grouping them under `verification/` makes the relationship explicit at the
-filesystem level: `core.py` is the shared engine, and `account.py`/
-`password_reset.py`/`pin_reset.py` are siblings that *depend on* `core` and
-share its conventions (mirrored function names: `rotate`, `is_window_open`,
-`send_current_code`, `verify` — per the summary's "mirrored structure"). A
-flat `app/services/verification_core.py`,
-`app/services/verification_account.py`, etc. would convey the same
-information through naming alone, but the package grouping makes "these four
-files are one cohesive subsystem" visually obvious in a file tree.
+**Q216. Why does `app/services/verification/` exist as a *package* (`core.py` + `flows.py`) rather than flat files at `app/services/`?**
+Grouping them under `verification/` makes the two-layer relationship explicit
+at the filesystem level: `core.py` is the stateless HMAC engine (pure, takes
+`user_id`/`purpose`/`anchor`), and `flows.py` is the user-facing orchestration
+(`rotate`/`verify`/`send_code`/`ensure_active`, parameterized by `purpose`) that
+*depends on* `core`. A flat `app/services/verification_core.py` +
+`app/services/verification_flows.py` would convey the same information through
+naming alone, but the package grouping makes "this is one cohesive subsystem,
+split into primitive vs. flow" visually obvious in a file tree.
 
 **Q217. Why does `app/services/accounts.py` (singular concept: account lifecycle) hold *two* seemingly-unrelated things — limbo-purge AND `maybe_complete_onboarding`?**
 Both are "account lifecycle state transitions that aren't tied to a single
@@ -1953,9 +1989,10 @@ manages background tasks, and *calls into* `app/security/` and
 "primitives" vs. "flows that use primitives," which also makes
 `app/security/` trivially unit-testable without any DB/app context.
 
-**Q220. Why does `app/dependencies/` exist as its own package for just `auth.py` (three functions)?**
-`app/dependencies/auth.py`'s three functions
-(`get_current_user`/`get_pending_verification_user`/`get_password_reset_user`)
+**Q220. Why does `app/dependencies/` exist as its own package for just `auth.py`?**
+`app/dependencies/auth.py`'s two public providers
+(`get_current_user`/`get_pending_verification_user`, sharing the private
+`_user_from_token`/`_extract_user_id` helpers)
 are FastAPI `Depends(...)` providers — a distinct *role* in the architecture
 (request-scoped guards that routers declare as parameters) from both
 "primitives" (`app/security/`) and "orchestration" (`app/services/`), even
@@ -1966,8 +2003,8 @@ things you put in a route's function signature," distinct from things you
 
 **Q221. The `backend/README.md` "Project Structure" tree is fairly detailed (down to individual files with one-line descriptions) — why maintain that by hand instead of, say, generating it?**
 For a project at this size (a few dozen files), a hand-maintained tree with
-*intent* annotations ("durable limbo-purge, re-armed on startup" next to
-`accounts.py`) conveys *why* a file exists, which an auto-generated `tree`
+*intent* annotations (e.g. what each service module is for) conveys *why* a file
+exists, which an auto-generated `tree`
 output never could. The cost is that it can drift if files are added/moved
 without updating the README — a tradeoff accepted because the README is
 explicitly the onboarding document for "Connecting the Frontend" /
@@ -2093,26 +2130,26 @@ a terminal. Stdlib `logging` is in the standard library (no new dependency),
 every other library in the stack (`uvicorn`, `sqlalchemy`, `fastapi`) already
 logs through it, and `logging.basicConfig` plus `logging.getLogger(__name__)`
 is the smallest thing that works. If a later epic needs log aggregation, the
-per-module loggers don't change — only `app/logging_config.py`'s formatter/
-handler would, e.g. swapping in `python-json-logger`.
+per-module loggers don't change — only the single `basicConfig` call in
+`main.py` would, e.g. swapping in `python-json-logger`.
 
-**Q233. Walk through `app/logging_config.py` and how it's wired into `main.py`.**
-`configure_logging()` is a single function that calls
-`logging.basicConfig(level=settings.LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s: %(message)s")`.
-`main.py` calls it once, at module level, *before* `app = FastAPI(...)` — so
-every logger created afterward (including inside FastAPI/uvicorn/SQLAlchemy)
-inherits the root handler and level. Each module that logs does
-`logger = logging.getLogger(__name__)`, so log lines are prefixed with e.g.
-`app.routers.auth.login` — immediately telling you which file emitted the
-line without grepping.
+**Q233. How is logging wired into `main.py`?**
+`main.py` calls `logging.basicConfig(level=settings.LOG_LEVEL, format="%(asctime)s
+%(levelname)s %(name)s: %(message)s")` once, at module level, *before*
+`app = FastAPI(...)` — so every logger created afterward (including inside
+FastAPI/uvicorn/SQLAlchemy) inherits the root handler and level. It's a plain
+inline call, not its own module: four lines used in exactly one place don't earn
+a `logging_config.py`. Each module that logs does `logger = logging.getLogger(__name__)`,
+so log lines are prefixed with e.g. `src.api.auth.login` — immediately telling
+you which file emitted the line without grepping.
 
 **Q234. Why plain-text lines (`%(asctime)s %(levelname)s %(name)s: %(message)s`) instead of JSON?**
 Same reasoning as Q232 — there's no log shipper parsing JSON yet, and
 plain text is what a developer actually reads with `docker compose logs -f
-api` or in CI output. The format string is centralized in one place
-(`app/logging_config.py`), so switching to JSON later (e.g.
-`python-json-logger`'s `jsonlogger.JsonFormatter`) is a one-line change with
-zero impact on the ~25 call sites that call `logger.info(...)`.
+api` or in CI output. The format string lives in the one `basicConfig` call in
+`main.py`, so switching to JSON later (e.g. `python-json-logger`'s
+`jsonlogger.JsonFormatter`) is a one-line change with zero impact on the ~25
+call sites that call `logger.info(...)`.
 
 **Q235. How is the log level controlled, and what would you set in each environment?**
 `LOG_LEVEL` is a new `Settings` field in `app/config.py` (default `"INFO"`,
@@ -2139,9 +2176,10 @@ identified by `user_id` once resolved:
   (expired/invalid code); PIN-reset completed.
 - **Profiles** (`profiles.py`): child profile created (incl. `409
   children_cap_reached`); child profile deactivated.
-- **Background lifecycle** (`app/services/accounts.py`, `main.py`): API
-  startup/shutdown; limbo accounts re-armed on startup; a limbo account
-  actually purged; onboarding-completion trigger firing.
+- **Background lifecycle** (`app/services/accounts.py`,
+  `app/services/tasks/submissions.py`, `main.py`): API startup/shutdown; the
+  daily maintenance sweep (count of limbo accounts purged, duty slots generated);
+  onboarding-completion trigger firing.
 
 **Q237. Why does a failed login log nothing identifying — not even `user_id` when the email *is* registered?**
 Because the anti-enumeration guarantee (Q177-184) is about the *response*,

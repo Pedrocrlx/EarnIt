@@ -9,9 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlmodel import SQLModel
 
 import src.db.database as app_database
-import src.models.auth  # noqa: F401 — registers auth tables with SQLModel.metadata
+import src.models.auth
 import src.models.tasks  # noqa: F401 — registers task tables with SQLModel.metadata
-import src.services.accounts as app_accounts
 import src.services.tasks.submissions as app_tasks_submissions
 from src.core.config import settings
 from src.db.database import get_session
@@ -27,7 +26,11 @@ from src.db.database import get_session
 
 # The example parent account used across test modules to exercise
 # register -> verify -> (login/pin/profile/...) flows.
-VALID_USER = {"email": "user@example.com", "password": "Password123!", "family_name": "Silva"}
+VALID_USER = {
+    "email": "user@example.com",
+    "password": "Password123!",
+    "family_name": "Silva",
+}
 
 _REGISTER_URL = "/api/v1/auth/register"
 _VERIFY_URL = "/api/v1/auth/verify"
@@ -64,9 +67,7 @@ async def register_and_verify(client: AsyncClient, mock_mail, **overrides) -> st
     return extract_cookie(verify_res, "access_token")
 
 
-# ---------------------------------------------------------------------------
 # Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -97,22 +98,19 @@ async def db_engine():
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
 
-    # app.services.accounts imported AsyncSessionLocal (bound to the dev database)
-    # by name for its background purge tasks — repoint both that reference and the
-    # module attribute at the test database for the duration of the test session,
-    # so those tasks see the same data as the rest of the test fixtures.
+    # src.services.tasks.submissions imported AsyncSessionLocal (bound to the dev
+    # database) by name for its daily maintenance loop — repoint that reference and
+    # the db module attribute at the test database for the test session, so the loop
+    # sees the same data as the rest of the test fixtures.
     test_session_factory = async_sessionmaker(engine, expire_on_commit=False)
     original_database_factory = app_database.AsyncSessionLocal
-    original_accounts_factory = app_accounts.AsyncSessionLocal
     original_submissions_factory = app_tasks_submissions.AsyncSessionLocal
     app_database.AsyncSessionLocal = test_session_factory
-    app_accounts.AsyncSessionLocal = test_session_factory
     app_tasks_submissions.AsyncSessionLocal = test_session_factory
 
     yield engine
 
     app_database.AsyncSessionLocal = original_database_factory
-    app_accounts.AsyncSessionLocal = original_accounts_factory
     app_tasks_submissions.AsyncSessionLocal = original_submissions_factory
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.drop_all)
@@ -131,21 +129,11 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession]:
 
 @pytest.fixture(autouse=True, scope="session")
 def _force_auth_on():
-    """Ensure DISABLE_AUTH is always off during tests, regardless of config.py or .env."""
+    """Keep DISABLE_AUTH off during tests, regardless of config.py or .env."""
     original = settings.DISABLE_AUTH
     settings.DISABLE_AUTH = False
     yield
     settings.DISABLE_AUTH = original
-
-
-@pytest_asyncio.fixture(autouse=True)
-async def _cleanup_purge_tasks():
-    # /register arms a long-sleeping limbo-purge task; cancel any left pending so
-    # they don't leak across tests or warn at event-loop teardown.
-    yield
-    from src.services import accounts
-
-    await accounts.cancel_pending_purges()
 
 
 @pytest.fixture
@@ -173,7 +161,9 @@ async def client(db_engine) -> AsyncGenerator[AsyncClient]:
 
     app.dependency_overrides[get_session] = override_get_session
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         yield ac
 
     app.dependency_overrides.clear()

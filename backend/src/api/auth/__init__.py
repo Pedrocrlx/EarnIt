@@ -1,3 +1,10 @@
+"""Auth router package — mounts every /api/v1/auth/* endpoint.
+
+Each auth concern lives in its own module (register, verification, login,
+logout, password recovery, PIN, PIN recovery); this file wires them onto a
+single shared ``/api/v1/auth`` router for the top-level API to include.
+"""
+
 from fastapi import APIRouter
 
 from src.api.auth import (

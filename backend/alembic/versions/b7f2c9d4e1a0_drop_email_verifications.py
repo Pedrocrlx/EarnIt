@@ -24,7 +24,9 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.drop_index(op.f("ix_email_verifications_user_id"), table_name="email_verifications")
+    op.drop_index(
+        op.f("ix_email_verifications_user_id"), table_name="email_verifications"
+    )
     op.drop_index(op.f("ix_email_verifications_id"), table_name="email_verifications")
     op.drop_table("email_verifications")
 
@@ -43,7 +45,12 @@ def downgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_email_verifications_id"), "email_verifications", ["id"], unique=False)
     op.create_index(
-        op.f("ix_email_verifications_user_id"), "email_verifications", ["user_id"], unique=False
+        op.f("ix_email_verifications_id"), "email_verifications", ["id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_email_verifications_user_id"),
+        "email_verifications",
+        ["user_id"],
+        unique=False,
     )

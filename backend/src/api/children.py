@@ -1,3 +1,11 @@
+"""Child-facing endpoints — the kid's task list, submissions, and wallet.
+
+Routes under ``/api/v1/children/{child_id}`` let a child view their assigned
+tasks, submit a completion (duty or extra task), resubmit a rejected one, and
+read their wallet balance and history. Every route is scoped to the
+authenticated parent and 404s if the child does not belong to them.
+"""
+
 import logging
 from datetime import UTC, datetime
 from uuid import UUID
@@ -16,74 +24,65 @@ from src.schemas.tasks import (
     WalletBalanceResponse,
     WalletTransactionResponse,
 )
-from src.services.tasks import get_balance, get_transaction_history, resubmit_task, submit_task
+from src.services.tasks import (
+    get_balance,
+    get_transaction_history,
+    resubmit_task,
+    submit_task,
+)
 from src.services.tasks._shared import get_child_or_404
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/children")
 
-
-# ---------------------------------------------------------------------------
-# Child task view (tasks 25-28)
-# ---------------------------------------------------------------------------
+# Child Task View
 
 
-@router.get("/{child_id}/tasks", response_model=list[ChildTaskResponse], tags=["children/tasks"])
+@router.get(
+    "/{child_id}/tasks",
+    response_model=list[ChildTaskResponse],
+    tags=["children/tasks"],
+    summary="List tasks for a child",
+)
 async def list_child_tasks(
     child_id: UUID,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[ChildTaskResponse]:
+    """Return all active tasks assigned to the specified child.
+
+    Duties include today's submission slot (status `pending`, `approved`, or
+    `rejected`) or `null` if the daily slot has not been generated yet. Extra tasks
+    include the most recent submission. Returns 404 if the child does not belong to
+    the authenticated parent.
+    """
     await get_child_or_404(child_id, current_user, session)
     today = datetime.now(UTC).date()
 
-    duties = (
-        await session.execute(
-            select(Task).where(
-                Task.child_id == child_id,
-                Task.task_type == "duty",
-                Task.is_active.is_(True),
+    # task_type ordering puts "duty" before "extra_task" (the historical order).
+    tasks = (
+        (
+            await session.execute(
+                select(Task)
+                .where(Task.child_id == child_id, Task.is_active.is_(True))
+                .order_by(Task.task_type)
             )
         )
-    ).scalars().all()
-
-    extra_tasks = (
-        await session.execute(
-            select(Task).where(
-                Task.child_id == child_id,
-                Task.task_type == "extra_task",
-                Task.is_active.is_(True),
-            )
-        )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     items: list[ChildTaskResponse] = []
-
-    for task in duties:
-        slot = (
-            await session.execute(
-                select(TaskSubmission).where(
-                    TaskSubmission.task_id == task.id,
-                    TaskSubmission.scheduled_date == today,
-                )
+    for task in tasks:
+        # Duties show today's slot; extra tasks show their most recent submission.
+        if task.task_type == "duty":
+            query = select(TaskSubmission).where(
+                TaskSubmission.task_id == task.id,
+                TaskSubmission.scheduled_date == today,
             )
-        ).scalar_one_or_none()
-        items.append(
-            ChildTaskResponse(
-                id=task.id,
-                title=task.title,
-                description=task.description,
-                task_type=task.task_type,
-                reward_amount=task.reward_amount,
-                expires_at=task.expires_at,
-                submission=SubmissionResponse.model_validate(slot) if slot else None,
-            )
-        )
-
-    for task in extra_tasks:
-        sub = (
-            await session.execute(
+        else:
+            query = (
                 select(TaskSubmission)
                 .where(
                     TaskSubmission.task_id == task.id,
@@ -92,7 +91,7 @@ async def list_child_tasks(
                 .order_by(TaskSubmission.submitted_at.desc())
                 .limit(1)
             )
-        ).scalar_one_or_none()
+        sub = (await session.execute(query)).scalar_one_or_none()
         items.append(
             ChildTaskResponse(
                 id=task.id,
@@ -108,38 +107,75 @@ async def list_child_tasks(
     return items
 
 
-@router.post("/{child_id}/tasks/{task_id}/submit", status_code=201, response_model=SubmissionResponse, tags=["children/tasks"])
+@router.post(
+    "/{child_id}/tasks/{task_id}/submit",
+    status_code=201,
+    response_model=SubmissionResponse,
+    tags=["children/tasks"],
+    summary="Submit a task completion",
+)
 async def submit_task_endpoint(
     child_id: UUID,
     task_id: UUID,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> SubmissionResponse:
+    """Record that a child has completed a task.
+
+    For duties, submits today's slot and sets its status to `pending`. Returns 409
+    if the slot has already been submitted today. For extra tasks, creates a new
+    submission in `pending` state; returns 409 if a pending or approved submission
+    already exists. The parent can then approve or reject via the submissions endpoints.
+    """
     sub = await submit_task(task_id, child_id, current_user, session)
     return SubmissionResponse.model_validate(sub)
 
 
-@router.patch("/{child_id}/submissions/{submission_id}", response_model=SubmissionResponse, tags=["children/tasks"])
+@router.patch(
+    "/{child_id}/submissions/{submission_id}",
+    response_model=SubmissionResponse,
+    tags=["children/tasks"],
+    summary="Resubmit a rejected task",
+)
 async def resubmit_task_endpoint(
     child_id: UUID,
     submission_id: UUID,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> SubmissionResponse:
+    """Reset a rejected submission back to `pending` for parent review.
+
+    Only submissions in `rejected` state can be resubmitted — returns 409 otherwise.
+    Clears the `rejection_note` and `reviewed_at` fields, and updates `submitted_at`
+    to now.
+    """
     sub = await resubmit_task(submission_id, child_id, current_user, session)
     return SubmissionResponse.model_validate(sub)
 
 
-@router.get("/{child_id}/wallet", response_model=WalletBalanceResponse, tags=["children/wallet"])
+@router.get(
+    "/{child_id}/wallet",
+    response_model=WalletBalanceResponse,
+    tags=["children/wallet"],
+    summary="Get wallet balance and history",
+)
 async def get_wallet(
     child_id: UUID,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> WalletBalanceResponse:
+    """Return the child's current balance and full transaction history.
+
+    Balance is the sum of all approved reward transactions in euros (1 pt = €0.01),
+    computed from `wallet_transactions`. History is ordered newest-first. Returns 404
+    if the child does not belong to the authenticated parent.
+    """
     balance = await get_balance(child_id, current_user, session)
     transactions = await get_transaction_history(child_id, current_user, session)
     return WalletBalanceResponse(
         child_id=child_id,
         balance=balance,
-        transactions=[WalletTransactionResponse.model_validate(t) for t in transactions],
+        transactions=[
+            WalletTransactionResponse.model_validate(t) for t in transactions
+        ],
     )

@@ -1,7 +1,17 @@
+"""Backend Global Configurations for API and Services."""
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Typed application settings, loaded from the environment and ``.env``.
+
+    Pydantic reads each field from a matching environment variable (case
+    sensitive), falling back to the default defined here when absent. Grouped
+    by concern below: database, CORS, JWT, email, password rules, verification
+    codes, session lifetimes, profiles, PIN, logging, and dev toggles.
+    """
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Database
@@ -13,6 +23,7 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
+        """Build the asyncpg SQLAlchemy DSN from the POSTGRES_* settings."""
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
@@ -49,7 +60,6 @@ class Settings(BaseSettings):
 
     # --- Profiles ---
     MAX_CHILDREN_PER_USER: int = 10
-    MIN_CHILDREN_FOR_ONBOARDING: int = 1
 
     # --- Parental PIN ---
     PARENT_PIN_LENGTH: int = 4

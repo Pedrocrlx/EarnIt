@@ -1,4 +1,4 @@
-.PHONY: help up-ba down enter-db ruff format lint-fix rm-venv mail-up mail-down mail-logs seed
+.PHONY: help up-ba down enter-db ruff format lint-fix mail-up mail-down mail-logs clean full-clean test test-api test-all
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -12,12 +12,6 @@ down: ## Stop and remove the Docker containers and volumes
 	docker compose down -v
 
 ## --- Database ---
-
-seed: ## Seed a dev account and print its access_token (pass EMAIL= PASS= NAME= to override)
-	uv run quickaccess/seed.py \
-		$(if $(EMAIL),--email $(EMAIL)) \
-		$(if $(PASS),--password $(PASS)) \
-		$(if $(NAME),--family-name $(NAME))
 
 enter-db: ## Enter the PostgreSQL database and list tables
 	docker compose exec db psql -U earn_it_user -d earn_it_db -c "\dt"
@@ -33,6 +27,17 @@ mail-down: ## Stop Mailpit
 mail-logs: ## Tail Mailpit logs
 	docker compose -f mail/compose.yaml logs -f
 
+## --- Tests (need the db container; mail is mocked) ---
+
+test: ## Run the essential unit suite (critical modules)
+	uv run pytest tests --ignore=tests/api
+
+test-api: ## Run the API suite (endpoint flows)
+	uv run pytest tests/api
+
+test-all: ## Run every test (essential + api)
+	uv run pytest tests
+
 ## --- Code quality ---
 
 format: ## Run ruff formatting
@@ -43,7 +48,9 @@ lint-fix: ## Run ruff and apply automatic fixes
 
 ## --- Cleanup ---
 
-cache: ## Remove the local virtualenv and __pycache__ directories
-	sudo rm -rf .venv/
-	sudo rm -rf */__pycache__
-	sudo rm -rf .ruff_cache/
+clean: ## Remove Python and tool caches (keeps the virtualenv)
+	sudo find . -type d -name __pycache__ -prune -exec rm -rf {} +
+	sudo rm -rf .ruff_cache .pytest_cache
+
+full-clean: clean ## Full cleanup — everything in clean plus the local virtualenv
+	sudo rm -rf .venv

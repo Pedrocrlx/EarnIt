@@ -1,3 +1,11 @@
+"""Dev fixtures — seed a ready-to-use parent and child for local runs.
+
+When ``DISABLE_AUTH`` is on, ``get_current_user`` returns this seeded dev user
+instead of decoding a token, so the API is usable without logging in. Run as a
+module (``python -m src.dev.seed``) to seed manually, or it runs on startup.
+NEVER enable this path in production.
+"""
+
 import asyncio
 import logging
 from datetime import UTC, date, datetime
@@ -30,7 +38,9 @@ async def seed_dev_fixtures() -> None:
             )
             session.add(user)
             await session.flush()
-            logger.warning("DISABLE_AUTH: seeded dev user %s (id=%s)", DEV_USER_EMAIL, user.id)
+            logger.warning(
+                "DISABLE_AUTH: seeded dev user %s (id=%s)", DEV_USER_EMAIL, user.id
+            )
 
         child = await session.get(Child, DEV_CHILD_ID)
         if child is None:
@@ -42,13 +52,17 @@ async def seed_dev_fixtures() -> None:
                 is_active=True,
             )
             session.add(child)
-            logger.warning("DISABLE_AUTH: seeded dev child '%s' (child_id=%s)", child.name, child.id)
+            logger.warning(
+                "DISABLE_AUTH: seeded dev child '%s' (child_id=%s)",
+                child.name,
+                child.id,
+            )
 
         await session.commit()
 
 
 if __name__ == "__main__":
-    import src.models.auth  # noqa: F401 — registers tables with SQLModel metadata
+    import src.models.auth
     import src.models.tasks  # noqa: F401
 
     asyncio.run(seed_dev_fixtures())

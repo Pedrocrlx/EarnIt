@@ -12,11 +12,17 @@ from src.models.auth import User
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["auth/basic"])
+router = APIRouter(tags=["auth/session"])
 
 
-@router.post("/logout")
+@router.post("/logout", summary="Log out")
 async def logout(response: Response, current_user: User = Depends(get_current_user)):
+    """End the current session.
+
+    Expires the `access_token` cookie (sets `Max-Age=0`), immediately invalidating
+    the session on the client. Requires an active authenticated session — returns 401
+    if no valid token is present.
+    """
     # get_current_user already enforces a valid, active session (401/403 otherwise),
     # so by this point we just need to drop the cookie. delete_cookie sets Max-Age=0,
     # which tells the browser to discard it immediately.

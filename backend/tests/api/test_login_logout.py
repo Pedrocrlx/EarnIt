@@ -8,10 +8,7 @@ _REGISTER_URL = "/api/v1/auth/register"
 _LOGIN_URL = "/api/v1/auth/login"
 _LOGOUT_URL = "/api/v1/auth/logout"
 
-
-# ---------------------------------------------------------------------------
 # Login
-# ---------------------------------------------------------------------------
 
 
 async def test_login_wrong_password_returns_401(client: AsyncClient, mock_mail):
@@ -34,7 +31,8 @@ async def test_login_disabled_account_returns_403_account_disabled(
     await db_session.commit()
 
     res = await client.post(
-        _LOGIN_URL, json={"email": VALID_USER["email"], "password": VALID_USER["password"]}
+        _LOGIN_URL,
+        json={"email": VALID_USER["email"], "password": VALID_USER["password"]},
     )
     assert res.status_code == 403
     body = res.json()
@@ -50,7 +48,8 @@ async def test_login_unverified_account_returns_403_with_fresh_pending_cookie(
     await client.post(_REGISTER_URL, json=VALID_USER)
 
     res = await client.post(
-        _LOGIN_URL, json={"email": VALID_USER["email"], "password": VALID_USER["password"]}
+        _LOGIN_URL,
+        json={"email": VALID_USER["email"], "password": VALID_USER["password"]},
     )
     assert res.status_code == 403
     body = res.json()
@@ -68,11 +67,14 @@ async def test_login_unverified_account_with_expired_code_rotates_and_resends(
     await client.post(_REGISTER_URL, json=VALID_USER)
     first_code = mock_mail[-1].template_body["code"]
 
-    await db_session.execute(text("UPDATE users SET updated_at = NOW() - INTERVAL '11 minutes'"))
+    await db_session.execute(
+        text("UPDATE users SET updated_at = NOW() - INTERVAL '11 minutes'")
+    )
     await db_session.commit()
 
     res = await client.post(
-        _LOGIN_URL, json={"email": VALID_USER["email"], "password": VALID_USER["password"]}
+        _LOGIN_URL,
+        json={"email": VALID_USER["email"], "password": VALID_USER["password"]},
     )
     assert res.status_code == 403
     assert res.json()["error"] == "account_unverified"
@@ -80,12 +82,15 @@ async def test_login_unverified_account_with_expired_code_rotates_and_resends(
     assert mock_mail[-1].template_body["code"] != first_code
 
 
-async def test_login_verified_account_returns_200_and_access_token(client: AsyncClient, mock_mail):
+async def test_login_verified_account_returns_200_and_access_token(
+    client: AsyncClient, mock_mail
+):
     # The "happy path": correct credentials + verified account → full session cookie.
     await register_and_verify(client, mock_mail)
 
     res = await client.post(
-        _LOGIN_URL, json={"email": VALID_USER["email"], "password": VALID_USER["password"]}
+        _LOGIN_URL,
+        json={"email": VALID_USER["email"], "password": VALID_USER["password"]},
     )
     assert res.status_code == 200
     body = res.json()
@@ -93,9 +98,7 @@ async def test_login_verified_account_returns_200_and_access_token(client: Async
     assert extract_cookie(res, "access_token") is not None
 
 
-# ---------------------------------------------------------------------------
 # Logout
-# ---------------------------------------------------------------------------
 
 
 async def test_logout_with_valid_session_returns_200_and_clears_cookie(
@@ -105,16 +108,17 @@ async def test_logout_with_valid_session_returns_200_and_clears_cookie(
     # cleared via Set-Cookie ...; Max-Age=0 (delete_cookie's signature).
     await register_and_verify(client, mock_mail)
     login_res = await client.post(
-        _LOGIN_URL, json={"email": VALID_USER["email"], "password": VALID_USER["password"]}
+        _LOGIN_URL,
+        json={"email": VALID_USER["email"], "password": VALID_USER["password"]},
     )
     access_token = extract_cookie(login_res, "access_token")
 
     res = await client.post(_LOGOUT_URL, cookies={"access_token": access_token})
     assert res.status_code == 200
     assert res.json()["status"] == "success"
-    assert "access_token=;" in res.headers.get("set-cookie", "") or "Max-Age=0" in res.headers.get(
+    assert "access_token=;" in res.headers.get(
         "set-cookie", ""
-    )
+    ) or "Max-Age=0" in res.headers.get("set-cookie", "")
 
 
 async def test_logout_without_session_returns_401(client: AsyncClient):
@@ -132,7 +136,8 @@ async def test_logout_with_purged_user_returns_401(
     # get_current_user does session.get(User, user_id) -> None -> 401.
     await register_and_verify(client, mock_mail)
     login_res = await client.post(
-        _LOGIN_URL, json={"email": VALID_USER["email"], "password": VALID_USER["password"]}
+        _LOGIN_URL,
+        json={"email": VALID_USER["email"], "password": VALID_USER["password"]},
     )
     access_token = extract_cookie(login_res, "access_token")
 
@@ -151,7 +156,8 @@ async def test_logout_with_disabled_account_returns_403_account_disabled(
     # on every authenticated request, not just at login time.
     await register_and_verify(client, mock_mail)
     login_res = await client.post(
-        _LOGIN_URL, json={"email": VALID_USER["email"], "password": VALID_USER["password"]}
+        _LOGIN_URL,
+        json={"email": VALID_USER["email"], "password": VALID_USER["password"]},
     )
     access_token = extract_cookie(login_res, "access_token")
 

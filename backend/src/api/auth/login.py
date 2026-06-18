@@ -18,11 +18,11 @@ from src.db.database import get_session
 from src.models.auth import User
 from src.schemas.auth import LoginRequest
 from src.security.hashing import verify_secret
-from src.services.verification import account
+from src.services.verification import core, flows
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["auth/basic"])
+router = APIRouter(tags=["auth/session"])
 
 # A throwaway hash with the same bcrypt cost as a real one. When the email isn't
 # registered we still run one verify against this, so the response time doesn't
@@ -30,10 +30,19 @@ router = APIRouter(tags=["auth/basic"])
 _DUMMY_PASSWORD_HASH = bcrypt.hashpw(b"timing-equalizer", bcrypt.gensalt()).decode()
 
 
-@router.post("/login")
+@router.post("/login", summary="Log in")
 async def login(
     body: LoginRequest, response: Response, session: AsyncSession = Depends(get_session)
 ):
+    """Authenticate with email and password.
+
+    On success, sets an `access_token` HttpOnly cookie used by all protected endpoints.
+    If credentials are correct but the email is unverified, returns 403
+    (`account_unverified`) and re-issues a `pending_verification_token` so the client
+    can resume the verification flow without re-registering.
+    Resistant to user-enumeration: response time and content are identical whether the
+    email is unknown or the password is wrong.
+    """
     # Look up the account by email. If it doesn't exist, fall through to the same
     # 401 as a wrong password — never reveal whether an email is registered.
     result = await session.execute(select(User).where(User.email == str(body.email)))
@@ -55,14 +64,17 @@ async def login(
         logger.warning("Login blocked: account disabled (user_id=%s)", user.id)
         raise HTTPException(
             status_code=403,
-            detail={"error": "account_disabled", "message": "This account has been disabled."},
+            detail={
+                "error": "account_disabled",
+                "message": "This account has been disabled.",
+            },
         )
 
     if user.email_verified_at is None:
         # Credentials are correct, but the account is still in "limbo": deny the full
         # session and instead send the client back through the verification flow with
         # a fresh pending_verification_token (the old one may have expired).
-        expires_at = await account.ensure_active(user, session)
+        expires_at = await flows.ensure_active(user, session, core.PURPOSE_ACCOUNT)
         unverified_response = JSONResponse(
             status_code=403,
             content={
