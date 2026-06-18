@@ -11,7 +11,6 @@ from sqlmodel import SQLModel
 import src.db.database as app_database
 import src.models.auth
 import src.models.tasks  # noqa: F401 — registers task tables with SQLModel.metadata
-import src.services.accounts as app_accounts
 import src.services.tasks.submissions as app_tasks_submissions
 from src.core.config import settings
 from src.db.database import get_session
@@ -101,22 +100,19 @@ async def db_engine():
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
 
-    # app.services.accounts imported AsyncSessionLocal (bound to the dev database)
-    # by name for its background purge tasks — repoint both that reference and the
-    # module attribute at the test database for the duration of the test session,
-    # so those tasks see the same data as the rest of the test fixtures.
+    # src.services.tasks.submissions imported AsyncSessionLocal (bound to the dev
+    # database) by name for its daily maintenance loop — repoint that reference and
+    # the db module attribute at the test database for the test session, so the loop
+    # sees the same data as the rest of the test fixtures.
     test_session_factory = async_sessionmaker(engine, expire_on_commit=False)
     original_database_factory = app_database.AsyncSessionLocal
-    original_accounts_factory = app_accounts.AsyncSessionLocal
     original_submissions_factory = app_tasks_submissions.AsyncSessionLocal
     app_database.AsyncSessionLocal = test_session_factory
-    app_accounts.AsyncSessionLocal = test_session_factory
     app_tasks_submissions.AsyncSessionLocal = test_session_factory
 
     yield engine
 
     app_database.AsyncSessionLocal = original_database_factory
-    app_accounts.AsyncSessionLocal = original_accounts_factory
     app_tasks_submissions.AsyncSessionLocal = original_submissions_factory
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.drop_all)
@@ -140,16 +136,6 @@ def _force_auth_on():
     settings.DISABLE_AUTH = False
     yield
     settings.DISABLE_AUTH = original
-
-
-@pytest_asyncio.fixture(autouse=True)
-async def _cleanup_purge_tasks():
-    # /register arms a long-sleeping limbo-purge task; cancel any left pending so
-    # they don't leak across tests or warn at event-loop teardown.
-    yield
-    from src.services import accounts
-
-    await accounts.cancel_pending_purges()
 
 
 @pytest.fixture

@@ -17,11 +17,14 @@ from sqlalchemy.exc import IntegrityError
 from src.api.routes import api_router
 from src.core.config import settings
 from src.dev.seed import DEV_USER_EMAIL, seed_dev_fixtures
-from src.logging_config import configure_logging
-from src.services import accounts
-from src.services.tasks import start_daily_slot_job, stop_daily_slot_job
+from src.services.tasks import start_daily_maintenance, stop_daily_maintenance
 
-configure_logging()
+# Never log secrets (codes, passwords, PINs, hashes, JWTs); log the non-enumerable
+# user_id, not the email. Every module gets its logger via getLogger(__name__).
+logging.basicConfig(
+    level=settings.LOG_LEVEL,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 
@@ -29,9 +32,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Run startup and shutdown work around the app's serving lifetime.
 
-    On startup: optionally seed the dev user, re-arm any pending limbo-purge
-    tasks, and start the daily duty-slot job. On shutdown (after ``yield``):
-    cancel those background tasks so the process exits cleanly.
+    On startup: optionally seed the dev user and start the daily maintenance loop
+    (duty-slot generation + limbo-account purge). On shutdown (after ``yield``):
+    cancel that loop so the process exits cleanly.
     """
     logger.info("EarnIt API starting up")
     if settings.DISABLE_AUTH:
@@ -40,13 +43,9 @@ async def lifespan(app: FastAPI):
             DEV_USER_EMAIL,
         )
         await seed_dev_fixtures()
-    # Reconstruct a limbo-purge task for every still-unverified account, so pending
-    # purges survive a restart (their deadline is derived from users.created_at).
-    await accounts.rearm_pending_purges()
-    await start_daily_slot_job()
+    await start_daily_maintenance()
     yield
-    await accounts.cancel_pending_purges()
-    await stop_daily_slot_job()
+    await stop_daily_maintenance()
     logger.info("EarnIt API shutting down")
 
 

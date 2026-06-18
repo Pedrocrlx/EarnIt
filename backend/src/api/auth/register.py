@@ -1,9 +1,8 @@
 """Registration: create a parent account in limbo and start email verification.
 
-A new user starts with email_verified_at = NULL ("limbo") and a durable purge
-task that deletes the row after ACCOUNT_LIMBO_PURGE_HOURS unless verified —
-see verification.py for the next step and app/services/accounts.py for the
-purge task itself.
+A new user starts with email_verified_at = NULL ("limbo"); the daily maintenance
+sweep deletes the row after ACCOUNT_LIMBO_PURGE_HOURS unless verified — see
+verification.py for the next step and app/services/accounts.py for the sweep.
 """
 
 import logging
@@ -17,7 +16,6 @@ from src.db.database import get_session
 from src.models.auth import User
 from src.schemas.auth import RegisterRequest
 from src.security.hashing import hash_secret
-from src.services.accounts import schedule_limbo_purge
 from src.services.verification import core, flows
 
 logger = logging.getLogger(__name__)
@@ -63,11 +61,9 @@ async def register(
     background_tasks.add_task(flows.send_code, user, core.PURPOSE_ACCOUNT)
     set_pending_cookie(response, user.id)
 
-    # Arm the durable limbo purge: a background task deletes this account once its
-    # window elapses, unless verification defuses it first. Re-armed on restart
-    # from users.created_at (see app/services/accounts.py).
-    schedule_limbo_purge(user)
-
+    # The account stays in limbo (email_verified_at = NULL) until verified; the
+    # daily maintenance sweep deletes it if the window elapses unverified (see
+    # app/services/accounts.purge_expired_limbo_accounts).
     logger.info("New account registered: user_id=%s", user.id)
 
     return {

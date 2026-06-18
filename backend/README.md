@@ -80,7 +80,7 @@ uv run pytest -q     # requires the db + mailpit containers to be running
 - **ORM:** SQLModel
 - **Migrations:** Alembic
 - **Mail:** fastapi-mail (SMTP, dev via Mailpit)
-- **Background work:** asyncio tasks (durable limbo-purge + daily duty-slot generation, both re-armed on startup)
+- **Background work:** one daily maintenance loop (duty-slot generation + limbo-account purge sweep)
 - **Package Manager:** [uv](https://github.com/astral-sh/uv)
 
 ### Getting Started
@@ -156,7 +156,6 @@ backend/
 │   ├── dev/
 │   │   └── seed.py           # Dev fixture seeding (dev@earnit.local + child); importable + standalone
 │   ├── email/                # HTML email templates (verification code, etc.)
-│   ├── logging_config.py     # stdlib logging setup
 │   ├── mail.py               # fastapi-mail config
 │   ├── models/               # SQLModel tables: User, Child, Task, TaskSubmission, WalletTransaction
 │   ├── schemas/              # Pydantic request/response schemas
@@ -257,13 +256,13 @@ Every flow shares one **stateless verification code** primitive (`src/services/v
    - Validates the password policy (≥`PASSWORD_MIN_LENGTH` chars, upper + lower + digit + special).
    - Inserts a `users` row in **limbo** (`email_verified_at = NULL`); a duplicate email → `409`.
    - Derives an `account_verification` code from `updated_at` and emails it (dispatched *after* the response, off the critical path).
-   - Sets a scoped `pending_verification_token` cookie and **arms a durable purge task** (deletes this account after `ACCOUNT_LIMBO_PURGE_HOURS` unless verified first). → `201`
+   - Sets a scoped `pending_verification_token` cookie. The row stays in limbo until verified; the daily maintenance sweep deletes it after `ACCOUNT_LIMBO_PURGE_HOURS` if still unverified. → `201`
 2. **`POST /api/v1/auth/verify`** `{ code }` *(pending cookie required)*
    - `409` if already verified · `410` if the 10-min window elapsed · `400` if the code doesn't match.
-   - On success: stamps `email_verified_at`, bumps `updated_at` (so the used code can't be replayed), **cancels the purge task**, and swaps the pending cookie for a full `access_token` session. → `200`
+   - On success: stamps `email_verified_at`, bumps `updated_at` (so the used code can't be replayed), and swaps the pending cookie for a full `access_token` session. A verified row no longer matches the purge sweep — no explicit defuse needed. → `200`
 3. **`POST /api/v1/auth/verify/resend`** *(pending cookie required)*
    - `429` (with `retry_after_seconds`) while the current code is still live; otherwise rotates the anchor → new code, emailed off the response path. → `200`
-4. **Abandoned verification:** logging in with correct credentials on a limbo account returns `403 account_unverified` + a fresh pending cookie, re-entering this flow. If the limbo window passes with no verification, the purge task deletes the account and frees the email — *as if never registered*.
+4. **Abandoned verification:** logging in with correct credentials on a limbo account returns `403 account_unverified` + a fresh pending cookie, re-entering this flow. Once the limbo window passes with no verification, the next maintenance sweep deletes the account and frees the email — *as if never registered*.
 
 #### 2. Forgot password
 
@@ -308,7 +307,7 @@ The suite is split into two parts:
 - **Essential unit suite** — `tests/` (`test_security.py`, `test_purge.py`):
   unit/service-level tests for the critical modules (bcrypt hashing, JWT
   tokens, the stateless verification-code engine, the auth dependencies, and
-  the durable limbo-purge background task). This is what NFR-05 asks for.
+  the limbo-purge sweep). This is what NFR-05 asks for.
 - **Integration suite** — `tests/integration/` (one file per feature, e.g.
   `test_registration.py`, `test_login_logout.py`, `test_tasks.py`): endpoint
   flow tests that drive the real API with an httpx `AsyncClient` against the DB
@@ -329,10 +328,10 @@ email is mocked, so Mailpit isn't required.
 
 ### Logging
 
-Plain stdlib `logging`, configured once in `src/logging_config.py` and applied at
-import time in `main.py` (`configure_logging()`, before the `FastAPI` app is
-constructed). Every module gets its own logger via `logging.getLogger(__name__)`
-and inherits the global config — no per-module setup needed.
+Plain stdlib `logging`, configured once at import time in `main.py` (a single
+`logging.basicConfig(...)` call, before the `FastAPI` app is constructed). Every
+module gets its own logger via `logging.getLogger(__name__)` and inherits the
+global config — no per-module setup needed.
 
 - **Format:** `%(asctime)s %(levelname)s %(name)s: %(message)s` to stdout (container-friendly — Docker/Compose captures stdout as the log stream).
 - **Level:** `LOG_LEVEL` env var (default `INFO`; see `.env.example`). Set to `DEBUG` locally for noisier output, `WARNING` in CI if the test logs get too busy.
@@ -340,7 +339,7 @@ and inherits the global config — no per-module setup needed.
   - **Auth lifecycle:** registration, account verification (success / expired / invalid code), verification resend (incl. `429` rate-limit), login (success / invalid credentials / disabled / unverified), logout.
   - **Password & PIN recovery:** forgot-password request + rate-limit (429), password reset completion, PIN set, PIN verification (success/failure), forgot/reset-PIN (incl. expired/invalid code and `429` rate-limit).
   - **Profiles:** child profile created (incl. `409 children_cap_reached`), child profile deactivated.
-  - **Background lifecycle:** limbo-account purges, re-arming pending purges on startup, onboarding-completion trigger firing.
+  - **Background lifecycle:** the daily maintenance sweep (limbo-account purge count, duty-slot generation), onboarding-completion trigger firing.
 - **What never gets logged:** verification codes, passwords, PINs, password/PIN hashes, JWTs, or raw email addresses. On login failure specifically, nothing identifying is logged at all (logging `user_id` only for *known* accounts would create a log-volume signal that distinguishes registered from unregistered emails — the same anti-enumeration concern as the API response itself).
 
 ### Connecting the Frontend
@@ -406,10 +405,10 @@ All task-management endpoints require a full `access_token` session (parent). `c
    - Returns `{ child_id, balance, transactions[] }`. Balance is computed as `SUM(amount) WHERE type=credit` − `SUM(amount) WHERE type=debit` via a single DB query.
    - → `200 WalletBalanceResponse`
 
-#### 4. Daily duty-slot background job
+#### 4. Daily maintenance background loop
 
-On every app startup (`lifespan` in `main.py`), `start_daily_slot_job()` runs:
-1. Immediately calls `generate_daily_duty_slots()` once — creates today's `task_submissions` rows for all active duties (idempotent: skips any `(task_id, scheduled_date)` that already exists).
-2. Spawns an `asyncio.Task` (`_slot_task`) that loops, sleeping until the next UTC midnight, and repeats step 1 daily.
+On every app startup (`lifespan` in `main.py`), `start_daily_maintenance()` runs:
+1. Immediately runs one maintenance pass — `generate_daily_duty_slots()` creates today's `task_submissions` rows for all active duties (idempotent: skips any `(task_id, scheduled_date)` that already exists), then `purge_expired_limbo_accounts()` deletes every account still unverified past `ACCOUNT_LIMBO_PURGE_HOURS` in one `DELETE` (CASCADE removes their children).
+2. Spawns an `asyncio.Task` (`_maintenance_task`) that loops, sleeping until the next UTC midnight, and repeats the pass daily.
 
-The task reference is stored at module level in `src/services/tasks/submissions.py` to prevent garbage collection. `stop_daily_slot_job()` cancels it cleanly on shutdown. Tests call `generate_daily_duty_slots(session)` directly (bypassing the background loop).
+The task reference is stored at module level in `src/services/tasks/submissions.py` to prevent garbage collection. `stop_daily_maintenance()` cancels it cleanly on shutdown. Tests call `generate_daily_duty_slots(session)` and `purge_expired_limbo_accounts(session)` directly (bypassing the background loop).

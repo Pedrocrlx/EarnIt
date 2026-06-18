@@ -63,28 +63,13 @@ async def list_child_tasks(
     await get_child_or_404(child_id, current_user, session)
     today = datetime.now(UTC).date()
 
-    duties = (
+    # task_type ordering puts "duty" before "extra_task" (the historical order).
+    tasks = (
         (
             await session.execute(
-                select(Task).where(
-                    Task.child_id == child_id,
-                    Task.task_type == "duty",
-                    Task.is_active.is_(True),
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-
-    extra_tasks = (
-        (
-            await session.execute(
-                select(Task).where(
-                    Task.child_id == child_id,
-                    Task.task_type == "extra_task",
-                    Task.is_active.is_(True),
-                )
+                select(Task)
+                .where(Task.child_id == child_id, Task.is_active.is_(True))
+                .order_by(Task.task_type)
             )
         )
         .scalars()
@@ -92,31 +77,15 @@ async def list_child_tasks(
     )
 
     items: list[ChildTaskResponse] = []
-
-    for task in duties:
-        slot = (
-            await session.execute(
-                select(TaskSubmission).where(
-                    TaskSubmission.task_id == task.id,
-                    TaskSubmission.scheduled_date == today,
-                )
+    for task in tasks:
+        # Duties show today's slot; extra tasks show their most recent submission.
+        if task.task_type == "duty":
+            query = select(TaskSubmission).where(
+                TaskSubmission.task_id == task.id,
+                TaskSubmission.scheduled_date == today,
             )
-        ).scalar_one_or_none()
-        items.append(
-            ChildTaskResponse(
-                id=task.id,
-                title=task.title,
-                description=task.description,
-                task_type=task.task_type,
-                reward_amount=task.reward_amount,
-                expires_at=task.expires_at,
-                submission=SubmissionResponse.model_validate(slot) if slot else None,
-            )
-        )
-
-    for task in extra_tasks:
-        sub = (
-            await session.execute(
+        else:
+            query = (
                 select(TaskSubmission)
                 .where(
                     TaskSubmission.task_id == task.id,
@@ -125,7 +94,7 @@ async def list_child_tasks(
                 .order_by(TaskSubmission.submitted_at.desc())
                 .limit(1)
             )
-        ).scalar_one_or_none()
+        sub = (await session.execute(query)).scalar_one_or_none()
         items.append(
             ChildTaskResponse(
                 id=task.id,

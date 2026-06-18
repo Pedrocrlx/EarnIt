@@ -17,7 +17,6 @@ from src.db.database import get_session
 from src.dependencies.auth import get_pending_verification_user
 from src.models.auth import User
 from src.schemas.auth import VerifyCodeRequest
-from src.services.accounts import cancel_limbo_purge
 from src.services.verification import core, flows
 
 logger = logging.getLogger(__name__)
@@ -35,9 +34,9 @@ async def verify_account(
     """Redeem the email verification code sent by `/register`.
 
     Requires the `pending_verification_token` cookie. On success, swaps it for a
-    full `access_token` session cookie and cancels the pending account-deletion timer.
-    Returns 410 if the code window has expired — call `/verify/resend` to get a fresh
-    code. Returns 400 for an incorrect code.
+    full `access_token` session cookie (the account no longer matches the limbo-purge
+    sweep). Returns 410 if the code window has expired — call `/verify/resend` to get
+    a fresh code. Returns 400 for an incorrect code.
     """
     # Already-verified check comes first so the client gets a clear signal.
     if current_user.email_verified_at is not None:
@@ -64,10 +63,8 @@ async def verify_account(
     current_user.updated_at = now
     await session.commit()
 
-    # Account is verified — defuse its limbo purge now rather than leaving the task
-    # asleep until its deadline just to no-op.
-    cancel_limbo_purge(current_user.id)
-
+    # Now verified, the account no longer matches the limbo-purge sweep — no
+    # explicit defuse needed.
     logger.info("Account verified: user_id=%s", current_user.id)
 
     clear_pending_cookie(response)

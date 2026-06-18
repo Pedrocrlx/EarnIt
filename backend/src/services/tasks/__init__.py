@@ -2,7 +2,7 @@
 
 Re-exports the public functions from the focused submodules so callers import
 from one place: ``crud`` (task lifecycle), ``submissions`` (submit/review +
-the daily duty-slot job), and ``wallet`` (balance and history). Cross-cutting
+the daily maintenance loop), and ``wallet`` (balance and history). Cross-cutting
 ownership checks live in ``_shared``.
 """
 
@@ -20,8 +20,8 @@ from src.services.tasks.submissions import (
     list_submissions,
     reject_submission,
     resubmit_task,
-    start_daily_slot_job,
-    stop_daily_slot_job,
+    start_daily_maintenance,
+    stop_daily_maintenance,
     submit_task,
 )
 from src.services.tasks.wallet import get_balance, get_transaction_history
@@ -39,8 +39,8 @@ __all__ = [
     "reject_submission",
     "resubmit_task",
     "soft_delete_task",
-    "start_daily_slot_job",
-    "stop_daily_slot_job",
+    "start_daily_maintenance",
+    "stop_daily_maintenance",
     "submit_task",
     "update_task",
 ]

@@ -43,6 +43,36 @@ def _extract_user_id(payload: dict) -> UUID:
         raise HTTPException(status_code=401, detail="Invalid token") from None
 
 
+async def _user_from_token(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None,
+    session: AsyncSession,
+    *,
+    scope: str,
+    cookie_name: str,
+) -> User:
+    """Resolve the user from a Bearer header or the named cookie, enforcing ``scope``.
+
+    Raises 401 for a missing/invalid/expired token, the wrong scope, or a user row
+    that no longer exists (e.g. purged from limbo).
+    """
+    token = credentials.credentials if credentials else request.cookies.get(cookie_name)
+    if token is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = decode_token(token)
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=401, detail="Invalid or expired token"
+        ) from None
+    if payload.get("scope") != scope:
+        raise HTTPException(status_code=401, detail="Invalid token scope")
+    user = await session.get(User, _extract_user_id(payload))
+    if user is None:
+        raise HTTPException(status_code=401)
+    return user
+
+
 async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
@@ -50,12 +80,9 @@ async def get_current_user(
 ) -> User:
     """FastAPI dependency for routes that require a full authenticated session.
 
-    Accepts the token from either:
-    - Authorization: Bearer <token> header (Swagger / API clients)
-    - access_token HttpOnly cookie (browser clients)
-
-    Decodes the token, validates scope == "full", then confirms the users row
-    still exists (401 if purged) and is_active is true (403 if disabled).
+    Accepts the token from the ``Authorization: Bearer`` header (Swagger / API
+    clients) or the ``access_token`` cookie (browsers), validates scope == "full",
+    confirms the row exists (401 if purged), and that it's active (403 if disabled).
 
     When DISABLE_AUTH=true (dev only), skips all token checks and returns the
     seeded dev user directly.
@@ -69,23 +96,9 @@ async def get_current_user(
             )
         return user
 
-    token = (
-        credentials.credentials if credentials else request.cookies.get("access_token")
+    user = await _user_from_token(
+        request, credentials, session, scope="full", cookie_name="access_token"
     )
-    if token is None:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = decode_token(token)
-    except jwt.PyJWTError:
-        raise HTTPException(
-            status_code=401, detail="Invalid or expired token"
-        ) from None
-    if payload.get("scope") != "full":
-        raise HTTPException(status_code=401, detail="Invalid token scope")
-    user_id = _extract_user_id(payload)
-    user = await session.get(User, user_id)
-    if user is None:
-        raise HTTPException(status_code=401)
     if not user.is_active:
         raise HTTPException(
             status_code=403,
@@ -103,23 +116,10 @@ async def get_pending_verification_user(
     session: AsyncSession = Depends(get_session),
 ) -> User:
     """FastAPI dependency for the verify and resend routes (scope == "verify" only)."""
-    token = (
-        credentials.credentials
-        if credentials
-        else request.cookies.get("pending_verification_token")
+    return await _user_from_token(
+        request,
+        credentials,
+        session,
+        scope="verify",
+        cookie_name="pending_verification_token",
     )
-    if token is None:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = decode_token(token)
-    except jwt.PyJWTError:
-        raise HTTPException(
-            status_code=401, detail="Invalid or expired token"
-        ) from None
-    if payload.get("scope") != "verify":
-        raise HTTPException(status_code=401, detail="Invalid token scope")
-    user_id = _extract_user_id(payload)
-    user = await session.get(User, user_id)
-    if user is None:
-        raise HTTPException(status_code=401)
-    return user
