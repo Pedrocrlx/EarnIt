@@ -18,7 +18,7 @@ from src.db.database import get_session
 from src.models.auth import User
 from src.schemas.auth import LoginRequest
 from src.security.hashing import verify_secret
-from src.services.verification import account
+from src.services.verification import core, flows
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ async def login(
         # Credentials are correct, but the account is still in "limbo": deny the full
         # session and instead send the client back through the verification flow with
         # a fresh pending_verification_token (the old one may have expired).
-        expires_at = await account.ensure_active(user, session)
+        expires_at = await flows.ensure_active(user, session, core.PURPOSE_ACCOUNT)
         unverified_response = JSONResponse(
             status_code=403,
             content={

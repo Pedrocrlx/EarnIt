@@ -19,7 +19,7 @@ from src.models.auth import User
 from src.schemas.auth import ResetPinRequest
 from src.security.hashing import hash_secret
 from src.services.accounts import maybe_complete_onboarding
-from src.services.verification import core, pin_reset
+from src.services.verification import core, flows
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ async def forgot_pin(
     now = core.now()
 
     # Anti-spam: a fresh code can only be issued once the current window has closed.
-    if pin_reset.is_window_open(current_user, now):
+    if flows.is_window_open(current_user, now):
         logger.info("PIN reset rate-limited: user_id=%s", current_user.id)
         return JSONResponse(
             status_code=429,
@@ -52,16 +52,14 @@ async def forgot_pin(
                     "A PIN reset code is still active. "
                     "Please wait before requesting another."
                 ),
-                "retry_after_seconds": pin_reset.seconds_until_resend(
-                    current_user, now
-                ),
+                "retry_after_seconds": flows.seconds_until_resend(current_user, now),
             },
         )
 
     # Rotate the anchor synchronously (it's the source of truth), then email the
     # new code off the critical path.
-    expires_at = await pin_reset.rotate(current_user, session)
-    background_tasks.add_task(pin_reset.send_current_code, current_user)
+    expires_at = await flows.rotate(current_user, session)
+    background_tasks.add_task(flows.send_code, current_user, core.PURPOSE_PIN_RESET)
     logger.info("PIN reset code requested: user_id=%s", current_user.id)
     return {
         "status": "success",
@@ -83,11 +81,11 @@ async def reset_pin(
     (anchor rotation prevents replay). May complete onboarding if conditions are met.
     """
     now = core.now()
-    if not pin_reset.is_window_open(current_user, now):
+    if not flows.is_window_open(current_user, now):
         logger.info("PIN reset failed: code expired (user_id=%s)", current_user.id)
         raise HTTPException(status_code=410, detail="PIN reset code has expired.")
 
-    if not pin_reset.verify(current_user, body.code):
+    if not flows.verify(current_user, core.PURPOSE_PIN_RESET, body.code):
         logger.warning("PIN reset failed: invalid code (user_id=%s)", current_user.id)
         raise HTTPException(status_code=400, detail="Invalid PIN reset code.")
 

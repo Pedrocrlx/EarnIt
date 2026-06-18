@@ -16,7 +16,7 @@ from src.db.database import get_session
 from src.models.auth import User
 from src.schemas.auth import ResetPasswordRequest
 from src.security.hashing import hash_secret
-from src.services.verification import core, password_reset
+from src.services.verification import core, flows
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +46,8 @@ async def reset_password(
     if (
         user is None
         or not user.is_active
-        or not password_reset.is_window_open(user, now)
-        or not password_reset.verify(user, body.code)
+        or not flows.is_window_open(user, now)
+        or not flows.verify(user, core.PURPOSE_PASSWORD_RESET, body.code)
     ):
         logger.warning(
             "Password reset failed: user_id=%s",

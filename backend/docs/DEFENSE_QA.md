@@ -1093,7 +1093,7 @@ provider.
 
 **Q131. Why does email-sending happen via `background_tasks.add_task(...)` rather than `await`ing it directly in the route handler?**
 Several routes (`forgot_password`, `forgot_pin`, registration/resend) call
-`background_tasks.add_task(password_reset.send_current_code, user)` (etc.) —
+`background_tasks.add_task(flows.send_code, user, core.PURPOSE_PASSWORD_RESET)` (etc.) —
 FastAPI's `BackgroundTasks` runs this *after* the response has been sent to
 the client. The user doesn't need to wait for an SMTP round-trip (even to a
 local Mailpit, that's extra latency) before getting their `200 success`
@@ -1117,14 +1117,13 @@ email should make clear what action it's tied to, since the recipient already
 has a full account). Three small templates keep each message's copy accurate
 without conditional logic inside one template.
 
-**Q134. How does `app/services/verification/{account,password_reset,pin_reset}.py`'s `send_current_code` know which template to use?**
-Each module is purpose-specific (mirrored structure per the summary) and
-constructs its own `MessageSchema(template_name="<purpose>_code.html",
-template_body={"code": ..., ...})`, calling `mail.send_message(message,
-template_name=...)`. The "which template" decision is made by *which module's*
-`send_current_code` is called from the router — `forgot_password.py` calls
-`password_reset.send_current_code`, `pin_reset.py`'s router calls
-`pin_reset.send_current_code`, etc.
+**Q134. How does `app/services/verification/flows.py`'s `send_code` know which template (and subject) to use?**
+`flows.send_code(user, purpose)` looks the purpose up in the module-level
+`_EMAILS` dict — `{purpose: (subject, template_filename)}` — and builds the
+`MessageSchema(subject=..., template_body={"code": ..., ...})`, calling
+`mail.send_message(message, template_name=...)`. The "which template" decision
+is data, not code: the caller passes `core.PURPOSE_PASSWORD_RESET` /
+`core.PURPOSE_PIN_RESET` / `core.PURPOSE_ACCOUNT` and the dict resolves it.
 
 **Q135. Why is the code never included in the API JSON response, only the email?**
 That *is* the security property: if `/auth/forgot-password` returned the code
@@ -1481,15 +1480,20 @@ distinction. (Note: `/forgot-password/verify` deliberately *collapses* both
 into the same `400` for anti-enumeration reasons — Section 14 — showing the
 same primitives support both styles depending on the caller's needs.)
 
-**Q173. Why do `password_reset.py`/`pin_reset.py`/`account.py` each have their own `rotate`/`is_window_open`/`send_current_code`/`verify` functions instead of one shared `verification_flow(purpose)` function parameterized by purpose?**
-Each purpose has *different side effects* beyond the shared HMAC math:
-`account.ensure_active` also (re)arms/disarms limbo-purge tasks;
-`pin_reset.rotate` doesn't touch `password_hash`; each `send_current_code`
-picks a different email template (Q134) and may include different template
-variables. A single parameterized function would need a large
-if/elif-per-purpose body — three small, purpose-named modules sharing the
-`core` engine (composition) is more readable than one function with
-purpose-conditional branches.
+**Q173. Why is there one shared `flows.py` (functions parameterized by `purpose`) rather than a separate `account.py`/`password_reset.py`/`pin_reset.py` module per purpose?**
+Because the per-purpose differences turned out to be pure *data*, not behaviour.
+`rotate`, `is_window_open`, and `seconds_until_resend` are byte-for-byte
+identical across purposes (they only touch `user.updated_at`); `verify` and
+`send_code` differ solely by the `purpose` string and the email subject/template
+— which live in a `_EMAILS = {purpose: (subject, template)}` dict. So `flows.py`
+exposes `rotate(user, session)`, `verify(user, purpose, code)`,
+`send_code(user, purpose)`, and `ensure_active(user, session, purpose)`; the
+router passes `core.PURPOSE_*`. No `if/elif`-per-purpose body appears anywhere —
+the dict lookup replaces it. (Earlier this *was* three near-identical modules;
+they were collapsed because the duplication had no behavioural justification.
+The one genuinely purpose-coupled side effect — cancelling the limbo-purge on
+account verification — lives in the *router* (`verification.py` calls
+`accounts.cancel_limbo_purge`), not in the flow, so it never forced a split.)
 
 **Q174. What does "rotate" mean concretely, and why is it the verb used (vs. "generate" or "issue")?**
 "Rotate" = `user.updated_at = core.now()` (bump the anchor) — which
@@ -1913,16 +1917,15 @@ while `pin_reset.py` is specifically the *email-based recovery* path for a
 forgotten PIN. The split mirrors a genuine difference in auth requirements and
 threat model between the two halves, not just file-size management.
 
-**Q216. Why does `app/services/verification/` exist as a *package* (with `core.py` + three purpose modules) rather than three flat files at `app/services/`?**
-Grouping them under `verification/` makes the relationship explicit at the
-filesystem level: `core.py` is the shared engine, and `account.py`/
-`password_reset.py`/`pin_reset.py` are siblings that *depend on* `core` and
-share its conventions (mirrored function names: `rotate`, `is_window_open`,
-`send_current_code`, `verify` — per the summary's "mirrored structure"). A
-flat `app/services/verification_core.py`,
-`app/services/verification_account.py`, etc. would convey the same
-information through naming alone, but the package grouping makes "these four
-files are one cohesive subsystem" visually obvious in a file tree.
+**Q216. Why does `app/services/verification/` exist as a *package* (`core.py` + `flows.py`) rather than flat files at `app/services/`?**
+Grouping them under `verification/` makes the two-layer relationship explicit
+at the filesystem level: `core.py` is the stateless HMAC engine (pure, takes
+`user_id`/`purpose`/`anchor`), and `flows.py` is the user-facing orchestration
+(`rotate`/`verify`/`send_code`/`ensure_active`, parameterized by `purpose`) that
+*depends on* `core`. A flat `app/services/verification_core.py` +
+`app/services/verification_flows.py` would convey the same information through
+naming alone, but the package grouping makes "this is one cohesive subsystem,
+split into primitive vs. flow" visually obvious in a file tree.
 
 **Q217. Why does `app/services/accounts.py` (singular concept: account lifecycle) hold *two* seemingly-unrelated things — limbo-purge AND `maybe_complete_onboarding`?**
 Both are "account lifecycle state transitions that aren't tied to a single

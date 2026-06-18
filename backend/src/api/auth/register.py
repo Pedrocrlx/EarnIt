@@ -18,7 +18,7 @@ from src.models.auth import User
 from src.schemas.auth import RegisterRequest
 from src.security.hashing import hash_secret
 from src.services.accounts import schedule_limbo_purge
-from src.services.verification import account
+from src.services.verification import core, flows
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ async def register(
     # The account flow derives the code from user.updated_at (its "anchor"); the
     # email is dispatched after the response so SMTP latency stays off the signup
     # path. Nothing is stored — /verify recomputes and compares.
-    background_tasks.add_task(account.send_current_code, user)
+    background_tasks.add_task(flows.send_code, user, core.PURPOSE_ACCOUNT)
     set_pending_cookie(response, user.id)
 
     # Arm the durable limbo purge: a background task deletes this account once its
@@ -80,5 +80,5 @@ async def register(
             "email_verified_at": user.email_verified_at,
             "onboarding_completed": user.onboarding_completed,
         },
-        "verification": {"expires_at": account.expires_at(user)},
+        "verification": {"expires_at": flows.expires_at(user)},
     }

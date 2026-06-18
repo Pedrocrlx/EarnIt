@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.database import get_session
 from src.models.auth import User
 from src.schemas.auth import ForgotPasswordRequest
-from src.services.verification import core, password_reset
+from src.services.verification import core, flows
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ async def forgot_password(
 
     if user is not None and user.is_active:
         now = core.now()
-        if password_reset.is_window_open(user, now):
+        if flows.is_window_open(user, now):
             logger.info("Password reset rate-limited: user_id=%s", user.id)
             return JSONResponse(
                 status_code=429,
@@ -58,13 +58,11 @@ async def forgot_password(
                         "A password reset code is still active. "
                         "Please wait before requesting another."
                     ),
-                    "retry_after_seconds": password_reset.seconds_until_resend(
-                        user, now
-                    ),
+                    "retry_after_seconds": flows.seconds_until_resend(user, now),
                 },
             )
-        await password_reset.rotate(user, session)
-        background_tasks.add_task(password_reset.send_current_code, user)
+        await flows.rotate(user, session)
+        background_tasks.add_task(flows.send_code, user, core.PURPOSE_PASSWORD_RESET)
         logger.info("Password reset requested: user_id=%s", user.id)
 
     return _GENERIC_REQUEST_RESPONSE

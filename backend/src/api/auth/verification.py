@@ -18,7 +18,7 @@ from src.dependencies.auth import get_pending_verification_user
 from src.models.auth import User
 from src.schemas.auth import VerifyCodeRequest
 from src.services.accounts import cancel_limbo_purge
-from src.services.verification import account, core
+from src.services.verification import core, flows
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +46,13 @@ async def verify_account(
     now = core.now()
     # Expiry is checked before the code itself so an expired window returns 410,
     # not a generic 400 — the client can then prompt a resend.
-    if not account.is_window_open(current_user, now):
+    if not flows.is_window_open(current_user, now):
         logger.info(
             "Account verification failed: code expired (user_id=%s)", current_user.id
         )
         raise HTTPException(status_code=410, detail="Verification code has expired.")
 
-    if not account.verify(current_user, body.code):
+    if not flows.verify(current_user, core.PURPOSE_ACCOUNT, body.code):
         logger.warning(
             "Account verification failed: invalid code (user_id=%s)", current_user.id
         )
@@ -102,7 +102,7 @@ async def resend_verification(
     now = core.now()
 
     # Anti-spam: a fresh code can only be issued once the current window has closed.
-    if account.is_window_open(current_user, now):
+    if flows.is_window_open(current_user, now):
         logger.info("Verification resend rate-limited: user_id=%s", current_user.id)
         return JSONResponse(
             status_code=429,
@@ -112,14 +112,14 @@ async def resend_verification(
                     "A verification code is still active. "
                     "Please wait before requesting another."
                 ),
-                "retry_after_seconds": account.seconds_until_resend(current_user, now),
+                "retry_after_seconds": flows.seconds_until_resend(current_user, now),
             },
         )
 
     # Rotate the anchor synchronously (it's the source of truth), then email the
     # new code off the critical path.
-    expires_at = await account.rotate(current_user, session)
-    background_tasks.add_task(account.send_current_code, current_user)
+    expires_at = await flows.rotate(current_user, session)
+    background_tasks.add_task(flows.send_code, current_user, core.PURPOSE_ACCOUNT)
     logger.info("Verification code resent: user_id=%s", current_user.id)
     return {
         "status": "success",
