@@ -303,7 +303,29 @@ Every flow shares one **stateless verification code** primitive (`src/services/v
 
 ### Tests
 
-Endpoints are covered by tests in `tests/` (one file per feature, e.g. `test_registration.py`, `test_login_logout.py`). `tests/conftest.py` centralizes shared fixtures plus the example account (`VALID_USER`), cookie-extraction (`extract_cookie`), and register+verify (`register_and_verify`) helpers used across feature files.
+The suite is split into two parts:
+
+- **Essential unit suite** — `tests/` (`test_security.py`, `test_purge.py`):
+  unit/service-level tests for the critical modules (bcrypt hashing, JWT
+  tokens, the stateless verification-code engine, the auth dependencies, and
+  the durable limbo-purge background task). This is what NFR-05 asks for.
+- **Integration suite** — `tests/integration/` (one file per feature, e.g.
+  `test_registration.py`, `test_login_logout.py`, `test_tasks.py`): endpoint
+  flow tests that drive the real API with an httpx `AsyncClient` against the DB
+  — the "bonus" integration coverage.
+
+`tests/conftest.py` (shared by both) centralizes the fixtures plus the example
+account (`VALID_USER`), cookie-extraction (`extract_cookie`), and register+verify
+(`register_and_verify`) helpers.
+
+```bash
+make test              # essential unit suite only
+make test-integration  # endpoint flow tests
+make test-all          # everything
+```
+
+Tests need the `db` container running (they auto-create a `*_test` database);
+email is mocked, so Mailpit isn't required.
 
 ### Logging
 

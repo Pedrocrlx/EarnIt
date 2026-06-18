@@ -1,4 +1,4 @@
-.PHONY: help up-ba down enter-db ruff format lint-fix mail-up mail-down mail-logs clean cleanup
+.PHONY: help up-ba down enter-db ruff format lint-fix mail-up mail-down mail-logs clean full-clean test test-integration test-all
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -26,6 +26,17 @@ mail-down: ## Stop Mailpit
 
 mail-logs: ## Tail Mailpit logs
 	docker compose -f mail/compose.yaml logs -f
+
+## --- Tests (need the db container; mail is mocked) ---
+
+test: ## Run the essential unit suite (critical modules)
+	uv run pytest tests --ignore=tests/integration
+
+test-integration: ## Run the integration suite (endpoint flows)
+	uv run pytest tests/integration
+
+test-all: ## Run every test (essential + integration)
+	uv run pytest tests
 
 ## --- Code quality ---
 

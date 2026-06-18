@@ -558,8 +558,9 @@ async def test_wallet_history_ordered_newest_first(client: AsyncClient, mock_mai
         )
     ).json()["transactions"]
     assert len(transactions) == 2
-    assert float(transactions[0]["amount"]) >= float(transactions[1]["amount"]) or True
-    # ordering by created_at desc — just verify two records exist
+    # Ordered newest-first: t2 (approved last, €2.00) must precede t1 (€1.00).
+    assert float(transactions[0]["amount"]) == 2.00
+    assert float(transactions[1]["amount"]) == 1.00
     assert all(t["transaction_type"] == "credit" for t in transactions)
 
 
