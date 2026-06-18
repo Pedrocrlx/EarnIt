@@ -7,32 +7,37 @@ import { cn } from "@/lib/utils";
 
 const howItWorksSteps = [
   {
-    title: "Assign Chores",
-    description: "Parents set tasks, point values, and deadlines in seconds.",
+    title: "Atribuir tarefas",
+    description: "Os pais definem tarefas, pontos e prazos em segundos.",
     icon: ClipboardList,
     iconColor: "text-white",
     iconBg: "bg-[#034e22]",
   },
   {
-    title: "Kids Earn",
-    description: "Kids complete tasks, checking them off to earn points and level up.",
+    title: "As crianças ganham",
+    description: "As crianças concluem tarefas, ganham pontos e sobem de nível.",
     icon: ShieldCheck,
     iconColor: "text-[#1a1d00]",
     iconBg: "bg-[#deec5a]",
   },
   {
-    title: "Redeem Rewards",
-    description: "Points translate to real-world rewards, screen time, or allowance.",
+    title: "Trocar recompensas",
+    description: "Os pontos transformam-se em prémios, tempo de ecrã ou semanada.",
     icon: Gift,
     iconColor: "text-white",
     iconBg: "bg-[#034e22]",
   },
 ];
 
-const footerLinks = ["Privacy Policy", "Terms of Service", "Contact Us", "Help Center"];
+const footerLinks = [
+  "Política de Privacidade",
+  "Termos de Serviço",
+  "Contacte-nos",
+  "Centro de Ajuda",
+];
 
 const ctaButtonClass =
-  "h-auto rounded-full bg-[#deec5a] px-8 py-3 text-xs font-bold leading-5 text-[#1a1d00] shadow-[0px_4px_0px_rgba(91,99,0,0.5)] hover:bg-[#d7e652] sm:px-10";
+  "h-auto rounded-full bg-[#deec5a] px-8 py-3 text-xs font-bold leading-5 text-[#1a1d00] shadow-[0px_4px_0px_rgba(91,99,0,0.5)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#d7e652] hover:shadow-[0px_6px_0px_rgba(91,99,0,0.45)] active:translate-y-0 active:shadow-[0px_3px_0px_rgba(91,99,0,0.45)] sm:px-10";
 
 export const LandingPage = () => {
   const navigate = useNavigate();
@@ -46,24 +51,24 @@ export const LandingPage = () => {
           <div className="mx-auto grid max-w-[1180px] items-center gap-10 md:grid-cols-[minmax(0,1fr)_300px] md:gap-12 lg:min-h-[430px] lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-[72px] xl:gap-20">
             <div className="max-w-[560px]">
               <h1 className="text-4xl font-normal leading-[1.12] tracking-normal text-[#003514] sm:text-5xl md:text-[52px] md:leading-[62px] lg:text-[56px] lg:leading-[66px]">
-                Turn Chores into
+                Transforme tarefas em
                 <br />
-                <span className="text-[#c2cf40]">Achievements.</span>
+                <span className="text-[#c2cf40]">conquistas.</span>
               </h1>
               <p className="mt-5 max-w-[520px] text-base font-normal leading-7 text-[#404940] sm:text-lg sm:leading-8 lg:text-[22px] lg:leading-9">
-                Make responsibility fun. EarnIt helps parents organize tasks while rewarding kids
-                for building great habits through a playful, gamified experience.
+                Torne a responsabilidade divertida. A EarnIt ajuda os pais a organizar tarefas
+                e recompensa as crianças por criarem bons hábitos numa experiência lúdica.
               </p>
               <Button onClick={handleRegister} className={cn(ctaButtonClass, "mt-8")}>
-                Get Started Free
+                Começar grátis
               </Button>
             </div>
 
             <div className="relative mx-auto flex w-full max-w-[220px] justify-center sm:max-w-[260px] md:max-w-[280px] lg:max-w-[300px]">
               <img
                 src="/mascot/avocado.webp"
-                alt="EarnIt avocado mascot"
-                className="h-auto w-full object-contain"
+                alt="Mascote abacate da EarnIt"
+                className="h-auto w-full object-contain transition-transform duration-300 ease-out hover:-translate-y-1 hover:scale-[1.02]"
               />
             </div>
           </div>
@@ -76,19 +81,19 @@ export const LandingPage = () => {
           <div className="mx-auto max-w-[1180px]">
             <div className="text-center">
               <h2 className="text-3xl font-normal leading-tight text-[#003514] sm:text-4xl lg:text-[40px] lg:leading-[56px]">
-                How it Works
+                Como funciona
               </h2>
               <p className="mt-2 text-sm leading-6 text-[#404940] sm:text-base">
-                Three simple steps to building better habits.
+                Três passos simples para criar melhores hábitos.
               </p>
             </div>
 
-            <div className="relative mt-10 sm:mt-12">
+            <div className="group/steps relative mt-10 sm:mt-12">
               <img
                 src="/mascot/kiwi.webp"
                 alt=""
                 aria-hidden="true"
-                className="pointer-events-none absolute -top-28 left-0 hidden w-[200px] select-none lg:block"
+                className="pointer-events-none absolute -top-28 left-0 hidden w-[200px] select-none transition-transform duration-500 ease-out group-hover/steps:translate-y-1 lg:block"
               />
               <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:gap-8">
                 {howItWorksSteps.map((step) => {
@@ -97,11 +102,11 @@ export const LandingPage = () => {
                   return (
                     <article
                       key={step.title}
-                      className="relative z-10 flex min-h-[220px] flex-col items-center justify-center rounded-[24px] bg-white px-6 py-10 text-center shadow-[0px_8px_12px_rgba(3,78,34,0.08)] lg:min-h-[280px] lg:rounded-[32px] lg:px-8"
+                      className="group relative z-10 flex min-h-[220px] flex-col items-center justify-center rounded-[24px] bg-white px-6 py-10 text-center shadow-[0px_8px_12px_rgba(3,78,34,0.08)] transition-all duration-200 ease-out hover:-translate-y-1 hover:shadow-[0px_18px_34px_-18px_rgba(3,78,34,0.34)] lg:min-h-[280px] lg:rounded-[32px] lg:px-8"
                     >
                       <div
                         className={cn(
-                          "mb-6 flex size-14 sm:size-16 items-center justify-center rounded-full",
+                          "mb-6 flex size-14 items-center justify-center rounded-full transition-transform duration-200 ease-out group-hover:scale-105 sm:size-16",
                           step.iconBg,
                         )}
                       >
@@ -128,14 +133,14 @@ export const LandingPage = () => {
               <div className="absolute -bottom-40 -left-40 size-64 rounded-full bg-[#dbe957] opacity-20 blur-[20px]" />
               <div className="relative z-10 mx-auto max-w-[680px]">
                 <h2 className="text-3xl font-normal leading-tight text-white sm:text-4xl lg:text-[44px] lg:leading-[60px]">
-                  Join the Family
+                  Junte-se à família
                 </h2>
                 <p className="mx-auto mt-4 max-w-[620px] text-sm leading-6 text-[#92d69c] sm:text-base">
-                  Start making chores less of a chore. Sign up today and get your first month free
-                  and join thousands of happy families.
+                  Comece a tornar as tarefas menos aborrecidas. Registe-se hoje,
+                  tenha o primeiro mês grátis e junte-se a milhares de famílias felizes.
                 </p>
                 <Button onClick={handleRegister} className={cn(ctaButtonClass, "mt-8")}>
-                  Start Earning
+                  Começar a ganhar
                 </Button>
               </div>
             </div>
@@ -147,21 +152,21 @@ export const LandingPage = () => {
         <div className="mx-auto flex max-w-[1180px] flex-col items-center justify-between gap-8 lg:flex-row">
           <Logo className="h-10 w-auto sm:h-12" />
           <nav
-            aria-label="Footer"
+            aria-label="Rodapé"
             className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 lg:gap-x-10"
           >
             {footerLinks.map((link) => (
               <a
                 key={link}
                 href="#"
-                className="text-xs font-semibold leading-5 text-[#404940] transition-colors hover:text-[#003514]"
+                className="text-xs font-semibold leading-5 text-[#404940] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:text-[#003514]"
               >
                 {link}
               </a>
             ))}
           </nav>
           <p className="text-center text-xs font-semibold leading-5 text-[#404940]">
-            © 2024 EarnIt Family. All rights reserved.
+            © 2024 EarnIt Family. Todos os direitos reservados.
           </p>
         </div>
       </footer>

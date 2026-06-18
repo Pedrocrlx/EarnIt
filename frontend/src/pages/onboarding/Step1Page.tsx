@@ -35,12 +35,12 @@ const OnboardingStep1Page = () => {
     const nextErrors: FieldErrors<Step1Field> = {};
     const familyNameRequiredError = validateRequired(
       familyName,
-      "Enter your family name.",
+      "Introduza o nome da sua família.",
     );
     const familyNameLengthError = validateMaxLength(
       familyName,
       MAX_FAMILY_NAME_LENGTH,
-      `Family name must be ${MAX_FAMILY_NAME_LENGTH} characters or fewer.`,
+      `O nome da família deve ter ${MAX_FAMILY_NAME_LENGTH} caracteres ou menos.`,
     );
     const parsedChildCount = Number(childCount);
 
@@ -51,13 +51,13 @@ const OnboardingStep1Page = () => {
     }
 
     if (!childCount) {
-      nextErrors.childCount = "Select the number of children.";
+      nextErrors.childCount = "Selecione o número de crianças.";
     } else if (
       !Number.isInteger(parsedChildCount) ||
       parsedChildCount < 1 ||
       parsedChildCount > MAX_CHILDREN_PER_USER
     ) {
-      nextErrors.childCount = `Choose between 1 and ${MAX_CHILDREN_PER_USER} children.`;
+      nextErrors.childCount = `Escolha entre 1 e ${MAX_CHILDREN_PER_USER} crianças.`;
     }
 
     return nextErrors;
@@ -99,7 +99,7 @@ const OnboardingStep1Page = () => {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "Unable to save family setup.",
+          : "Não foi possível guardar a configuração da família.",
       );
     } finally {
       setIsSubmitting(false);
@@ -118,8 +118,8 @@ const OnboardingStep1Page = () => {
 
           <div className="w-full max-w-[640px] space-y-2">
             <div className="flex items-center justify-between text-[14px] font-semibold text-[#003514]/60">
-              <span className="uppercase tracking-[0.05em]">Step 1 of 3</span>
-              <span className="text-[#003514]">Family Setup</span>
+              <span className="uppercase tracking-[0.05em]">Passo 1 de 3</span>
+              <span className="text-[#003514]">Configuração da família</span>
             </div>
             <div
               className="h-2 overflow-hidden rounded-full bg-[#edeef0]"
@@ -132,10 +132,10 @@ const OnboardingStep1Page = () => {
 
         <div className="max-w-[600px] space-y-2 text-center">
           <h1 className="font-montserrat text-[32px] font-bold leading-10 text-[#003514]">
-            Welcome to the Family!
+            Bem-vindo à família!
           </h1>
           <p className="text-[18px] leading-[26px] text-[#404940]">
-            Let&apos;s get started by setting up your family profile.
+            Vamos começar por configurar o perfil da sua família.
           </p>
         </div>
 
@@ -149,7 +149,7 @@ const OnboardingStep1Page = () => {
                 htmlFor="family-name"
                 className="pl-1 text-sm font-semibold text-[#404940]"
               >
-                Family Name
+                Nome da família
               </label>
               <div className="relative">
                 <UsersRound className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#404940]" />
@@ -161,7 +161,7 @@ const OnboardingStep1Page = () => {
                     clearFieldError("familyName");
                     setError("");
                   }}
-                  placeholder="e.g. The Robinsons"
+                  placeholder="ex.: Os Silvas"
                   aria-invalid={Boolean(fieldErrors.familyName)}
                   aria-describedby={
                     fieldErrors.familyName ? "family-name-error" : undefined
@@ -180,7 +180,7 @@ const OnboardingStep1Page = () => {
                 htmlFor="children-count"
                 className="pl-1 text-sm font-semibold text-[#404940]"
               >
-                Number of Children
+                Número de crianças
               </label>
               <div className="relative">
                 <select
@@ -200,7 +200,7 @@ const OnboardingStep1Page = () => {
                     fieldErrors.childCount && invalidInputClass,
                   )}
                 >
-                  <option value="">Select number</option>
+                  <option value="">Selecione um número</option>
                   {childCountOptions.map((option) => (
                     <option key={option} value={option}>
                       {option}
@@ -225,7 +225,7 @@ const OnboardingStep1Page = () => {
               disabled={isSubmitting}
               className="h-auto rounded-full bg-[#d4e251] px-10 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.08),0px_4px_6px_-4px_rgba(0,0,0,0.08)] hover:bg-[#cfdc42] disabled:opacity-60"
             >
-              {isSubmitting ? "Saving..." : "Continue"}
+              {isSubmitting ? "A guardar..." : "Continuar"}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </div>

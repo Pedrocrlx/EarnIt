@@ -14,7 +14,7 @@ export class ApiError extends Error {
 
 const getErrorMessage = (data: unknown) => {
   if (!data || typeof data !== "object") {
-    return "API request failed";
+    return "O pedido à API falhou.";
   }
 
   const errorData = data as {
@@ -44,7 +44,7 @@ const getErrorMessage = (data: unknown) => {
     return errorData.error;
   }
 
-  return "API request failed";
+  return "O pedido à API falhou.";
 };
 
 const parseResponseBody = async (response: Response): Promise<unknown> => {

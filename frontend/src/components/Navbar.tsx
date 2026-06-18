@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils";
 import Logo from "./Logo";
 
 const navigationItems = [
-  { name: "Features", path: "/#features" },
-  { name: "How it Works", path: "/#how-it-works" },
+  { name: "Funcionalidades", path: "/#features" },
+  { name: "Como funciona", path: "/#how-it-works" },
 ];
 
 const hiddenNavbarPaths = ["/login", "/register", "/verification", "/profile"];
@@ -52,7 +52,7 @@ export const Navbar = () => {
           <Logo className="h-12 w-auto sm:h-14" />
         </Link>
         <nav
-          aria-label="Primary"
+          aria-label="Principal"
           className="hidden items-center gap-10 md:flex lg:gap-16"
         >
           {navigationItems.map((item) => (
@@ -67,13 +67,22 @@ export const Navbar = () => {
         </nav>
         <div className="hidden items-center gap-2 sm:gap-4 md:flex">
           {isAuthenticated ? (
-            <Button
-              variant="default"
-              onClick={logoutAndClose}
-              className={cn(primaryButtonStyle)}
-            >
-              Logout
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                onClick={() => navigate("/dashboard")}
+                className={cn(ghostButtonStyle)}
+              >
+                Painel
+              </Button>
+              <Button
+                variant="default"
+                onClick={logoutAndClose}
+                className={cn(primaryButtonStyle)}
+              >
+                Sair
+              </Button>
+            </>
           ) : (
             <>
               <Button
@@ -81,14 +90,14 @@ export const Navbar = () => {
                 onClick={() => navigate("/login")}
                 className={cn(ghostButtonStyle)}
               >
-                Sign In
+                Entrar
               </Button>
               <Button
                 variant="default"
                 onClick={() => navigate("/register")}
                 className={cn(primaryButtonStyle)}
               >
-                Sign Up
+                Criar conta
               </Button>
             </>
           )}
@@ -96,9 +105,9 @@ export const Navbar = () => {
         <button
           type="button"
           onClick={() => setMenuIsOpen((isOpen) => !isOpen)}
-          className="flex size-10 items-center justify-center rounded-full border border-[#e1e2e4] text-[#003514] transition-colors hover:bg-[#f3f4f6] md:hidden"
+          className="flex size-10 cursor-pointer items-center justify-center rounded-full border border-[#e1e2e4] text-[#003514] transition-colors hover:bg-[#f3f4f6] md:hidden"
           aria-label={
-            menuIsOpen ? "Close navigation menu" : "Open navigation menu"
+            menuIsOpen ? "Fechar menu de navegação" : "Abrir menu de navegação"
           }
           aria-expanded={menuIsOpen}
         >
@@ -112,7 +121,7 @@ export const Navbar = () => {
 
       {menuIsOpen ? (
         <div className="border-t border-black/5 bg-white px-5 pb-5 pt-3 md:hidden">
-          <nav aria-label="Mobile primary" className="flex flex-col gap-1">
+          <nav aria-label="Principal mobile" className="flex flex-col gap-1">
             {navigationItems.map((item) => (
               <Link
                 key={item.name}
@@ -127,13 +136,22 @@ export const Navbar = () => {
 
           <div className="mt-4 grid gap-3">
             {isAuthenticated ? (
-              <Button
-                variant="default"
-                onClick={logoutAndClose}
-                className={cn(primaryButtonStyle, "w-full justify-center py-3")}
+              <>
+                <Button
+                  variant="ghost"
+                  onClick={() => navigateAndClose("/dashboard")}
+                className={cn(ghostButtonStyle, "w-full justify-center py-3")}
               >
-                Logout
-              </Button>
+                  Painel
+                </Button>
+                <Button
+                  variant="default"
+                  onClick={logoutAndClose}
+                  className={cn(primaryButtonStyle, "w-full justify-center py-3")}
+                >
+                  Sair
+                </Button>
+              </>
             ) : (
               <>
                 <Button
@@ -141,7 +159,7 @@ export const Navbar = () => {
                   onClick={() => navigateAndClose("/login")}
                   className={cn(ghostButtonStyle, "w-full justify-center py-3")}
                 >
-                  Sign In
+                  Entrar
                 </Button>
                 <Button
                   variant="default"
@@ -151,7 +169,7 @@ export const Navbar = () => {
                     "w-full justify-center py-3",
                   )}
                 >
-                  Sign Up
+                  Criar conta
                 </Button>
               </>
             )}

@@ -19,7 +19,7 @@ const VerificationCode = lazy(
 
 const PageFallback = () => (
   <main className="flex min-h-screen items-center justify-center bg-[#f8f9fb] px-4">
-    <div className="text-sm font-semibold text-[#003514]">Loading...</div>
+    <div className="text-sm font-semibold text-[#003514]">A carregar...</div>
   </main>
 );
 

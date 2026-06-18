@@ -144,7 +144,7 @@ export const VerificationCode = () => {
     },
     onError: (error: unknown) => {
       setMessageTone("error");
-      setMessage(getErrorMessage(error, "Verification failed"));
+      setMessage(getErrorMessage(error, "A verificação falhou"));
     },
   });
 
@@ -154,11 +154,11 @@ export const VerificationCode = () => {
     }),
     onSuccess: () => {
       setMessageTone("neutral");
-      setMessage("A new verification code has been sent.");
+      setMessage("Foi enviado um novo código de verificação.");
     },
     onError: (error: unknown) => {
       setMessageTone("error");
-      setMessage(getErrorMessage(error, "Failed to resend code"));
+      setMessage(getErrorMessage(error, "Não foi possível reenviar o código"));
     },
   });
 
@@ -198,10 +198,10 @@ export const VerificationCode = () => {
                 id="email-verification-title"
                 className="font-montserrat font-bold text-[#003514] text-3xl tracking-tight leading-10"
               >
-                Check your email
+                Verifique o seu email
               </h1>
               <p className="text-[#404940] text-base leading-relaxed">
-                We sent a code to your email. Enter it below to continue.
+                Enviámos um código para o seu email. Introduza-o abaixo para continuar.
               </p>
             </div>
 
@@ -212,7 +212,7 @@ export const VerificationCode = () => {
                 aria-describedby={message ? "verification-message" : undefined}
               >
                 <legend className="sr-only">
-                  Enter the {OTP_LENGTH}-character verification code
+                  Introduza o código de verificação de {OTP_LENGTH} caracteres
                 </legend>
                 {otpSlots.map((slotIndex) => {
                   const isFilled = code[slotIndex] !== "";
@@ -231,7 +231,7 @@ export const VerificationCode = () => {
                       inputMode="text"
                       autoComplete={slotIndex === 0 ? "one-time-code" : "off"}
                       maxLength={1}
-                      aria-label={`Digit ${slotIndex + 1}`}
+                      aria-label={`Carácter ${slotIndex + 1}`}
                       value={code[slotIndex]}
                       onChange={(event) =>
                         handleChange(slotIndex, event.target.value)
@@ -269,22 +269,22 @@ export const VerificationCode = () => {
                   !isComplete && "opacity-50 cursor-not-allowed"
                 }`}
               >
-                {verifyMutation.isPending ? "Verifying..." : "Verify"}
+                {verifyMutation.isPending ? "A verificar..." : "Verificar"}
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </form>
 
             <div className="flex flex-col items-center gap-2 pt-4">
               <div className="text-[#404940] text-base">
-                Didn't receive it?
+                Não recebeu o código?
               </div>
               <button
                 type="button"
                 onClick={() => resendMutation.mutate()}
                 disabled={resendMutation.isPending}
-                className="text-[#003514] font-semibold text-sm hover:underline transition-all"
+                className="cursor-pointer text-[#003514] font-semibold text-sm hover:underline transition-all disabled:cursor-not-allowed"
               >
-                {resendMutation.isPending ? "Resending..." : "Resend Code"}
+                {resendMutation.isPending ? "A reenviar..." : "Reenviar código"}
               </button>
             </div>
           </div>
@@ -294,10 +294,10 @@ export const VerificationCode = () => {
           <button
             type="button"
             onClick={() => navigate("/login")}
-            className="flex items-center gap-2 px-4 py-2 text-[#404940] font-semibold text-sm hover:text-[#003514] transition-colors rounded-lg"
+            className="flex cursor-pointer items-center gap-2 px-4 py-2 text-[#404940] font-semibold text-sm hover:text-[#003514] transition-colors rounded-lg"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Login
+            Voltar ao login
           </button>
         </div>
       </div>

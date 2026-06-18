@@ -53,9 +53,9 @@ const RegistrationPage = () => {
     }
 
     if (!confirmPassword) {
-      nextErrors.confirmPassword = "Confirm your password.";
+      nextErrors.confirmPassword = "Confirme a sua palavra-passe.";
     } else if (password !== confirmPassword) {
-      nextErrors.confirmPassword = "Passwords do not match.";
+      nextErrors.confirmPassword = "As palavras-passe não coincidem.";
     }
 
     return nextErrors;
@@ -80,7 +80,7 @@ const RegistrationPage = () => {
     },
     onError: (error: unknown) => {
       setFormError(
-        error instanceof Error ? error.message : "Unable to create account.",
+        error instanceof Error ? error.message : "Não foi possível criar a conta.",
       );
     },
   });
@@ -101,7 +101,7 @@ const RegistrationPage = () => {
   };
 
   return (
-    <AuthFormLayout subtitle="Create your account. Join the crew!">
+    <AuthFormLayout subtitle="Crie a sua conta. Junte-se à equipa!">
       <form className="space-y-6" onSubmit={handleSubmit}>
         <EmailField
           error={fieldErrors.email}
@@ -117,7 +117,7 @@ const RegistrationPage = () => {
           describedBy="password-requirements"
           error={fieldErrors.password}
           isVisible={showPassword}
-          label="Password"
+          label="Palavra-passe"
           onBlur={() => setPasswordFocused(false)}
           onChange={(value) => {
             setPassword(value);
@@ -138,7 +138,7 @@ const RegistrationPage = () => {
                 : "max-h-0 -translate-y-1 opacity-0",
             )}
           >
-            <ul className="grid gap-2 p-3" aria-label="Password requirements">
+            <ul className="grid gap-2 p-3" aria-label="Requisitos da palavra-passe">
               {passwordRequirements.map((requirement) => (
                 <li
                   key={requirement.id}
@@ -165,7 +165,7 @@ const RegistrationPage = () => {
           id="confirm-password"
           error={fieldErrors.confirmPassword}
           isVisible={showConfirmPassword}
-          label="Confirm Password"
+          label="Confirmar palavra-passe"
           onChange={(value) => {
             setConfirmPassword(value);
             clearFieldError("confirmPassword");
@@ -186,14 +186,14 @@ const RegistrationPage = () => {
           className="h-auto w-full rounded-lg bg-[#dbe957] px-4 py-[18px] text-sm font-semibold tracking-[0.70px] text-[#5f6800] shadow-[0px_8px_10px_-6px_#034e221a,0px_10px_25px_-5px_#034e2226] hover:bg-[#d2e24f]"
           disabled={registerMutation.isPending}
         >
-          {registerMutation.isPending ? "CREATING..." : "CREATE ACCOUNT"}
+          {registerMutation.isPending ? "A CRIAR..." : "CRIAR CONTA"}
         </Button>
 
         <div className="space-y-2 pt-3">
           <Separator className="bg-[#e1e2e4]" />
           <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1 pt-0.5 text-center">
             <span className="text-sm font-normal leading-6 text-[#404940] sm:text-base">
-              Already have an account?
+              Já tem conta?
             </span>
             <Button
               type="button"
@@ -201,7 +201,7 @@ const RegistrationPage = () => {
               onClick={() => navigate("/login")}
               className="h-auto p-0 text-sm font-semibold leading-5 text-[#003514] no-underline hover:no-underline"
             >
-              Log In
+              Entrar
             </Button>
           </div>
         </div>

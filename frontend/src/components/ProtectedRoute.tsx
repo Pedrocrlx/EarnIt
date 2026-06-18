@@ -20,7 +20,7 @@ export const ProtectedRoute = ({
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#f8f9fb] px-4">
         <div className="text-sm font-semibold text-[#003514]">
-          Loading your session...
+          A carregar a sua sessão...
         </div>
       </main>
     );

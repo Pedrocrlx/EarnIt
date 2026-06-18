@@ -29,11 +29,11 @@ export const validateEmail = (email: string) => {
   const trimmedEmail = email.trim();
 
   if (!trimmedEmail) {
-    return "Enter your email address.";
+    return "Introduza o seu email.";
   }
 
   if (!emailPattern.test(trimmedEmail)) {
-    return "Enter a valid email address.";
+    return "Introduza um email válido.";
   }
 
   return "";
@@ -44,38 +44,38 @@ export const getPasswordRequirements = (
 ): PasswordRequirement[] => [
   {
     id: "length",
-    label: `At least ${PASSWORD_MIN_LENGTH} characters`,
+    label: `Pelo menos ${PASSWORD_MIN_LENGTH} caracteres`,
     met: password.length >= PASSWORD_MIN_LENGTH,
   },
   {
     id: "uppercase",
-    label: "One uppercase letter",
+    label: "Uma letra maiúscula",
     met: /[A-Z]/.test(password),
   },
   {
     id: "lowercase",
-    label: "One lowercase letter",
+    label: "Uma letra minúscula",
     met: /[a-z]/.test(password),
   },
   {
     id: "number",
-    label: "One number",
+    label: "Um número",
     met: /\d/.test(password),
   },
   {
     id: "special",
-    label: "One special character",
+    label: "Um carácter especial",
     met: specialCharacterPattern.test(password),
   },
 ];
 
 export const validatePassword = (password: string) => {
   if (!password) {
-    return "Enter a password.";
+    return "Introduza uma palavra-passe.";
   }
 
   if (getPasswordRequirements(password).some((requirement) => !requirement.met)) {
-    return "Password does not meet all requirements.";
+    return "A palavra-passe não cumpre todos os requisitos.";
   }
 
   return "";
@@ -83,11 +83,11 @@ export const validatePassword = (password: string) => {
 
 export const validateVerificationCode = (code: string) => {
   if (!code) {
-    return "Enter your verification code.";
+    return "Introduza o seu código de verificação.";
   }
 
   if (!new RegExp(`^[A-Z0-9]{${VERIFICATION_CODE_LENGTH}}$`).test(code)) {
-    return `Enter the ${VERIFICATION_CODE_LENGTH}-character code from your email.`;
+    return `Introduza o código de ${VERIFICATION_CODE_LENGTH} caracteres enviado por email.`;
   }
 
   return "";
@@ -95,11 +95,11 @@ export const validateVerificationCode = (code: string) => {
 
 export const validatePin = (pin: string) => {
   if (!pin) {
-    return "Enter a PIN.";
+    return "Introduza um PIN.";
   }
 
   if (!new RegExp(`^\\d{${PARENT_PIN_LENGTH}}$`).test(pin)) {
-    return `Enter a ${PARENT_PIN_LENGTH}-digit PIN.`;
+    return `Introduza um PIN de ${PARENT_PIN_LENGTH} dígitos.`;
   }
 
   return "";

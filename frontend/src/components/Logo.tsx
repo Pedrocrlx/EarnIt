@@ -8,7 +8,7 @@ export const Logo = ({ className }: LogoProps) => {
   return (
     <img
       src="/earnit_icon_black.webp"
-      alt="EarnIt logo"
+      alt="Logótipo EarnIt"
       className={cn("h-36 w-auto object-contain", className)}
     />
   );

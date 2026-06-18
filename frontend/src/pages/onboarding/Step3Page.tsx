@@ -62,9 +62,9 @@ const OnboardingStep3Page = () => {
     }
 
     if (!confirmPin) {
-      nextErrors.confirmPin = "Confirm your PIN.";
+      nextErrors.confirmPin = "Confirme o seu PIN.";
     } else if (pin !== confirmPin) {
-      nextErrors.confirmPin = "PINs do not match.";
+      nextErrors.confirmPin = "Os PINs não coincidem.";
     }
 
     return nextErrors;
@@ -112,7 +112,7 @@ const OnboardingStep3Page = () => {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "Unable to save your PIN. Please try again.",
+          : "Não foi possível guardar o seu PIN. Tente novamente.",
       );
     } finally {
       setIsSubmitting(false);
@@ -130,14 +130,14 @@ const OnboardingStep3Page = () => {
               className="h-12 w-auto object-contain sm:h-14"
             />
             <span className="rounded-full bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.06em] text-[#003514] shadow-[0px_8px_18px_-14px_rgba(3,78,34,0.45)]">
-              Step 3 of 3
+              Passo 3 de 3
             </span>
           </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.06em] text-[#003514]/55">
-              <span>Parent Security</span>
-              <span className="text-[#003514]">Complete setup</span>
+              <span>Segurança parental</span>
+              <span className="text-[#003514]">Concluir configuração</span>
             </div>
             <div
               className="h-2 overflow-hidden rounded-full bg-[#edeef0]"
@@ -155,11 +155,11 @@ const OnboardingStep3Page = () => {
             </div>
             <div className="space-y-2">
               <h1 className="font-montserrat text-[30px] font-bold leading-[38px] text-[#003514] sm:text-[34px] sm:leading-[42px]">
-                Set your parent PIN
+                Defina o PIN parental
               </h1>
               <p className="mx-auto max-w-[430px] text-base leading-6 text-[#404940]">
-                This PIN protects grown-up controls when someone switches into
-                the Mom/Dad profile.
+                Este PIN protege os controlos dos adultos quando alguém muda
+                para o perfil Mãe/Pai.
               </p>
             </div>
           </section>
@@ -172,11 +172,11 @@ const OnboardingStep3Page = () => {
                 </span>
                 <div>
                   <h2 className="font-bold leading-6 text-[#003514]">
-                    Parent-only access
+                    Acesso só para pais
                   </h2>
                   <p className="mt-1 text-sm leading-5 text-[#404940]">
-                    Use exactly 4 digits. You can change this PIN later from
-                    parent settings.
+                    Use exatamente 4 dígitos. Pode alterar este PIN mais tarde
+                    nas definições parentais.
                   </p>
                 </div>
               </div>
@@ -187,7 +187,7 @@ const OnboardingStep3Page = () => {
                     htmlFor="parent-pin"
                     className="pl-1 text-sm font-semibold text-[#404940]"
                   >
-                    Create PIN
+                    Criar PIN
                   </label>
                   <div className="relative">
                     <KeyRound className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#404940]" />
@@ -200,7 +200,7 @@ const OnboardingStep3Page = () => {
                       onChange={(event) =>
                         updatePin(event.target.value, setPin, "pin")
                       }
-                      placeholder="4 digits"
+                      placeholder="4 dígitos"
                       aria-invalid={Boolean(fieldErrors.pin)}
                       aria-describedby={
                         fieldErrors.pin ? "parent-pin-error" : undefined
@@ -219,7 +219,7 @@ const OnboardingStep3Page = () => {
                     htmlFor="confirm-parent-pin"
                     className="pl-1 text-sm font-semibold text-[#404940]"
                   >
-                    Confirm PIN
+                    Confirmar PIN
                   </label>
                   <div className="relative">
                     <CheckCircle2 className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#404940]" />
@@ -232,7 +232,7 @@ const OnboardingStep3Page = () => {
                       onChange={(event) =>
                         updatePin(event.target.value, setConfirmPin, "confirmPin")
                       }
-                      placeholder="Repeat PIN"
+                      placeholder="Repetir PIN"
                       aria-invalid={Boolean(fieldErrors.confirmPin)}
                       aria-describedby={
                         fieldErrors.confirmPin
@@ -254,7 +254,7 @@ const OnboardingStep3Page = () => {
 
               <div
                 className="mt-6 flex justify-center gap-2"
-                aria-label={`${pin.length} of 4 PIN digits entered`}
+                aria-label={`${pin.length} de 4 dígitos do PIN introduzidos`}
               >
                 {pinPreviewSlots.map((slot) => (
                   <span
@@ -282,7 +282,7 @@ const OnboardingStep3Page = () => {
                 className="h-13 rounded-full bg-white px-6 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_18px_-16px_rgba(3,78,34,0.5)] hover:bg-white hover:text-[#003514] sm:order-1"
               >
                 <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
-                Back
+                Voltar
               </Button>
               <Button
                 type="submit"
@@ -295,7 +295,7 @@ const OnboardingStep3Page = () => {
                 {isSubmitting ? (
                   <LoaderCircle className="mr-2 size-4 animate-spin" />
                 ) : null}
-                Finish Setup
+                Concluir configuração
                 <ArrowRight className="ml-2 size-4" aria-hidden="true" />
               </Button>
             </div>

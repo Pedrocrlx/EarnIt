@@ -55,7 +55,7 @@ const LoginPage = () => {
   const validateForm = () => {
     const nextErrors: FieldErrors<LoginField> = {};
     const emailError = validateEmail(email);
-    const passwordError = validateRequired(password, "Enter your password.");
+    const passwordError = validateRequired(password, "Introduza a sua palavra-passe.");
 
     if (emailError) {
       nextErrors.email = emailError;
@@ -96,7 +96,7 @@ const LoginPage = () => {
       }
 
       setFormError(
-        error instanceof Error ? error.message : "Unable to sign in.",
+        error instanceof Error ? error.message : "Não foi possível iniciar sessão.",
       );
     },
   });
@@ -116,7 +116,7 @@ const LoginPage = () => {
   };
 
   return (
-    <AuthFormLayout subtitle="Welcome Back! Ready to see progress?">
+    <AuthFormLayout subtitle="Bem-vindo de volta! Pronto para ver o progresso?">
       <form className="space-y-6" onSubmit={handleSubmit}>
         <EmailField
           error={fieldErrors.email}
@@ -131,7 +131,7 @@ const LoginPage = () => {
           id="password"
           error={fieldErrors.password}
           isVisible={showPassword}
-          label="Password"
+          label="Palavra-passe"
           onChange={(value) => {
             setPassword(value);
             clearFieldError("password");
@@ -152,14 +152,14 @@ const LoginPage = () => {
           className="h-auto w-full rounded-lg bg-[#dbe957] px-4 py-[18px] text-sm font-semibold tracking-[0.70px] text-[#5f6800] shadow-[0px_8px_10px_-6px_#034e221a,0px_10px_25px_-5px_#034e2226] hover:bg-[#d2e24f]"
           disabled={loginMutation.isPending}
         >
-          {loginMutation.isPending ? "SIGNING IN..." : "SIGN IN"}
+          {loginMutation.isPending ? "A ENTRAR..." : "ENTRAR"}
         </Button>
 
         <div className="space-y-2 pt-3">
           <Separator className="bg-[#e1e2e4]" />
           <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1 pt-0.5 text-center">
             <span className="text-sm font-normal leading-6 text-[#404940] sm:text-base">
-              Don&apos;t have an account?
+              Ainda não tem conta?
             </span>
             <Button
               type="button"
@@ -167,7 +167,7 @@ const LoginPage = () => {
               onClick={() => navigate("/register")}
               className="h-auto p-0 text-sm font-semibold leading-5 text-[#003514] no-underline hover:no-underline"
             >
-              Create an account
+              Criar conta
             </Button>
           </div>
         </div>

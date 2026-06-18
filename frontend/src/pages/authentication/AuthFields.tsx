@@ -23,7 +23,7 @@ export const EmailField = ({ error, value, onChange }: EmailFieldProps) => (
       htmlFor="email"
       className="text-sm font-semibold leading-5 text-[#191c1e]"
     >
-      Email address
+      Email
     </Label>
     <div className="relative">
       <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#404940]" />
@@ -95,8 +95,8 @@ export const PasswordField = ({
       <button
         type="button"
         onClick={() => onVisibilityChange(!isVisible)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#404940]"
-        aria-label={isVisible ? `Hide ${label}` : `Show ${label}`}
+        className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-[#404940]"
+        aria-label={isVisible ? `Ocultar ${label}` : `Mostrar ${label}`}
       >
         {isVisible ? (
           <EyeOff size={16} aria-hidden="true" />

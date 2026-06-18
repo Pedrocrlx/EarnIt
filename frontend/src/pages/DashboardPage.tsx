@@ -12,7 +12,7 @@ import { useAuth } from "@/context/useAuth";
 
 const DashboardPage = () => {
   const { familyProfile } = useAuth();
-  const familyName = familyProfile?.family_name?.trim() || "Family";
+  const familyName = familyProfile?.family_name?.trim() || "Família";
   const children = familyProfile?.children ?? [];
   const activeChildren = children.filter((child) => child.is_active);
 
@@ -22,14 +22,14 @@ const DashboardPage = () => {
         <header className="flex flex-col gap-4 rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_8px_20px_-16px_rgba(3,78,34,0.35)] sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div>
             <p className="text-sm font-semibold uppercase text-[#5f6800]">
-              Parent dashboard
+              Painel parental
             </p>
             <h1 className="mt-1 font-montserrat text-2xl font-bold text-[#003514] sm:text-3xl">
               {familyName}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#404940] sm:text-base">
-              Review profiles, keep parent controls protected, and continue from
-              the family device.
+              Reveja perfis, mantenha os controlos parentais protegidos e continue
+              a partir do dispositivo da família.
             </p>
           </div>
 
@@ -38,7 +38,7 @@ const DashboardPage = () => {
             className="h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42]"
           >
             <Link to="/profile">
-              Switch profile
+              Trocar perfil
               <ChevronRight className="ml-2 size-4" aria-hidden="true" />
             </Link>
           </Button>
@@ -49,7 +49,7 @@ const DashboardPage = () => {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-[#404940]">
-                  Active children
+                  Crianças ativas
                 </p>
                 <p className="mt-2 text-3xl font-bold text-[#003514]">
                   {activeChildren.length}
@@ -65,10 +65,10 @@ const DashboardPage = () => {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-[#404940]">
-                  Setup status
+                  Estado da configuração
                 </p>
                 <p className="mt-2 text-lg font-bold text-[#003514]">
-                  Complete
+                  Concluída
                 </p>
               </div>
               <span className="flex size-11 items-center justify-center rounded-full bg-[#eef7d1] text-[#5f6800]">
@@ -81,10 +81,10 @@ const DashboardPage = () => {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-[#404940]">
-                  Parent area
+                  Área parental
                 </p>
                 <p className="mt-2 text-lg font-bold text-[#003514]">
-                  PIN protected
+                  Protegida por PIN
                 </p>
               </div>
               <span className="flex size-11 items-center justify-center rounded-full bg-[#fff4de] text-[#9a5b00]">
@@ -99,10 +99,10 @@ const DashboardPage = () => {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-bold text-[#003514]">
-                  Child profiles
+                  Perfis das crianças
                 </h2>
                 <p className="mt-1 text-sm leading-5 text-[#404940]">
-                  Profiles linked to this parent account.
+                  Perfis ligados a esta conta parental.
                 </p>
               </div>
               <UsersRound className="size-5 text-[#404940]" aria-hidden="true" />
@@ -125,19 +125,19 @@ const DashboardPage = () => {
                         </p>
                         <p className="mt-0.5 text-sm text-[#404940]">
                           {child.birth_date
-                            ? `Born ${child.birth_date}`
-                            : "Birth date not set"}
+                            ? `Nasc. ${child.birth_date}`
+                            : "Data de nascimento não definida"}
                         </p>
                       </div>
                     </div>
                     <span className="shrink-0 rounded-full bg-[#f3f4f6] px-3 py-1 text-xs font-semibold text-[#404940]">
-                      {child.is_active ? "Active" : "Inactive"}
+                      {child.is_active ? "Ativo" : "Inativo"}
                     </span>
                   </div>
                 ))
               ) : (
                 <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
-                  No child profiles yet.
+                  Ainda não existem perfis de crianças.
                 </p>
               )}
             </div>
@@ -150,8 +150,8 @@ const DashboardPage = () => {
                   <ShieldCheck className="size-5" aria-hidden="true" />
                 </span>
                 <div>
-                  <h2 className="font-bold text-[#003514]">Parent controls</h2>
-                  <p className="text-sm text-[#404940]">Ready for protected access.</p>
+                  <h2 className="font-bold text-[#003514]">Controlos parentais</h2>
+                  <p className="text-sm text-[#404940]">Prontos para acesso protegido.</p>
                 </div>
               </div>
             </section>
@@ -162,8 +162,8 @@ const DashboardPage = () => {
                   <CalendarDays className="size-5" aria-hidden="true" />
                 </span>
                 <div>
-                  <h2 className="font-bold text-[#003514]">Next session</h2>
-                  <p className="text-sm text-[#404940]">Choose a profile to continue.</p>
+                  <h2 className="font-bold text-[#003514]">Próxima sessão</h2>
+                  <p className="text-sm text-[#404940]">Escolha um perfil para continuar.</p>
                 </div>
               </div>
             </section>

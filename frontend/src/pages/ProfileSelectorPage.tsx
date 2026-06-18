@@ -1,9 +1,10 @@
 import { LoaderCircle, LockKeyhole, X } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Logo from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/context/useAuth";
 import { apiFetch } from "@/lib/api";
 
 type PinVerificationResponse = {
@@ -13,27 +14,52 @@ type PinVerificationResponse = {
 
 const PARENT_PROFILE_ID = "parent";
 const SELECTED_PROFILE_STORAGE_KEY = "earnit:selected-profile";
+const childAvatarFallbacks = [
+  "/profile-selector/leo.jpg",
+  "/profile-selector/maya.jpg",
+];
 
-const profiles = [
-  {
-    id: "leo",
-    name: "Leo",
-    image: "/profile-selector/leo.jpg",
-    alt: "Profile picture of Leo",
+type SelectableProfile = {
+  alt: string;
+  id: string;
+  image: string;
+  name: string;
+  protected?: boolean;
+};
+
+const parentProfile: SelectableProfile = {
+  id: PARENT_PROFILE_ID,
+  name: "Mãe/Pai",
+  image: "/profile-selector/parent.jpg",
+  alt: "Foto de perfil de Mãe ou Pai",
+  protected: true,
+};
+
+const getFallbackAvatar = (index: number) =>
+  childAvatarFallbacks[index % childAvatarFallbacks.length];
+
+const buildChildProfile = (
+  child: {
+    avatar_url: string | null;
+    id: string;
+    name: string;
   },
+  index: number,
+): SelectableProfile => ({
+  id: child.id,
+  name: child.name,
+  image: child.avatar_url || getFallbackAvatar(index),
+  alt: `Foto de perfil de ${child.name}`,
+});
+
+const staticFallbackProfiles: SelectableProfile[] = [
   {
-    id: "maya",
-    name: "Maya",
-    image: "/profile-selector/maya.jpg",
-    alt: "Profile picture of Maya",
+    id: "demo-child-1",
+    name: "Criança",
+    image: childAvatarFallbacks[0],
+    alt: "Foto de perfil de criança",
   },
-  {
-    id: PARENT_PROFILE_ID,
-    name: "Mom/Dad",
-    image: "/profile-selector/parent.jpg",
-    alt: "Profile picture of Mom or Dad",
-    protected: true,
-  },
+  parentProfile,
 ];
 
 type ParentPinDialogProps = {
@@ -69,18 +95,18 @@ const ParentPinDialog = ({
             id="parent-pin-title"
             className="font-montserrat text-xl font-bold text-[#003514]"
           >
-            Parent PIN
+            PIN parental
           </h2>
           <p className="mt-1 text-sm leading-5 text-[#404940]">
-            Enter the PIN created during onboarding.
+            Introduza o PIN criado durante a configuração.
           </p>
         </div>
         <button
           type="button"
           onClick={onClose}
           disabled={isVerifying}
-          className="flex size-9 shrink-0 items-center justify-center rounded-full text-[#404940] transition-colors hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-60"
-          aria-label="Close parent PIN dialog"
+          className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-[#404940] transition-colors hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-60"
+          aria-label="Fechar janela do PIN parental"
         >
           <X className="size-5" aria-hidden="true" />
         </button>
@@ -91,7 +117,7 @@ const ParentPinDialog = ({
           htmlFor="profile-parent-pin"
           className="pl-1 text-sm font-semibold text-[#404940]"
         >
-          4-digit PIN
+          PIN de 4 dígitos
         </label>
         <div className="relative">
           <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#404940]" />
@@ -102,7 +128,7 @@ const ParentPinDialog = ({
             autoComplete="current-password"
             value={pin}
             onChange={(event) => onPinChange(event.target.value)}
-            placeholder="Enter PIN"
+            placeholder="Introduzir PIN"
             className="h-14 rounded-xl border-2 border-transparent bg-[#f3f4f6] pl-11 pr-4 text-base text-[#191c1e] placeholder:text-[#6b7280] focus-visible:border-[#003514] focus-visible:ring-0"
             autoFocus
           />
@@ -123,7 +149,7 @@ const ParentPinDialog = ({
           disabled={isVerifying}
           className="h-12 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
         >
-          Cancel
+          Cancelar
         </Button>
         <Button
           type="submit"
@@ -133,7 +159,7 @@ const ParentPinDialog = ({
           {isVerifying ? (
             <LoaderCircle className="mr-2 size-4 animate-spin" />
           ) : null}
-          Unlock
+          Desbloquear
         </Button>
       </div>
     </form>
@@ -142,10 +168,27 @@ const ParentPinDialog = ({
 
 export const ProfileSelectorPage = () => {
   const navigate = useNavigate();
+  const { familyProfile, refreshSession } = useAuth();
   const [pinModalIsOpen, setPinModalIsOpen] = useState(false);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
   const [isVerifyingPin, setIsVerifyingPin] = useState(false);
+
+  useEffect(() => {
+    void refreshSession();
+  }, [refreshSession]);
+
+  const profiles = useMemo(() => {
+    if (!familyProfile) {
+      return staticFallbackProfiles;
+    }
+
+    const childProfiles = familyProfile.children
+      .filter((child) => child.is_active)
+      .map(buildChildProfile);
+
+    return [...childProfiles, parentProfile];
+  }, [familyProfile]);
 
   const selectProfile = (profileId: string) => {
     if (profileId === PARENT_PROFILE_ID) {
@@ -178,7 +221,7 @@ export const ProfileSelectorPage = () => {
     event.preventDefault();
 
     if (!/^\d{4}$/.test(pin)) {
-      setPinError("Enter your 4-digit parent PIN.");
+      setPinError("Introduza o seu PIN parental de 4 dígitos.");
       return;
     }
 
@@ -192,7 +235,7 @@ export const ProfileSelectorPage = () => {
       });
 
       if (!response.authenticated) {
-        setPinError("Incorrect PIN.");
+        setPinError("PIN incorreto.");
         return;
       }
 
@@ -205,7 +248,7 @@ export const ProfileSelectorPage = () => {
       setPinError(
         caughtError instanceof Error
           ? caughtError.message
-          : "Unable to verify your PIN.",
+          : "Não foi possível verificar o seu PIN.",
       );
     } finally {
       setIsVerifyingPin(false);
@@ -217,7 +260,7 @@ export const ProfileSelectorPage = () => {
       <section className="flex w-full max-w-[760px] flex-col items-center">
         <Logo />
         <h1 className="mt-8 text-center text-base font-semibold leading-7 text-black sm:mt-9 sm:text-lg">
-          Who is playing?
+          Quem vai jogar?
         </h1>
 
         <div className="mt-10 grid w-full max-w-[640px] grid-cols-1 justify-items-center gap-8 sm:grid-cols-3 sm:gap-6 lg:mt-12 lg:gap-10">
@@ -226,8 +269,8 @@ export const ProfileSelectorPage = () => {
               key={profile.id}
               type="button"
               onClick={() => selectProfile(profile.id)}
-              className="group flex w-[150px] flex-col items-center gap-3 rounded-2xl focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[#034e22]/30 sm:w-[145px] lg:w-40"
-              aria-label={`Select ${profile.name} profile`}
+              className="group flex w-[150px] cursor-pointer flex-col items-center gap-3 rounded-2xl focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[#034e22]/30 sm:w-[145px] lg:w-40"
+              aria-label={`Selecionar perfil de ${profile.name}`}
             >
               <span className="relative w-full overflow-hidden rounded-xl border border-white/40 bg-white/30 p-px shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)] backdrop-blur-md transition-transform duration-200 group-hover:-translate-y-1 group-hover:shadow-[0px_14px_22px_-8px_rgba(0,0,0,0.18)]">
                 <img
