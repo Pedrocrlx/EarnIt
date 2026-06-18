@@ -2,11 +2,25 @@ import { ArrowRight, ChevronDown, UsersRound } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/useAuth";
 import { apiFetch } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import {
+  type FieldErrors,
+  MAX_CHILDREN_PER_USER,
+  MAX_FAMILY_NAME_LENGTH,
+  validateMaxLength,
+  validateRequired,
+} from "@/lib/validation";
 
 const childCountOptions = Array.from({ length: 10 }, (_, index) => index + 1);
+
+type Step1Field = "familyName" | "childCount";
+
+const invalidInputClass =
+  "border-red-300 bg-red-50/40 focus-visible:border-red-500 focus-visible:ring-red-500/15";
 
 const OnboardingStep1Page = () => {
   const navigate = useNavigate();
@@ -15,6 +29,47 @@ const OnboardingStep1Page = () => {
   const [childCount, setChildCount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<Step1Field>>({});
+
+  const validateForm = () => {
+    const nextErrors: FieldErrors<Step1Field> = {};
+    const familyNameRequiredError = validateRequired(
+      familyName,
+      "Enter your family name.",
+    );
+    const familyNameLengthError = validateMaxLength(
+      familyName,
+      MAX_FAMILY_NAME_LENGTH,
+      `Family name must be ${MAX_FAMILY_NAME_LENGTH} characters or fewer.`,
+    );
+    const parsedChildCount = Number(childCount);
+
+    if (familyNameRequiredError) {
+      nextErrors.familyName = familyNameRequiredError;
+    } else if (familyNameLengthError) {
+      nextErrors.familyName = familyNameLengthError;
+    }
+
+    if (!childCount) {
+      nextErrors.childCount = "Select the number of children.";
+    } else if (
+      !Number.isInteger(parsedChildCount) ||
+      parsedChildCount < 1 ||
+      parsedChildCount > MAX_CHILDREN_PER_USER
+    ) {
+      nextErrors.childCount = `Choose between 1 and ${MAX_CHILDREN_PER_USER} children.`;
+    }
+
+    return nextErrors;
+  };
+
+  const clearFieldError = (field: Step1Field) => {
+    setFieldErrors((currentErrors) => {
+      const nextErrors = { ...currentErrors };
+      delete nextErrors[field];
+      return nextErrors;
+    });
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -22,11 +77,14 @@ const OnboardingStep1Page = () => {
 
     const trimmedFamilyName = familyName.trim();
 
-    if (!trimmedFamilyName || !childCount) {
-      setError("Enter your family name and number of children.");
+    const nextErrors = validateForm();
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
       return;
     }
 
+    setFieldErrors({});
     setIsSubmitting(true);
 
     try {
@@ -100,12 +158,21 @@ const OnboardingStep1Page = () => {
                   value={familyName}
                   onChange={(event) => {
                     setFamilyName(event.target.value);
+                    clearFieldError("familyName");
                     setError("");
                   }}
                   placeholder="e.g. The Robinsons"
-                  className="h-14 rounded-xl border-2 border-transparent bg-[#f3f4f6] pl-11 pr-4 text-base text-[#191c1e] placeholder:text-[#6b7280] focus-visible:border-[#003514] focus-visible:ring-0"
+                  aria-invalid={Boolean(fieldErrors.familyName)}
+                  aria-describedby={
+                    fieldErrors.familyName ? "family-name-error" : undefined
+                  }
+                  className={cn(
+                    "h-14 rounded-xl border-2 border-transparent bg-[#f3f4f6] pl-11 pr-4 text-base text-[#191c1e] placeholder:text-[#6b7280] focus-visible:border-[#003514] focus-visible:ring-0",
+                    fieldErrors.familyName && invalidInputClass,
+                  )}
                 />
               </div>
+              <FieldError id="family-name-error" message={fieldErrors.familyName} />
             </div>
 
             <div className="space-y-1.5">
@@ -121,9 +188,17 @@ const OnboardingStep1Page = () => {
                   value={childCount}
                   onChange={(event) => {
                     setChildCount(event.target.value);
+                    clearFieldError("childCount");
                     setError("");
                   }}
-                  className="h-14 w-full appearance-none rounded-xl border-2 border-transparent bg-[#f3f4f6] px-4 text-base text-[#191c1e] outline-none transition-colors placeholder:text-[#6b7280] focus:border-[#003514] focus:ring-0"
+                  aria-invalid={Boolean(fieldErrors.childCount)}
+                  aria-describedby={
+                    fieldErrors.childCount ? "children-count-error" : undefined
+                  }
+                  className={cn(
+                    "h-14 w-full appearance-none rounded-xl border-2 border-transparent bg-[#f3f4f6] px-4 text-base text-[#191c1e] outline-none transition-colors placeholder:text-[#6b7280] focus:border-[#003514] focus:ring-0",
+                    fieldErrors.childCount && invalidInputClass,
+                  )}
                 >
                   <option value="">Select number</option>
                   {childCountOptions.map((option) => (
@@ -134,6 +209,7 @@ const OnboardingStep1Page = () => {
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6b7280]" />
               </div>
+              <FieldError id="children-count-error" message={fieldErrors.childCount} />
             </div>
 
             {error && (

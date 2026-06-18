@@ -10,16 +10,23 @@ import {
 import { type FormEvent, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/useAuth";
 import { apiFetch } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { type FieldErrors, validatePin } from "@/lib/validation";
 
 type PinResponse = {
   status: string;
   message: string;
 };
 
+type Step3Field = "pin" | "confirmPin";
+
 const pinPreviewSlots = Array.from({ length: 4 }, (_, index) => index);
+const invalidInputClass =
+  "border-red-300 bg-red-50/40 focus-visible:border-red-500 focus-visible:ring-red-500/15";
 
 const OnboardingStep3Page = () => {
   const navigate = useNavigate();
@@ -28,32 +35,65 @@ const OnboardingStep3Page = () => {
   const [confirmPin, setConfirmPin] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<Step3Field>>({});
 
   const pinIsComplete = /^\d{4}$/.test(pin);
   const pinsMatch = pin === confirmPin;
-  const canSubmit = useMemo(
-    () => pinIsComplete && pinsMatch && !isSubmitting,
-    [isSubmitting, pinIsComplete, pinsMatch],
+  const canSubmit = !isSubmitting;
+  const pinFieldsAreValid = useMemo(
+    () => pinIsComplete && pinsMatch,
+    [pinIsComplete, pinsMatch],
   );
 
-  const updatePin = (value: string, setter: (value: string) => void) => {
+  const clearFieldError = (field: Step3Field) => {
+    setFieldErrors((currentErrors) => {
+      const nextErrors = { ...currentErrors };
+      delete nextErrors[field];
+      return nextErrors;
+    });
+  };
+
+  const validateForm = () => {
+    const nextErrors: FieldErrors<Step3Field> = {};
+    const pinError = validatePin(pin);
+
+    if (pinError) {
+      nextErrors.pin = pinError;
+    }
+
+    if (!confirmPin) {
+      nextErrors.confirmPin = "Confirm your PIN.";
+    } else if (pin !== confirmPin) {
+      nextErrors.confirmPin = "PINs do not match.";
+    }
+
+    return nextErrors;
+  };
+
+  const updatePin = (
+    value: string,
+    setter: (value: string) => void,
+    field: Step3Field,
+  ) => {
     setter(value.replace(/\D/g, "").slice(0, 4));
+    clearFieldError(field);
+    if (field === "pin") {
+      clearFieldError("confirmPin");
+    }
     setError("");
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!pinIsComplete) {
-      setError("Enter a 4-digit PIN.");
+    const nextErrors = validateForm();
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
       return;
     }
 
-    if (!pinsMatch) {
-      setError("PINs do not match.");
-      return;
-    }
-
+    setFieldErrors({});
     setIsSubmitting(true);
     setError("");
 
@@ -157,11 +197,21 @@ const OnboardingStep3Page = () => {
                       inputMode="numeric"
                       autoComplete="new-password"
                       value={pin}
-                      onChange={(event) => updatePin(event.target.value, setPin)}
+                      onChange={(event) =>
+                        updatePin(event.target.value, setPin, "pin")
+                      }
                       placeholder="4 digits"
-                      className="h-14 rounded-xl border-2 border-transparent bg-[#f3f4f6] pl-11 pr-4 text-base font-semibold tracking-[0.35em] text-[#191c1e] placeholder:tracking-normal placeholder:text-[#6b7280] focus-visible:border-[#003514] focus-visible:ring-0"
+                      aria-invalid={Boolean(fieldErrors.pin)}
+                      aria-describedby={
+                        fieldErrors.pin ? "parent-pin-error" : undefined
+                      }
+                      className={cn(
+                        "h-14 rounded-xl border-2 border-transparent bg-[#f3f4f6] pl-11 pr-4 text-base font-semibold tracking-[0.35em] text-[#191c1e] placeholder:tracking-normal placeholder:text-[#6b7280] focus-visible:border-[#003514] focus-visible:ring-0",
+                        fieldErrors.pin && invalidInputClass,
+                      )}
                     />
                   </div>
+                  <FieldError id="parent-pin-error" message={fieldErrors.pin} />
                 </div>
 
                 <div className="space-y-2">
@@ -180,12 +230,25 @@ const OnboardingStep3Page = () => {
                       autoComplete="new-password"
                       value={confirmPin}
                       onChange={(event) =>
-                        updatePin(event.target.value, setConfirmPin)
+                        updatePin(event.target.value, setConfirmPin, "confirmPin")
                       }
                       placeholder="Repeat PIN"
-                      className="h-14 rounded-xl border-2 border-transparent bg-[#f3f4f6] pl-11 pr-4 text-base font-semibold tracking-[0.35em] text-[#191c1e] placeholder:tracking-normal placeholder:text-[#6b7280] focus-visible:border-[#003514] focus-visible:ring-0"
+                      aria-invalid={Boolean(fieldErrors.confirmPin)}
+                      aria-describedby={
+                        fieldErrors.confirmPin
+                          ? "confirm-parent-pin-error"
+                          : undefined
+                      }
+                      className={cn(
+                        "h-14 rounded-xl border-2 border-transparent bg-[#f3f4f6] pl-11 pr-4 text-base font-semibold tracking-[0.35em] text-[#191c1e] placeholder:tracking-normal placeholder:text-[#6b7280] focus-visible:border-[#003514] focus-visible:ring-0",
+                        fieldErrors.confirmPin && invalidInputClass,
+                      )}
                     />
                   </div>
+                  <FieldError
+                    id="confirm-parent-pin-error"
+                    message={fieldErrors.confirmPin}
+                  />
                 </div>
               </div>
 
@@ -224,7 +287,10 @@ const OnboardingStep3Page = () => {
               <Button
                 type="submit"
                 disabled={!canSubmit}
-                className="h-13 rounded-full bg-[#d4e251] px-6 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_18px_-16px_rgba(3,78,34,0.5)] hover:bg-[#cfdc42] disabled:opacity-60 sm:order-2"
+                className={cn(
+                  "h-13 rounded-full bg-[#d4e251] px-6 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_18px_-16px_rgba(3,78,34,0.5)] hover:bg-[#cfdc42] disabled:opacity-60 sm:order-2",
+                  !pinFieldsAreValid && "opacity-60",
+                )}
               >
                 {isSubmitting ? (
                   <LoaderCircle className="mr-2 size-4 animate-spin" />

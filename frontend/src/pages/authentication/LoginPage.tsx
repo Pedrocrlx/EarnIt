@@ -7,6 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/context/useAuth";
 import { ApiError, apiFetch } from "@/lib/api";
+import {
+  type FieldErrors,
+  validateEmail,
+  validateRequired,
+} from "@/lib/validation";
 import { EmailField, PasswordField } from "./AuthFields";
 import { AuthFormLayout } from "./AuthFormLayout";
 
@@ -14,6 +19,8 @@ type LoginCredentials = {
   email: string;
   password: string;
 };
+
+type LoginField = keyof LoginCredentials;
 
 const isAccountUnverifiedError = (error: unknown) => {
   if (!(error instanceof ApiError) || error.status !== 403) {
@@ -43,6 +50,31 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<LoginField>>({});
+
+  const validateForm = () => {
+    const nextErrors: FieldErrors<LoginField> = {};
+    const emailError = validateEmail(email);
+    const passwordError = validateRequired(password, "Enter your password.");
+
+    if (emailError) {
+      nextErrors.email = emailError;
+    }
+
+    if (passwordError) {
+      nextErrors.password = passwordError;
+    }
+
+    return nextErrors;
+  };
+
+  const clearFieldError = (field: LoginField) => {
+    setFieldErrors((currentErrors) => {
+      const nextErrors = { ...currentErrors };
+      delete nextErrors[field];
+      return nextErrors;
+    });
+  };
 
   const loginMutation = useMutation({
     mutationFn: (data: LoginCredentials) =>
@@ -72,18 +104,39 @@ const LoginPage = () => {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError("");
+    const nextErrors = validateForm();
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      return;
+    }
+
+    setFieldErrors({});
     loginMutation.mutate({ email, password });
   };
 
   return (
     <AuthFormLayout subtitle="Welcome Back! Ready to see progress?">
       <form className="space-y-6" onSubmit={handleSubmit}>
-        <EmailField value={email} onChange={setEmail} />
+        <EmailField
+          error={fieldErrors.email}
+          value={email}
+          onChange={(value) => {
+            setEmail(value);
+            clearFieldError("email");
+            setFormError("");
+          }}
+        />
         <PasswordField
           id="password"
+          error={fieldErrors.password}
           isVisible={showPassword}
           label="Password"
-          onChange={setPassword}
+          onChange={(value) => {
+            setPassword(value);
+            clearFieldError("password");
+            setFormError("");
+          }}
           onVisibilityChange={setShowPassword}
           value={password}
         />

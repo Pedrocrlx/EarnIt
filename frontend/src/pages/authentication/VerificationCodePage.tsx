@@ -4,6 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useMutation } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import {
+  validateVerificationCode,
+  VERIFICATION_CODE_LENGTH,
+} from "@/lib/validation";
 import { useAuth } from "@/context/useAuth";
 
 type VerifyCodeRequest = {
@@ -18,11 +22,12 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-const OTP_LENGTH = 6;
+const OTP_LENGTH = VERIFICATION_CODE_LENGTH;
 
 export const VerificationCode = () => {
   const [code, setCode] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"neutral" | "error">("neutral");
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -39,6 +44,7 @@ export const VerificationCode = () => {
     const nextCode = [...code];
     nextCode[index] = sanitizedValue;
     setCode(nextCode);
+    setMessage("");
 
     if (sanitizedValue && index < OTP_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
@@ -68,6 +74,7 @@ export const VerificationCode = () => {
       nextCode[index + offset] = digit;
     });
     setCode(nextCode);
+    setMessage("");
 
     const nextFocusIndex = Math.min(
       index + pastedDigits.length,
@@ -86,6 +93,7 @@ export const VerificationCode = () => {
         const nextCode = [...code];
         nextCode[index] = "";
         setCode(nextCode);
+        setMessage("");
         return;
       }
 
@@ -93,6 +101,7 @@ export const VerificationCode = () => {
         const nextCode = [...code];
         nextCode[index - 1] = "";
         setCode(nextCode);
+        setMessage("");
         inputRefs.current[index - 1]?.focus();
         inputRefs.current[index - 1]?.select();
       }
@@ -134,6 +143,7 @@ export const VerificationCode = () => {
       });
     },
     onError: (error: unknown) => {
+      setMessageTone("error");
       setMessage(getErrorMessage(error, "Verification failed"));
     },
   });
@@ -143,18 +153,28 @@ export const VerificationCode = () => {
       method: "POST",
     }),
     onSuccess: () => {
+      setMessageTone("neutral");
       setMessage("A new verification code has been sent.");
     },
     onError: (error: unknown) => {
+      setMessageTone("error");
       setMessage(getErrorMessage(error, "Failed to resend code"));
     },
   });
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!isComplete) return;
+    const joinedCode = code.join("");
+    const validationError = validateVerificationCode(joinedCode);
+
+    if (validationError) {
+      setMessageTone("error");
+      setMessage(validationError);
+      return;
+    }
+
     setMessage("");
-    verifyMutation.mutate({ code: code.join("") });
+    verifyMutation.mutate({ code: joinedCode });
   };
 
   const otpSlots = Array.from({ length: OTP_LENGTH }, (_, index) => index);
@@ -186,7 +206,11 @@ export const VerificationCode = () => {
             </div>
 
             <form className="w-full space-y-8" onSubmit={handleSubmit}>
-              <fieldset className="flex justify-center gap-2">
+              <fieldset
+                className="flex justify-center gap-2"
+                aria-invalid={messageTone === "error"}
+                aria-describedby={message ? "verification-message" : undefined}
+              >
                 <legend className="sr-only">
                   Enter the {OTP_LENGTH}-character verification code
                 </legend>
@@ -226,14 +250,21 @@ export const VerificationCode = () => {
               </fieldset>
 
               {message && (
-                <p className="rounded-lg bg-[#f3f4f6] px-4 py-3 text-center text-sm font-semibold text-[#003514]">
+                <p
+                  id="verification-message"
+                  className={`rounded-lg px-4 py-3 text-center text-sm font-semibold ${
+                    messageTone === "error"
+                      ? "bg-red-50 text-red-700"
+                      : "bg-[#f3f4f6] text-[#003514]"
+                  }`}
+                >
                   {message}
                 </p>
               )}
 
               <Button
                 type="submit"
-                disabled={!isComplete || verifyMutation.isPending}
+                disabled={verifyMutation.isPending}
                 className={`w-full h-14 rounded-lg bg-[#deec5a] hover:bg-[#d7e652] text-[#1a1d00] font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
                   !isComplete && "opacity-50 cursor-not-allowed"
                 }`}

@@ -2,9 +2,18 @@ import { ArrowLeft, ArrowRight, HandCoins, Plus } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/useAuth";
 import { apiFetch } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import {
+  MAX_CHILD_NAME_LENGTH,
+  MAX_CHILDREN_PER_USER,
+  isFutureDate,
+  validateMaxLength,
+  validateRequired,
+} from "@/lib/validation";
 
 type ChildProfile = {
   id: number;
@@ -17,6 +26,9 @@ const createChild = (id: number): ChildProfile => ({
   firstName: "",
   birthDate: "",
 });
+
+const invalidInputClass =
+  "border-red-300 bg-red-50/40 focus-visible:border-red-500 focus-visible:ring-red-500/15";
 
 const getInitialChildren = () => {
   const savedCount = Number(
@@ -36,8 +48,66 @@ const OnboardingStep2Page = () => {
   const [nextChildId, setNextChildId] = useState(children.length + 1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const getFieldKey = (
+    id: number,
+    field: keyof Omit<ChildProfile, "id">,
+  ) => `${id}.${field}`;
+
+  const getChildError = (
+    id: number,
+    field: keyof Omit<ChildProfile, "id">,
+  ) => fieldErrors[getFieldKey(id, field)];
+
+  const clearChildError = (
+    id: number,
+    field: keyof Omit<ChildProfile, "id">,
+  ) => {
+    setFieldErrors((currentErrors) => {
+      const nextErrors = { ...currentErrors };
+      delete nextErrors[getFieldKey(id, field)];
+      return nextErrors;
+    });
+  };
+
+  const validateChildren = () => {
+    const nextErrors: Record<string, string> = {};
+
+    children.forEach((child) => {
+      const firstNameRequiredError = validateRequired(
+        child.firstName,
+        "Enter this child's first name.",
+      );
+      const firstNameLengthError = validateMaxLength(
+        child.firstName,
+        MAX_CHILD_NAME_LENGTH,
+        `First name must be ${MAX_CHILD_NAME_LENGTH} characters or fewer.`,
+      );
+
+      if (firstNameRequiredError) {
+        nextErrors[getFieldKey(child.id, "firstName")] = firstNameRequiredError;
+      } else if (firstNameLengthError) {
+        nextErrors[getFieldKey(child.id, "firstName")] = firstNameLengthError;
+      }
+
+      if (isFutureDate(child.birthDate)) {
+        nextErrors[getFieldKey(child.id, "birthDate")] =
+          "Date of birth cannot be in the future.";
+      }
+    });
+
+    return nextErrors;
+  };
 
   const addChild = () => {
+    setError("");
+
+    if (children.length >= MAX_CHILDREN_PER_USER) {
+      setError(`You can add up to ${MAX_CHILDREN_PER_USER} children.`);
+      return;
+    }
+
     setChildren((currentChildren) => [
       ...currentChildren,
       createChild(nextChildId),
@@ -46,6 +116,12 @@ const OnboardingStep2Page = () => {
   };
 
   const removeChild = (id: number) => {
+    setFieldErrors((currentErrors) =>
+      Object.fromEntries(
+        Object.entries(currentErrors).filter(([key]) => !key.startsWith(`${id}.`)),
+      ),
+    );
+
     setChildren((currentChildren) => {
       if (currentChildren.length === 1) {
         return currentChildren;
@@ -61,6 +137,7 @@ const OnboardingStep2Page = () => {
     value: string,
   ) => {
     setError("");
+    clearChildError(id, field);
     setChildren((currentChildren) =>
       currentChildren.map((child) =>
         child.id === id ? { ...child, [field]: value } : child,
@@ -76,11 +153,14 @@ const OnboardingStep2Page = () => {
       birth_date: child.birthDate || null,
     }));
 
-    if (activeChildren.some((child) => !child.name)) {
-      setError("Enter a first name for each child.");
+    const nextErrors = validateChildren();
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
       return;
     }
 
+    setFieldErrors({});
     setIsSubmitting(true);
 
     try {
@@ -203,7 +283,20 @@ const OnboardingStep2Page = () => {
                           updateChild(child.id, "firstName", event.target.value)
                         }
                         placeholder="e.g. Emma"
-                        className="h-14 rounded-xl border-2 border-transparent bg-[#f3f4f6] px-4 text-base text-[#191c1e] placeholder:text-[#6b7280] focus-visible:border-[#003514] focus-visible:ring-0"
+                        aria-invalid={Boolean(getChildError(child.id, "firstName"))}
+                        aria-describedby={
+                          getChildError(child.id, "firstName")
+                            ? `child-${child.id}-first-name-error`
+                            : undefined
+                        }
+                        className={cn(
+                          "h-14 rounded-xl border-2 border-transparent bg-[#f3f4f6] px-4 text-base text-[#191c1e] placeholder:text-[#6b7280] focus-visible:border-[#003514] focus-visible:ring-0",
+                          getChildError(child.id, "firstName") && invalidInputClass,
+                        )}
+                      />
+                      <FieldError
+                        id={`child-${child.id}-first-name-error`}
+                        message={getChildError(child.id, "firstName")}
                       />
                     </div>
 
@@ -221,7 +314,20 @@ const OnboardingStep2Page = () => {
                         onChange={(event) =>
                           updateChild(child.id, "birthDate", event.target.value)
                         }
-                        className="h-14 rounded-xl border-2 border-transparent bg-[#f3f4f6] px-4 text-base text-[#191c1e] placeholder:text-[#6b7280] focus-visible:border-[#003514] focus-visible:ring-0"
+                        aria-invalid={Boolean(getChildError(child.id, "birthDate"))}
+                        aria-describedby={
+                          getChildError(child.id, "birthDate")
+                            ? `child-${child.id}-birth-date-error`
+                            : undefined
+                        }
+                        className={cn(
+                          "h-14 rounded-xl border-2 border-transparent bg-[#f3f4f6] px-4 text-base text-[#191c1e] placeholder:text-[#6b7280] focus-visible:border-[#003514] focus-visible:ring-0",
+                          getChildError(child.id, "birthDate") && invalidInputClass,
+                        )}
+                      />
+                      <FieldError
+                        id={`child-${child.id}-birth-date-error`}
+                        message={getChildError(child.id, "birthDate")}
                       />
                     </div>
                   </div>
@@ -233,7 +339,8 @@ const OnboardingStep2Page = () => {
           <button
             type="button"
             onClick={addChild}
-            className="flex min-h-20 w-full items-center justify-center gap-3 rounded-[28px] border-2 border-dashed border-[#c8d0c1] text-[18px] font-semibold text-[#404940] transition-colors hover:border-[#003514] hover:text-[#003514]"
+            disabled={children.length >= MAX_CHILDREN_PER_USER}
+            className="flex min-h-20 w-full items-center justify-center gap-3 rounded-[28px] border-2 border-dashed border-[#c8d0c1] text-[18px] font-semibold text-[#404940] transition-colors hover:border-[#003514] hover:text-[#003514] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#edeef0]">
               <Plus className="h-5 w-5" />
