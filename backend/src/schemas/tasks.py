@@ -12,10 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
-# ---------------------------------------------------------------------------
-# Task schemas (tasks 4)
-# ---------------------------------------------------------------------------
-
+# Task schemas
 
 class TaskCreateRequest(BaseModel):
     """Body for ``POST /tasks`` — a new duty or extra task for a child."""
@@ -86,11 +83,7 @@ class TaskResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-
-# ---------------------------------------------------------------------------
-# Submission schemas (task 5)
-# ---------------------------------------------------------------------------
-
+# Submission schemas
 
 class RejectRequest(BaseModel):
     """Body for rejecting a submission — an optional note for the child."""
@@ -137,10 +130,7 @@ class BatchApproveResponse(BaseModel):
     approved: int
 
 
-# ---------------------------------------------------------------------------
 # Child task list (used by GET /children/{child_id}/tasks)
-# ---------------------------------------------------------------------------
-
 
 class ChildTaskResponse(BaseModel):
     """A task as the child sees it, with its current submission attached."""
@@ -158,9 +148,7 @@ class ChildTaskResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# ---------------------------------------------------------------------------
-# Wallet schemas (task 6)
-# ---------------------------------------------------------------------------
+# Wallet schemas
 
 
 class WalletTransactionResponse(BaseModel):

@@ -14,11 +14,7 @@ _OTHER = {
     "family_name": "Costa",
 }
 
-
-# ---------------------------------------------------------------------------
 # Shared helpers
-# ---------------------------------------------------------------------------
-
 
 async def _child(client: AsyncClient, token: str, name: str = "Leo") -> str:
     res = await client.post(
@@ -67,10 +63,7 @@ async def _submit(client: AsyncClient, token: str, child_id: str, task_id: str) 
     return res
 
 
-# ---------------------------------------------------------------------------
-# Task 30 — CRUD
-# ---------------------------------------------------------------------------
-
+# CRUD
 
 async def test_create_duty_returns_201(client: AsyncClient, mock_mail):
     token = await register_and_verify(client, mock_mail)
@@ -223,10 +216,7 @@ async def test_create_task_without_token_returns_401(client: AsyncClient):
     assert res.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Task 31 — submit
-# ---------------------------------------------------------------------------
-
+# submit
 
 async def test_submit_duty_happy_path(
     client: AsyncClient, mock_mail, db_session: AsyncSession
@@ -286,9 +276,7 @@ async def test_duty_submit_without_slot_returns_404(client: AsyncClient, mock_ma
     assert res.status_code == 404
 
 
-# ---------------------------------------------------------------------------
-# Task 32 — approve single
-# ---------------------------------------------------------------------------
+# approve single
 
 
 async def test_approve_extra_task_creates_wallet_transaction(
@@ -349,11 +337,7 @@ async def test_approve_non_pending_returns_409(client: AsyncClient, mock_mail):
     )
     assert res.status_code == 409
 
-
-# ---------------------------------------------------------------------------
-# Task 33 — reject + resubmit
-# ---------------------------------------------------------------------------
-
+# reject + resubmit
 
 async def test_reject_sets_rejection_note(client: AsyncClient, mock_mail):
     token = await register_and_verify(client, mock_mail)
@@ -407,9 +391,7 @@ async def test_resubmit_non_rejected_returns_409(client: AsyncClient, mock_mail)
     assert res.status_code == 409
 
 
-# ---------------------------------------------------------------------------
-# Task 34 — batch approve
-# ---------------------------------------------------------------------------
+# batch approve
 
 
 async def test_batch_approve_flips_all_pending(client: AsyncClient, mock_mail):
@@ -491,11 +473,7 @@ async def test_batch_approve_filter_by_child_id(client: AsyncClient, mock_mail):
     )
     assert len(subs.json()) == 1
 
-
-# ---------------------------------------------------------------------------
-# Task 35 — wallet
-# ---------------------------------------------------------------------------
-
+# wallet
 
 async def test_wallet_balance_sums_credits(client: AsyncClient, mock_mail):
     token = await register_and_verify(client, mock_mail)
@@ -575,9 +553,7 @@ async def test_wallet_cross_user_returns_404(client: AsyncClient, mock_mail):
     assert res.status_code == 404
 
 
-# ---------------------------------------------------------------------------
-# Task 36 — duty slot background job
-# ---------------------------------------------------------------------------
+# duty slot background job
 
 
 async def test_generate_duty_slots_creates_slot_for_today(

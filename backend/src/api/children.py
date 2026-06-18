@@ -36,11 +36,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/children")
 
-
-# ---------------------------------------------------------------------------
-# Child task view (tasks 25-28)
-# ---------------------------------------------------------------------------
-
+# Child Task View
 
 @router.get(
     "/{child_id}/tasks",

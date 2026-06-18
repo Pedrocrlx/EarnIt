@@ -49,11 +49,7 @@ async def _persist_user(db_session: AsyncSession, **kwargs) -> User:
     await db_session.commit()
     return user
 
-
-# ---------------------------------------------------------------------------
 # Stateless verification codes — global engine (app/services/verification/core.py)
-# ---------------------------------------------------------------------------
-
 
 def test_code_has_correct_length():
     code = core.generate_code(uuid4(), core.PURPOSE_ACCOUNT, _utcnow())
@@ -96,11 +92,7 @@ def test_is_expired_respects_window():
     assert not core.is_expired(anchor, within)
     assert core.is_expired(anchor, past)
 
-
-# ---------------------------------------------------------------------------
 # Hashing
-# ---------------------------------------------------------------------------
-
 
 async def test_hash_verify_roundtrip():
     hashed = await hash_secret("Password1!")
@@ -118,10 +110,7 @@ async def test_two_hashes_of_same_secret_differ():
     assert h1 != h2  # bcrypt embeds a unique salt per call
 
 
-# ---------------------------------------------------------------------------
 # JWT tokens
-# ---------------------------------------------------------------------------
-
 
 def test_access_token_has_full_scope():
     uid = uuid4()
@@ -153,10 +142,7 @@ def test_tampered_token_raises():
         decode_token(token)
 
 
-# ---------------------------------------------------------------------------
 # RegisterRequest — password validation
-# ---------------------------------------------------------------------------
-
 
 def test_register_valid_minimal():
     req = RegisterRequest(email="user@example.com", password="Password123!")
@@ -199,11 +185,7 @@ def test_invalid_email_raises():
     with pytest.raises(ValidationError):
         RegisterRequest(email="not-an-email", password="Password1")
 
-
-# ---------------------------------------------------------------------------
 # PinRequest — PIN validation
-# ---------------------------------------------------------------------------
-
 
 def test_pin_valid():
     assert PinRequest(pin="1234").pin == "1234"
@@ -224,10 +206,7 @@ def test_pin_non_digit_raises():
         PinRequest(pin="12a4")
 
 
-# ---------------------------------------------------------------------------
 # Auth dependency — get_current_user
-# ---------------------------------------------------------------------------
-
 
 class _FakeRequest:
     """Minimal stand-in for starlette.requests.Request used by get_current_user."""
@@ -327,11 +306,7 @@ async def test_get_current_user_non_uuid_sub_raises(db_session: AsyncSession):
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Invalid token"
 
-
-# ---------------------------------------------------------------------------
 # Auth dependency — get_pending_verification_user
-# ---------------------------------------------------------------------------
-
 
 async def test_get_pending_verification_user_valid(db_session: AsyncSession):
     user = await _persist_user(db_session)

@@ -8,11 +8,7 @@ _REGISTER_URL = "/api/v1/auth/register"
 _LOGIN_URL = "/api/v1/auth/login"
 _LOGOUT_URL = "/api/v1/auth/logout"
 
-
-# ---------------------------------------------------------------------------
 # Login
-# ---------------------------------------------------------------------------
-
 
 async def test_login_wrong_password_returns_401(client: AsyncClient, mock_mail):
     # Account exists and is verified, but the password doesn't match the stored hash.
@@ -100,11 +96,7 @@ async def test_login_verified_account_returns_200_and_access_token(
     assert body["status"] == "success"
     assert extract_cookie(res, "access_token") is not None
 
-
-# ---------------------------------------------------------------------------
 # Logout
-# ---------------------------------------------------------------------------
-
 
 async def test_logout_with_valid_session_returns_200_and_clears_cookie(
     client: AsyncClient, mock_mail

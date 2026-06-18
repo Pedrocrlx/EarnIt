@@ -40,11 +40,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/tasks")
 
-
-# ---------------------------------------------------------------------------
-# Task CRUD (tasks 17-20)
-# ---------------------------------------------------------------------------
-
+# Task CRUD
 
 @router.post(
     "",
@@ -143,13 +139,8 @@ async def delete_task_endpoint(
     task = await soft_delete_task(task, session)
     return TaskResponse.model_validate(task)
 
-
-# ---------------------------------------------------------------------------
-# Submission review (tasks 21-24)
 # NOTE: approve-all MUST be registered before /{id}/approve to avoid FastAPI
 # matching the literal string "approve-all" as a UUID path parameter.
-# ---------------------------------------------------------------------------
-
 
 @router.get(
     "/submissions",

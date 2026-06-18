@@ -308,10 +308,10 @@ The suite is split into two parts:
   unit/service-level tests for the critical modules (bcrypt hashing, JWT
   tokens, the stateless verification-code engine, the auth dependencies, and
   the limbo-purge sweep). This is what NFR-05 asks for.
-- **Integration suite** — `tests/integration/` (one file per feature, e.g.
+- **API suite** — `tests/api/` (one file per feature, e.g.
   `test_registration.py`, `test_login_logout.py`, `test_tasks.py`): endpoint
   flow tests that drive the real API with an httpx `AsyncClient` against the DB
-  — the "bonus" integration coverage.
+  — the "bonus" integration-level coverage (guide §5.3).
 
 `tests/conftest.py` (shared by both) centralizes the fixtures plus the example
 account (`VALID_USER`), cookie-extraction (`extract_cookie`), and register+verify
@@ -319,7 +319,7 @@ account (`VALID_USER`), cookie-extraction (`extract_cookie`), and register+verif
 
 ```bash
 make test              # essential unit suite only
-make test-integration  # endpoint flow tests
+make test-api          # endpoint flow tests
 make test-all          # everything
 ```
 

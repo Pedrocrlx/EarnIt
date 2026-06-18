@@ -810,13 +810,32 @@ Returning the full verify-response would make every call site repeat
 "params, not options" simplification of the common case.
 
 **Q98. How many tests exist in total, and how are they organized?**
-109 tests across one file per feature area (`test_registration.py`,
-`test_login_logout.py`, `test_pin.py`, `test_profiles.py`,
-`test_forgot_password.py`, plus others for verification/resend and pin-reset
-flows) — mirroring the router split in `app/routers/auth/`. Each file groups
-tests by endpoint with `# ---...---` section-header comments (e.g.
-`test_forgot_password.py` has `/forgot-password`, `/forgot-password/verify`,
-`/reset-password` sections).
+142 tests in two tiers. **Unit/service tests** live flat in `tests/`
+(`test_security.py`, `test_purge.py`, `test_email_templates.py`, ~45 tests) and
+cover critical modules in isolation. **API tests** live in `tests/api/` (~97
+tests), one file per feature area (`test_registration.py`, `test_login_logout.py`,
+`test_pin.py`, `test_profiles.py`, `test_forgot_password.py`, plus
+verification/resend, pin-reset and tasks) — mirroring the router split in
+`app/routers/auth/`. Each API file groups tests by endpoint with `# ---...---`
+section-header comments (e.g. `test_forgot_password.py` has `/forgot-password`,
+`/forgot-password/verify`, `/reset-password` sections). `make test` runs the unit
+tier, `make test-api` the API tier, `make test-all` both.
+
+**Q98b. The brief (NFR-05) only requires unit tests for critical modules. Why maintain a whole second `tests/api/` suite?**
+Two reasons. First, it's an explicit *bonus* the brief offers — §5.3 lists
+"Integration-level testing beyond unit tests" under Bonus (not mandatory) — so the
+suite directly claims marks that NFR-05 alone doesn't. Second, and the real
+motivation: the unit tier proves the *pieces* work (HMAC codes, bcrypt, the purge
+sweep, the auth dependencies) but can't prove the *wiring* — that a request to a
+real endpoint returns the right status, sets the right cookie, enforces ownership
+(404 vs 403), collapses anti-enumeration responses, and fires cross-endpoint side
+effects like the onboarding trigger. Those are exactly the behaviours a marker (or
+a frontend integrating against the API) actually depends on, and they only emerge
+when router + dependency + service + ORM + DB run together. The cost is contained —
+shared `conftest.py` fixtures, mocked mail, one auto-created `*_test` database — so
+the regression safety on the public contract is cheap to keep. The directory is
+named `tests/api/` (not `integration/`) because every test in it drives the HTTP
+API; that's more precise than the catch-all "integration."
 
 **Q99. Give an example of a test that needed direct SQL (`text(...)`) rather than going through the API — why?**
 `test_forgot_password_disabled_account_returns_same_response` does
@@ -908,6 +927,24 @@ to children) — no need to wait or fast-forward 24h, since the cutoff is a plai
 `WHERE` clause. What's *not* covered is the scheduling wrapper (that the midnight
 loop fires) and a `/health` test; both are reasonable gaps — the loop is a thin
 `asyncio.sleep`-until-midnight wrapper around the tested unit of work.
+
+**Q109b. The test run prints ~260 `DeprecationWarning`s from httpx about per-request `cookies=`. Why are they left unfixed?**
+"Deprecated" means the call still works but the library has announced it will be
+removed in a future (major) version — it's a countdown, not an error. These come
+only from test code: the suite passes a one-off auth cookie per request as
+`client.post(url, cookies={"access_token": token})` (the Q97 pattern); httpx now
+prefers cookies set on the client instance. They're left as-is for three reasons:
+(1) it's **test-only** — no production code passes per-request cookies, so nothing
+a user or grader runs is affected; (2) the migration is **not mechanical** —
+client-level cookies persist across *all* later requests, but many tests
+deliberately scope one specific token to one call to prove rejection of the wrong
+scope/expired token, so moving cookies onto the client risks a false green at each
+of the ~109 sites; (3) **cost vs. benefit** — 109 careful edits to silence a
+warning that currently works isn't worth it. The right time to migrate is when an
+httpx upgrade actually removes the kwarg, where the resulting hard failure is the
+safety net showing which sites still need changing. Suppressing the warning with a
+pytest `filterwarnings` entry was rejected: it would hide the very signal that
+tells us when the deprecation becomes a removal.
 
 ---
 
@@ -1114,8 +1151,25 @@ vs. resetting a forgotten password vs. resetting a PIN they may not have
 requested) — wording like "If you didn't request this, ignore this email" is
 purpose-specific and matters for security communication (e.g. a PIN-reset
 email should make clear what action it's tied to, since the recipient already
-has a full account). Three small templates keep each message's copy accurate
-without conditional logic inside one template.
+has a full account). Keeping a template per purpose holds each message's copy
+accurate without conditional logic inside one template. The three are now thin:
+each is ~4 lines that `{% extends "_base.html" %}` and fill only the title and
+the two purpose-specific sentences — the shared chrome and styles live once in
+`_base.html` (see Q133b).
+
+**Q133b. Why share the chrome via a Jinja base template (`_base.html`) rather than a shared CSS file linked from each template?**
+Because external stylesheets don't work in email. Mail clients (Gmail especially)
+strip `<link rel="stylesheet">` and external CSS, which is why the styles are
+inlined in a `<head><style>` block in the first place — a shared `.css` would
+render the messages unstyled in most inboxes. The duplication that *is* avoidable
+is the chrome (the `<style>` block + wrapper/header/footer), and the right tool is
+the one already in the stack: Jinja2 template inheritance. `_base.html` owns the
+shell and exposes `{% block title %}/{% block intro %}/{% block ignore_note %}`;
+each purpose template extends it. fastapi-mail renders through Jinja, so `extends`
+resolves against the same `TEMPLATE_FOLDER` at send time and produces the same
+self-contained HTML — the styles still end up inlined in `<head>`, just authored
+once. (Because send is mocked in tests, `tests/test_email_templates.py` renders
+each template through Jinja directly so a broken `{% extends %}` fails loudly.)
 
 **Q134. How does `app/services/verification/flows.py`'s `send_code` know which template (and subject) to use?**
 `flows.send_code(user, purpose)` looks the purpose up in the module-level
