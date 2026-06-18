@@ -16,6 +16,7 @@ _OTHER = {
 
 # Shared helpers
 
+
 async def _child(client: AsyncClient, token: str, name: str = "Leo") -> str:
     res = await client.post(
         "/api/v1/profiles/children",
@@ -64,6 +65,7 @@ async def _submit(client: AsyncClient, token: str, child_id: str, task_id: str) 
 
 
 # CRUD
+
 
 async def test_create_duty_returns_201(client: AsyncClient, mock_mail):
     token = await register_and_verify(client, mock_mail)
@@ -218,6 +220,7 @@ async def test_create_task_without_token_returns_401(client: AsyncClient):
 
 # submit
 
+
 async def test_submit_duty_happy_path(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
@@ -337,7 +340,9 @@ async def test_approve_non_pending_returns_409(client: AsyncClient, mock_mail):
     )
     assert res.status_code == 409
 
+
 # reject + resubmit
+
 
 async def test_reject_sets_rejection_note(client: AsyncClient, mock_mail):
     token = await register_and_verify(client, mock_mail)
@@ -473,7 +478,9 @@ async def test_batch_approve_filter_by_child_id(client: AsyncClient, mock_mail):
     )
     assert len(subs.json()) == 1
 
+
 # wallet
+
 
 async def test_wallet_balance_sums_credits(client: AsyncClient, mock_mail):
     token = await register_and_verify(client, mock_mail)

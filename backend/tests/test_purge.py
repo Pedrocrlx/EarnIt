@@ -27,6 +27,7 @@ def _make_user(*, verified: bool = False, created_hours_ago: float = 0) -> User:
 # One DELETE removes every account still unverified past ACCOUNT_LIMBO_PURGE_HOURS;
 # verified accounts and not-yet-expired ones are left alone.
 
+
 async def test_purge_deletes_unverified_past_window(db_session: AsyncSession):
     user = _make_user(
         verified=False, created_hours_ago=settings.ACCOUNT_LIMBO_PURGE_HOURS + 1

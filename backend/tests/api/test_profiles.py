@@ -19,6 +19,7 @@ _PIN = "1234"
 
 # POST /profiles/children
 
+
 async def test_create_child_returns_201(client: AsyncClient, mock_mail):
     access_token = await register_and_verify(client, mock_mail)
 
@@ -133,7 +134,9 @@ async def test_onboarding_completes_when_child_created_after_pin(
     ).scalar_one()
     assert onboarding is True
 
+
 # GET /profiles/family
+
 
 async def test_get_family_returns_profile_and_children(client: AsyncClient, mock_mail):
     access_token = await register_and_verify(client, mock_mail)
@@ -163,7 +166,9 @@ async def test_get_family_without_access_token_returns_401(client: AsyncClient):
     res = await client.get(_FAMILY_URL)
     assert res.status_code == 401
 
+
 # PATCH /profiles/children/{child_id}
+
 
 async def test_deactivate_active_child_returns_200(client: AsyncClient, mock_mail):
     access_token = await register_and_verify(client, mock_mail)
@@ -225,7 +230,9 @@ async def test_deactivate_child_without_access_token_returns_401(client: AsyncCl
     res = await client.patch(f"{_CHILDREN_URL}/00000000-0000-0000-0000-000000000000")
     assert res.status_code == 401
 
+
 # PATCH /profiles/family-name
+
 
 async def test_update_family_name_returns_200_with_new_name(
     client: AsyncClient, mock_mail
@@ -319,5 +326,3 @@ async def test_onboarding_completes_when_family_name_set_last(
         )
     ).scalar_one()
     assert onboarding is True
-
-

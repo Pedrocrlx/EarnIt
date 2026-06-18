@@ -14,6 +14,7 @@ _NEW_PIN = "5678"
 
 # pin
 
+
 async def test_set_pin_with_no_prior_pin_returns_200(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
@@ -125,7 +126,9 @@ async def test_pin_without_access_token_returns_401(client: AsyncClient):
     res = await client.post(_PIN_URL, json={"pin": _PIN})
     assert res.status_code == 401
 
+
 # verify-pin
+
 
 async def test_verify_pin_before_set_returns_428(client: AsyncClient, mock_mail):
     access_token = await register_and_verify(client, mock_mail)
@@ -165,7 +168,9 @@ async def test_verify_pin_without_access_token_returns_401(client: AsyncClient):
     res = await client.post(_VERIFY_PIN_URL, json={"pin": _PIN})
     assert res.status_code == 401
 
+
 # forgot-pin
+
 
 async def test_forgot_pin_before_expiry_returns_429_with_retry_after(
     client: AsyncClient, mock_mail
@@ -208,7 +213,9 @@ async def test_forgot_pin_without_access_token_returns_401(client: AsyncClient):
     res = await client.post(_FORGOT_PIN_URL)
     assert res.status_code == 401
 
+
 # /reset-pin
+
 
 async def test_reset_pin_correct_code_allows_new_pin_verify(
     client: AsyncClient, mock_mail, db_session: AsyncSession

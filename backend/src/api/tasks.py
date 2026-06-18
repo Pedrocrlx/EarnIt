@@ -42,6 +42,7 @@ router = APIRouter(prefix="/api/v1/tasks")
 
 # Task CRUD
 
+
 @router.post(
     "",
     status_code=201,
@@ -139,8 +140,10 @@ async def delete_task_endpoint(
     task = await soft_delete_task(task, session)
     return TaskResponse.model_validate(task)
 
+
 # NOTE: approve-all MUST be registered before /{id}/approve to avoid FastAPI
 # matching the literal string "approve-all" as a UUID path parameter.
+
 
 @router.get(
     "/submissions",

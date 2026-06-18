@@ -11,6 +11,7 @@ _RESEND_URL = "/api/v1/auth/verify/resend"
 
 # Registration
 
+
 async def test_register_valid_returns_201_and_sets_cookie(
     client: AsyncClient, mock_mail
 ):
@@ -54,7 +55,9 @@ async def test_register_duplicate_email_limbo_returns_409(
     res = await client.post(_REGISTER_URL, json=VALID_USER)
     assert res.status_code == 409
 
+
 # Verification
+
 
 async def test_verify_correct_code_returns_200_and_swaps_cookies(
     client: AsyncClient, mock_mail
@@ -132,7 +135,9 @@ async def test_verify_already_verified_returns_409(client: AsyncClient, mock_mai
     )
     assert res.status_code == 409
 
+
 # Resend
+
 
 async def test_resend_before_expiry_returns_429_with_retry_after(
     client: AsyncClient, mock_mail

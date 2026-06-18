@@ -27,7 +27,9 @@ async def _open_reset_window(
     await client.post(_FORGOT_URL, json={"email": VALID_USER["email"]})
     return mock_mail[-1].template_body["code"]
 
+
 # forgot-password
+
 
 async def test_forgot_password_known_verified_account_returns_200_and_sends_email(
     client: AsyncClient, mock_mail, db_session: AsyncSession
@@ -108,7 +110,9 @@ async def test_forgot_password_allows_new_request_after_expiry(
     assert res.status_code == 200
     assert len(mock_mail) == 3  # registration + first reset + second reset
 
+
 # reset-password
+
 
 async def test_reset_password_correct_code_allows_new_login(
     client: AsyncClient, mock_mail, db_session: AsyncSession

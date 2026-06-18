@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, model_validator
 
 # Task schemas
 
+
 class TaskCreateRequest(BaseModel):
     """Body for ``POST /tasks`` — a new duty or extra task for a child."""
 
@@ -83,7 +84,9 @@ class TaskResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
 # Submission schemas
+
 
 class RejectRequest(BaseModel):
     """Body for rejecting a submission — an optional note for the child."""
@@ -131,6 +134,7 @@ class BatchApproveResponse(BaseModel):
 
 
 # Child task list (used by GET /children/{child_id}/tasks)
+
 
 class ChildTaskResponse(BaseModel):
     """A task as the child sees it, with its current submission attached."""

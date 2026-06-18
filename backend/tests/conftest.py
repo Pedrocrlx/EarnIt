@@ -66,7 +66,9 @@ async def register_and_verify(client: AsyncClient, mock_mail, **overrides) -> st
     )
     return extract_cookie(verify_res, "access_token")
 
+
 # Fixtures
+
 
 @pytest_asyncio.fixture(scope="session")
 async def db_engine():
