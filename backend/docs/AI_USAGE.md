@@ -8,6 +8,10 @@ This declares how AI was used in the `backend/` directory, as required by
 AI-assisted code was read, reviewed, and is understood by the team — nothing
 went in that we can't explain or defend.
 
+We also used a minimalism-focused review skill within Claude Code to surface
+over-engineering (speculative abstractions, duplicated logic, dead config); the
+team reviewed each suggestion and decided what to cut, keeping the suite green.
+
 ## How we used it
 
 - **Planning the structure.** Sketching the module layout
