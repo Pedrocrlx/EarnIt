@@ -52,7 +52,9 @@ async def register(
         await session.flush()
     except IntegrityError:
         await session.rollback()
-        raise HTTPException(status_code=409, detail="Email already registered.") from None
+        raise HTTPException(
+            status_code=409, detail="Email already registered."
+        ) from None
     await session.commit()
 
     # The account flow derives the code from user.updated_at (its "anchor"); the

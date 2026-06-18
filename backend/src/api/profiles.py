@@ -30,7 +30,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/profiles")
 
 
-@router.patch("/family-name", tags=["profiles/family"], summary="Set the family display name")
+@router.patch(
+    "/family-name", tags=["profiles/family"], summary="Set the family display name"
+)
 async def update_family_name(
     body: UpdateFamilyNameRequest,
     current_user: User = Depends(get_current_user),
@@ -48,7 +50,12 @@ async def update_family_name(
     return UpdateFamilyNameResponse(status="success", family_name=body.family_name)
 
 
-@router.post("/children", status_code=201, tags=["profiles/children"], summary="Add a child profile")
+@router.post(
+    "/children",
+    status_code=201,
+    tags=["profiles/children"],
+    summary="Add a child profile",
+)
 async def create_child(
     body: ChildCreateRequest,
     current_user: User = Depends(get_current_user),
@@ -61,9 +68,13 @@ async def create_child(
     the `child_id` used by task, submission, and wallet endpoints. May complete
     onboarding if the parental PIN is already set.
     """
-    count = await session.scalar(select(func.count()).where(Child.user_id == current_user.id))
+    count = await session.scalar(
+        select(func.count()).where(Child.user_id == current_user.id)
+    )
     if count >= settings.MAX_CHILDREN_PER_USER:
-        logger.info("Child profile creation blocked: cap reached (user_id=%s)", current_user.id)
+        logger.info(
+            "Child profile creation blocked: cap reached (user_id=%s)", current_user.id
+        )
         raise HTTPException(
             status_code=409,
             detail={
@@ -83,7 +94,9 @@ async def create_child(
 
     await maybe_complete_onboarding(current_user, session)
 
-    logger.info("Child profile created: user_id=%s, child_id=%s", current_user.id, child.id)
+    logger.info(
+        "Child profile created: user_id=%s, child_id=%s", current_user.id, child.id
+    )
     return {
         "id": child.id,
         "user_id": child.user_id,
@@ -94,7 +107,11 @@ async def create_child(
     }
 
 
-@router.patch("/children/{child_id}", tags=["profiles/children"], summary="Deactivate a child profile")
+@router.patch(
+    "/children/{child_id}",
+    tags=["profiles/children"],
+    summary="Deactivate a child profile",
+)
 async def deactivate_child(
     child_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -111,12 +128,16 @@ async def deactivate_child(
         raise HTTPException(status_code=404, detail="Child profile not found.")
 
     if not child.is_active:
-        raise HTTPException(status_code=409, detail="Child profile is already inactive.")
+        raise HTTPException(
+            status_code=409, detail="Child profile is already inactive."
+        )
 
     child.is_active = False
     await session.commit()
 
-    logger.info("Child profile deactivated: user_id=%s, child_id=%s", current_user.id, child.id)
+    logger.info(
+        "Child profile deactivated: user_id=%s, child_id=%s", current_user.id, child.id
+    )
     return {
         "status": "success",
         "message": "Child profile deactivated.",
@@ -135,7 +156,9 @@ async def get_family(
     Includes both active and inactive children. Use the child `id` values returned
     here as the `child_id` path parameter for task, submission, and wallet endpoints.
     """
-    result = await session.execute(select(Child).where(Child.user_id == current_user.id))
+    result = await session.execute(
+        select(Child).where(Child.user_id == current_user.id)
+    )
     children = result.scalars().all()
 
     return {

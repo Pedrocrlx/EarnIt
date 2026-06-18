@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlmodel import SQLModel
 
 import src.db.database as app_database
-import src.models.auth  # noqa: F401 — registers auth tables with SQLModel.metadata
+import src.models.auth
 import src.models.tasks  # noqa: F401 — registers task tables with SQLModel.metadata
 import src.services.accounts as app_accounts
 import src.services.tasks.submissions as app_tasks_submissions
@@ -27,7 +27,11 @@ from src.db.database import get_session
 
 # The example parent account used across test modules to exercise
 # register -> verify -> (login/pin/profile/...) flows.
-VALID_USER = {"email": "user@example.com", "password": "Password123!", "family_name": "Silva"}
+VALID_USER = {
+    "email": "user@example.com",
+    "password": "Password123!",
+    "family_name": "Silva",
+}
 
 _REGISTER_URL = "/api/v1/auth/register"
 _VERIFY_URL = "/api/v1/auth/verify"
@@ -131,7 +135,7 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession]:
 
 @pytest.fixture(autouse=True, scope="session")
 def _force_auth_on():
-    """Ensure DISABLE_AUTH is always off during tests, regardless of config.py or .env."""
+    """Keep DISABLE_AUTH off during tests, regardless of config.py or .env."""
     original = settings.DISABLE_AUTH
     settings.DISABLE_AUTH = False
     yield
@@ -173,7 +177,9 @@ async def client(db_engine) -> AsyncGenerator[AsyncClient]:
 
     app.dependency_overrides[get_session] = override_get_session
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         yield ac
 
     app.dependency_overrides.clear()

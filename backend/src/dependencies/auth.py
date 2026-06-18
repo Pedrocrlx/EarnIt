@@ -63,16 +63,23 @@ async def get_current_user(
     if settings.DISABLE_AUTH:
         user = await session.scalar(select(User).where(User.email == DEV_USER_EMAIL))
         if user is None:
-            raise HTTPException(status_code=500, detail="Dev user not seeded — restart with DISABLE_AUTH=true")
+            raise HTTPException(
+                status_code=500,
+                detail="Dev user not seeded — restart with DISABLE_AUTH=true",
+            )
         return user
 
-    token = credentials.credentials if credentials else request.cookies.get("access_token")
+    token = (
+        credentials.credentials if credentials else request.cookies.get("access_token")
+    )
     if token is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
         payload = decode_token(token)
     except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
+        raise HTTPException(
+            status_code=401, detail="Invalid or expired token"
+        ) from None
     if payload.get("scope") != "full":
         raise HTTPException(status_code=401, detail="Invalid token scope")
     user_id = _extract_user_id(payload)
@@ -82,7 +89,10 @@ async def get_current_user(
     if not user.is_active:
         raise HTTPException(
             status_code=403,
-            detail={"error": "account_disabled", "message": "This account has been disabled."},
+            detail={
+                "error": "account_disabled",
+                "message": "This account has been disabled.",
+            },
         )
     return user
 
@@ -93,13 +103,19 @@ async def get_pending_verification_user(
     session: AsyncSession = Depends(get_session),
 ) -> User:
     """FastAPI dependency for the verify and resend routes (scope == "verify" only)."""
-    token = credentials.credentials if credentials else request.cookies.get("pending_verification_token")
+    token = (
+        credentials.credentials
+        if credentials
+        else request.cookies.get("pending_verification_token")
+    )
     if token is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
         payload = decode_token(token)
     except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
+        raise HTTPException(
+            status_code=401, detail="Invalid or expired token"
+        ) from None
     if payload.get("scope") != "verify":
         raise HTTPException(status_code=401, detail="Invalid token scope")
     user_id = _extract_user_id(payload)
@@ -107,4 +123,3 @@ async def get_pending_verification_user(
     if user is None:
         raise HTTPException(status_code=401)
     return user
-

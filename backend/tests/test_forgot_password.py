@@ -49,7 +49,9 @@ async def test_forgot_password_known_verified_account_returns_200_and_sends_emai
     assert mock_mail[1].template_body["code"]
 
 
-async def test_forgot_password_unknown_email_returns_same_response(client: AsyncClient, mock_mail):
+async def test_forgot_password_unknown_email_returns_same_response(
+    client: AsyncClient, mock_mail
+):
     res = await client.post(_FORGOT_URL, json={"email": "nobody@example.com"})
     assert res.status_code == 200
     body = res.json()
@@ -123,14 +125,19 @@ async def test_reset_password_correct_code_allows_new_login(
 
     res = await client.post(
         _RESET_URL,
-        json={"email": VALID_USER["email"], "code": code, "new_password": _NEW_PASSWORD},
+        json={
+            "email": VALID_USER["email"],
+            "code": code,
+            "new_password": _NEW_PASSWORD,
+        },
     )
     assert res.status_code == 200
     assert res.json() == {"status": "success", "message": "Password has been reset."}
 
     # Old password no longer works; new password does.
     old_login = await client.post(
-        _LOGIN_URL, json={"email": VALID_USER["email"], "password": VALID_USER["password"]}
+        _LOGIN_URL,
+        json={"email": VALID_USER["email"], "password": VALID_USER["password"]},
     )
     assert old_login.status_code == 401
 
@@ -147,7 +154,11 @@ async def test_reset_password_wrong_code_returns_400(
 
     res = await client.post(
         _RESET_URL,
-        json={"email": VALID_USER["email"], "code": "WRONGCOD", "new_password": _NEW_PASSWORD},
+        json={
+            "email": VALID_USER["email"],
+            "code": "WRONGCOD",
+            "new_password": _NEW_PASSWORD,
+        },
     )
     assert res.status_code == 400
     assert res.json() == {"detail": "Invalid or expired code."}
@@ -164,7 +175,11 @@ async def test_reset_password_expired_code_returns_400(
 
     res = await client.post(
         _RESET_URL,
-        json={"email": VALID_USER["email"], "code": code, "new_password": _NEW_PASSWORD},
+        json={
+            "email": VALID_USER["email"],
+            "code": code,
+            "new_password": _NEW_PASSWORD,
+        },
     )
     assert res.status_code == 400
     assert res.json() == {"detail": "Invalid or expired code."}
@@ -173,7 +188,11 @@ async def test_reset_password_expired_code_returns_400(
 async def test_reset_password_unknown_email_returns_400(client: AsyncClient):
     res = await client.post(
         _RESET_URL,
-        json={"email": "nobody@example.com", "code": "WRONGCOD", "new_password": _NEW_PASSWORD},
+        json={
+            "email": "nobody@example.com",
+            "code": "WRONGCOD",
+            "new_password": _NEW_PASSWORD,
+        },
     )
     assert res.status_code == 400
     assert res.json() == {"detail": "Invalid or expired code."}
@@ -184,7 +203,11 @@ async def test_reset_password_code_cannot_be_replayed(
 ):
     code = await _open_reset_window(client, mock_mail, db_session)
 
-    payload = {"email": VALID_USER["email"], "code": code, "new_password": _NEW_PASSWORD}
+    payload = {
+        "email": VALID_USER["email"],
+        "code": code,
+        "new_password": _NEW_PASSWORD,
+    }
 
     first = await client.post(_RESET_URL, json=payload)
     assert first.status_code == 200

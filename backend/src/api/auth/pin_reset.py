@@ -49,9 +49,12 @@ async def forgot_pin(
             content={
                 "status": "error",
                 "message": (
-                    "A PIN reset code is still active. Please wait before requesting another."
+                    "A PIN reset code is still active. "
+                    "Please wait before requesting another."
                 ),
-                "retry_after_seconds": pin_reset.seconds_until_resend(current_user, now),
+                "retry_after_seconds": pin_reset.seconds_until_resend(
+                    current_user, now
+                ),
             },
         )
 

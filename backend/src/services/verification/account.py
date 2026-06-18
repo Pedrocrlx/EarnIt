@@ -24,7 +24,10 @@ async def _send_code_email(recipient: str, code: str) -> None:
     message = MessageSchema(
         subject="Verify your EarnIt account",
         recipients=[recipient],
-        template_body={"code": code, "expiry_minutes": settings.VERIFICATION_CODE_EXPIRY_MINUTES},
+        template_body={
+            "code": code,
+            "expiry_minutes": settings.VERIFICATION_CODE_EXPIRY_MINUTES,
+        },
         subtype=MessageType.html,
     )
     await mail.send_message(message, template_name="verification_code.html")

@@ -76,25 +76,38 @@ async def test_discard_missing_account_is_noop(db_session: AsyncSession):
 
 
 async def test_purge_task_deletes_account_past_deadline(db_session: AsyncSession):
-    # created_hours_ago > window → deadline already in the past → no sleep, immediate delete.
-    user = _make_user(verified=False, created_hours_ago=settings.ACCOUNT_LIMBO_PURGE_HOURS + 1)
+    # created_hours_ago > window → deadline already in the past →
+    # no sleep, immediate delete.
+    user = _make_user(
+        verified=False, created_hours_ago=settings.ACCOUNT_LIMBO_PURGE_HOURS + 1
+    )
     await _add(db_session, user)
 
-    await accounts._purge_after_limbo(user.id, accounts._limbo_deadline(user.created_at))
+    await accounts._purge_after_limbo(
+        user.id, accounts._limbo_deadline(user.created_at)
+    )
 
     assert await _fetch(user.id) is None
 
 
-async def test_purge_task_skips_verified_account_past_deadline(db_session: AsyncSession):
-    user = _make_user(verified=True, created_hours_ago=settings.ACCOUNT_LIMBO_PURGE_HOURS + 1)
+async def test_purge_task_skips_verified_account_past_deadline(
+    db_session: AsyncSession,
+):
+    user = _make_user(
+        verified=True, created_hours_ago=settings.ACCOUNT_LIMBO_PURGE_HOURS + 1
+    )
     await _add(db_session, user)
 
-    await accounts._purge_after_limbo(user.id, accounts._limbo_deadline(user.created_at))
+    await accounts._purge_after_limbo(
+        user.id, accounts._limbo_deadline(user.created_at)
+    )
 
     assert await _fetch(user.id) is not None
 
 
-async def test_rearm_pending_purges_schedules_limbo_accounts_only(db_session: AsyncSession):
+async def test_rearm_pending_purges_schedules_limbo_accounts_only(
+    db_session: AsyncSession,
+):
     # Past its deadline already, so the rearmed task fires (and deletes) immediately.
     limbo_user = _make_user(
         verified=False, created_hours_ago=settings.ACCOUNT_LIMBO_PURGE_HOURS + 1

@@ -598,13 +598,15 @@ and docstrings intentionally use proper typographic dashes/quotes (e.g. "Famíli
 Silva", or em-dashes in error messages) for readability. Ignoring these rules
 avoids Ruff flagging correct typography as a bug.
 
-**Q73. Why `line-length = 100` instead of the traditional 79 or Black's 88?**
-100 is a common modern middle ground — modern monitors comfortably fit
-100-character lines side-by-side, and FastAPI route signatures with multiple
-typed `Depends(...)` parameters plus return-type annotations get long quickly;
-79 would force awkward wrapping on almost every endpoint definition. 88
-(Black's default) was considered too tight for the same reason; 100 reduces
-unnecessary wrapping without going to "anything goes" widths like 120.
+**Q73. Why `line-length = 88` instead of the traditional 79 or a wider 100/120?**
+88 is the Ruff/Black default, so we stay on the out-of-the-box convention that
+most Python tooling and contributors already expect — no surprise when someone
+runs `ruff format` with stock settings. 79 (PEP 8) is tight enough to force
+awkward wrapping on almost every FastAPI route signature; 88 gives a little
+more room while still keeping lines narrow enough to view two files
+side-by-side. The extra wrapping it does cause on long route decorators and
+signatures is applied mechanically by `ruff format`, so it costs nothing to
+maintain.
 
 **Q74. Why `quote-style = "double"` under `[tool.ruff.format]`?**
 This is Ruff's formatter equivalent of Black's default — picking one quote

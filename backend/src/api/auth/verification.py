@@ -47,11 +47,15 @@ async def verify_account(
     # Expiry is checked before the code itself so an expired window returns 410,
     # not a generic 400 — the client can then prompt a resend.
     if not account.is_window_open(current_user, now):
-        logger.info("Account verification failed: code expired (user_id=%s)", current_user.id)
+        logger.info(
+            "Account verification failed: code expired (user_id=%s)", current_user.id
+        )
         raise HTTPException(status_code=410, detail="Verification code has expired.")
 
     if not account.verify(current_user, body.code):
-        logger.warning("Account verification failed: invalid code (user_id=%s)", current_user.id)
+        logger.warning(
+            "Account verification failed: invalid code (user_id=%s)", current_user.id
+        )
         raise HTTPException(status_code=400, detail="Invalid verification code.")
 
     # Stamping email_verified_at + bumping updated_at also moves the anchor, so the
@@ -105,7 +109,8 @@ async def resend_verification(
             content={
                 "status": "error",
                 "message": (
-                    "A verification code is still active. Please wait before requesting another."
+                    "A verification code is still active. "
+                    "Please wait before requesting another."
                 ),
                 "retry_after_seconds": account.seconds_until_resend(current_user, now),
             },

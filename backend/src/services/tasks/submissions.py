@@ -8,7 +8,7 @@ fresh submission slot for every active duty so it's ready to be completed.
 
 import asyncio
 import logging
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -55,7 +55,9 @@ async def submit_task(
         if slot is None:
             raise HTTPException(status_code=404, detail="No duty slot found for today")
         if slot.submitted_at is not None:
-            raise HTTPException(status_code=409, detail="Duty already submitted for today")
+            raise HTTPException(
+                status_code=409, detail="Duty already submitted for today"
+            )
         slot.submitted_at = now
         await session.commit()
         logger.info("Duty submitted: submission_id=%s", slot.id)
@@ -68,7 +70,10 @@ async def submit_task(
             )
         )
         if result.scalar_one_or_none() is not None:
-            raise HTTPException(status_code=409, detail="Task already has a pending or approved submission")
+            raise HTTPException(
+                status_code=409,
+                detail="Task already has a pending or approved submission",
+            )
         submission = TaskSubmission(
             task_id=task_id,
             child_id=child_id,
@@ -94,7 +99,9 @@ async def resubmit_task(
     if submission is None or submission.child_id != child_id:
         raise HTTPException(status_code=404, detail="Submission not found")
     if submission.status != "rejected":
-        raise HTTPException(status_code=409, detail="Only rejected submissions can be resubmitted")
+        raise HTTPException(
+            status_code=409, detail="Only rejected submissions can be resubmitted"
+        )
     submission.status = "pending"
     submission.submitted_at = datetime.now(UTC)
     submission.rejection_note = None
@@ -235,10 +242,14 @@ async def generate_daily_duty_slots(session: AsyncSession) -> int:
     """
     today = datetime.now(UTC).date()
     duties = (
-        await session.execute(
-            select(Task).where(Task.task_type == "duty", Task.is_active.is_(True))
+        (
+            await session.execute(
+                select(Task).where(Task.task_type == "duty", Task.is_active.is_(True))
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     count = 0
     for duty in duties:
@@ -270,7 +281,9 @@ async def generate_daily_duty_slots(session: AsyncSession) -> int:
 def _seconds_until_next_midnight() -> float:
     """Seconds from now until the next UTC midnight (the loop's sleep)."""
     now = datetime.now(UTC)
-    next_midnight = datetime.combine(now.date() + timedelta(days=1), time.min, tzinfo=UTC)
+    next_midnight = datetime.combine(
+        now.date() + timedelta(days=1), time.min, tzinfo=UTC
+    )
     return (next_midnight - now).total_seconds()
 
 

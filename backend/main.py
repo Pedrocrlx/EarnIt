@@ -35,7 +35,10 @@ async def lifespan(app: FastAPI):
     """
     logger.info("EarnIt API starting up")
     if settings.DISABLE_AUTH:
-        logger.warning("DISABLE_AUTH=true — JWT auth is OFF; all requests run as %s", DEV_USER_EMAIL)
+        logger.warning(
+            "DISABLE_AUTH=true — JWT auth is OFF; all requests run as %s",
+            DEV_USER_EMAIL,
+        )
         await seed_dev_fixtures()
     # Reconstruct a limbo-purge task for every still-unverified account, so pending
     # purges survive a restart (their deadline is derived from users.created_at).
@@ -51,17 +54,49 @@ app = FastAPI(
     lifespan=lifespan,
     swagger_ui_parameters={"persistAuthorization": True},
     openapi_tags=[
-        {"name": "auth/session",      "description": "Session management — register, login, logout"},
-        {"name": "auth/verification", "description": "Email verification — confirm and resend the account code"},
-        {"name": "auth/pin",          "description": "Parental PIN — set, update, and verify the dashboard PIN"},
-        {"name": "auth/recovery",     "description": "Account recovery — reset forgotten password or PIN by email"},
-        {"name": "profiles/family",   "description": "Family summary — parent profile and children list"},
-        {"name": "profiles/children", "description": "Child profile management — create and deactivate"},
-        {"name": "tasks/management",  "description": "Task CRUD — parent creates and manages tasks"},
-        {"name": "tasks/submissions", "description": "Submission review — parent approves or rejects"},
-        {"name": "children/tasks",    "description": "Child task view — list tasks and submit completions"},
-        {"name": "children/wallet",   "description": "Child wallet — balance and transaction history"},
-        {"name": "system",            "description": "Health check"},
+        {
+            "name": "auth/session",
+            "description": "Session management — register, login, logout",
+        },
+        {
+            "name": "auth/verification",
+            "description": "Email verification — confirm and resend the account code",
+        },
+        {
+            "name": "auth/pin",
+            "description": "Parental PIN — set, update, and verify the dashboard PIN",
+        },
+        {
+            "name": "auth/recovery",
+            "description": (
+                "Account recovery — reset forgotten password or PIN by email"
+            ),
+        },
+        {
+            "name": "profiles/family",
+            "description": "Family summary — parent profile and children list",
+        },
+        {
+            "name": "profiles/children",
+            "description": "Child profile management — create and deactivate",
+        },
+        {
+            "name": "tasks/management",
+            "description": "Task CRUD — parent creates and manages tasks",
+        },
+        {
+            "name": "tasks/submissions",
+            "description": "Submission review — parent approves or rejects",
+        },
+        {
+            "name": "children/tasks",
+            "description": "Child task view — list tasks and submit completions",
+        },
+        {
+            "name": "children/wallet",
+            "description": "Child wallet — balance and transaction history",
+        },
+        {"name": "system", "description": "Health check"},
     ],
 )
 
@@ -69,7 +104,9 @@ app = FastAPI(
 # Catch any unhandled database uniqueness failures and return a clean 409.
 # Routes that want a more specific message catch IntegrityError themselves first.
 @app.exception_handler(IntegrityError)
-async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+async def integrity_error_handler(
+    request: Request, exc: IntegrityError
+) -> JSONResponse:
     """Turn an uncaught DB uniqueness violation into a clean 409 response."""
     return JSONResponse(status_code=409, content={"detail": "Resource already exists."})
 
@@ -86,7 +123,9 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     """Serialise HTTPException, preserving dict details as the top-level body."""
     content = exc.detail if isinstance(exc.detail, dict) else {"detail": exc.detail}
-    return JSONResponse(status_code=exc.status_code, content=content, headers=exc.headers)
+    return JSONResponse(
+        status_code=exc.status_code, content=content, headers=exc.headers
+    )
 
 
 app.include_router(api_router)

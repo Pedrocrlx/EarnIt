@@ -46,7 +46,13 @@ router = APIRouter(prefix="/api/v1/tasks")
 # ---------------------------------------------------------------------------
 
 
-@router.post("", status_code=201, response_model=TaskResponse, tags=["tasks/management"], summary="Create a task")
+@router.post(
+    "",
+    status_code=201,
+    response_model=TaskResponse,
+    tags=["tasks/management"],
+    summary="Create a task",
+)
 async def create_task_endpoint(
     body: TaskCreateRequest,
     current_user: User = Depends(get_current_user),
@@ -66,7 +72,12 @@ async def create_task_endpoint(
     return TaskResponse.model_validate(task)
 
 
-@router.get("", response_model=list[TaskResponse], tags=["tasks/management"], summary="List tasks")
+@router.get(
+    "",
+    response_model=list[TaskResponse],
+    tags=["tasks/management"],
+    summary="List tasks",
+)
 async def list_tasks_endpoint(
     child_id: UUID | None = None,
     task_type: str | None = None,
@@ -79,11 +90,22 @@ async def list_tasks_endpoint(
     Filter by `child_id`, `task_type` (`duty` or `extra_task`), or `is_active`.
     Omitting a filter returns all values for that field.
     """
-    tasks = await list_tasks(current_user, session, child_id=child_id, task_type=task_type, is_active=is_active)
+    tasks = await list_tasks(
+        current_user,
+        session,
+        child_id=child_id,
+        task_type=task_type,
+        is_active=is_active,
+    )
     return [TaskResponse.model_validate(t) for t in tasks]
 
 
-@router.patch("/{task_id}", response_model=TaskResponse, tags=["tasks/management"], summary="Update a task")
+@router.patch(
+    "/{task_id}",
+    response_model=TaskResponse,
+    tags=["tasks/management"],
+    summary="Update a task",
+)
 async def update_task_endpoint(
     task_id: UUID,
     body: TaskUpdateRequest,
@@ -101,7 +123,12 @@ async def update_task_endpoint(
     return TaskResponse.model_validate(task)
 
 
-@router.delete("/{task_id}", response_model=TaskResponse, tags=["tasks/management"], summary="Deactivate a task")
+@router.delete(
+    "/{task_id}",
+    response_model=TaskResponse,
+    tags=["tasks/management"],
+    summary="Deactivate a task",
+)
 async def delete_task_endpoint(
     task_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -124,7 +151,12 @@ async def delete_task_endpoint(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/submissions", response_model=list[SubmissionResponse], tags=["tasks/submissions"], summary="List submissions")
+@router.get(
+    "/submissions",
+    response_model=list[SubmissionResponse],
+    tags=["tasks/submissions"],
+    summary="List submissions",
+)
 async def list_submissions_endpoint(
     child_id: UUID | None = None,
     status: str | None = None,
@@ -137,11 +169,18 @@ async def list_submissions_endpoint(
     today's duty slots and all extra_task submissions. Omitting a filter returns all
     values for that field.
     """
-    subs = await list_submissions(current_user, session, child_id=child_id, status=status)
+    subs = await list_submissions(
+        current_user, session, child_id=child_id, status=status
+    )
     return [SubmissionResponse.model_validate(s) for s in subs]
 
 
-@router.post("/submissions/approve-all", response_model=BatchApproveResponse, tags=["tasks/submissions"], summary="Batch approve pending submissions")
+@router.post(
+    "/submissions/approve-all",
+    response_model=BatchApproveResponse,
+    tags=["tasks/submissions"],
+    summary="Batch approve pending submissions",
+)
 async def batch_approve_endpoint(
     body: BatchApproveRequest = BatchApproveRequest(),
     current_user: User = Depends(get_current_user),
@@ -158,7 +197,12 @@ async def batch_approve_endpoint(
     return BatchApproveResponse(approved=count)
 
 
-@router.post("/submissions/{submission_id}/approve", response_model=SubmissionResponse, tags=["tasks/submissions"], summary="Approve a submission")
+@router.post(
+    "/submissions/{submission_id}/approve",
+    response_model=SubmissionResponse,
+    tags=["tasks/submissions"],
+    summary="Approve a submission",
+)
 async def approve_submission_endpoint(
     submission_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -174,7 +218,12 @@ async def approve_submission_endpoint(
     return SubmissionResponse.model_validate(sub)
 
 
-@router.post("/submissions/{submission_id}/reject", response_model=SubmissionResponse, tags=["tasks/submissions"], summary="Reject a submission")
+@router.post(
+    "/submissions/{submission_id}/reject",
+    response_model=SubmissionResponse,
+    tags=["tasks/submissions"],
+    summary="Reject a submission",
+)
 async def reject_submission_endpoint(
     submission_id: UUID,
     body: RejectRequest = RejectRequest(),
@@ -188,5 +237,7 @@ async def reject_submission_endpoint(
     `PATCH /children/{child_id}/submissions/{submission_id}`. Returns 409 if the
     submission is not in `pending` state.
     """
-    sub = await reject_submission(submission_id, body.rejection_note, current_user, session)
+    sub = await reject_submission(
+        submission_id, body.rejection_note, current_user, session
+    )
     return SubmissionResponse.model_validate(sub)

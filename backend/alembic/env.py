@@ -4,9 +4,9 @@ from logging.config import fileConfig
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
 
+import src.models  # noqa: F401 — ensures all SQLModel tables are registered before autogenerate
 from alembic import context
 from src.core.config import settings
-import src.models  # noqa: F401 — ensures all SQLModel tables are registered before autogenerate
 
 alembic_config = context.config
 

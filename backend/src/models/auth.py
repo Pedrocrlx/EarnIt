@@ -24,7 +24,9 @@ class User(SQLModel, table=True):
 
     __tablename__: str = "users"
 
-    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True, nullable=False)
+    id: UUID = Field(
+        default_factory=uuid4, primary_key=True, index=True, nullable=False
+    )
     email: str = Field(max_length=320, unique=True, index=True, nullable=False)
     password_hash: str = Field(max_length=255, nullable=False)
     parent_pin_hash: str | None = Field(default=None, max_length=255, nullable=True)
@@ -62,9 +64,13 @@ class Child(SQLModel, table=True):
 
     __tablename__: str = "children"
 
-    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True, nullable=False)
+    id: UUID = Field(
+        default_factory=uuid4, primary_key=True, index=True, nullable=False
+    )
     # CASCADE: child rows are removed when the parent user is deleted
-    user_id: UUID = Field(foreign_key="users.id", index=True, nullable=False, ondelete="CASCADE")
+    user_id: UUID = Field(
+        foreign_key="users.id", index=True, nullable=False, ondelete="CASCADE"
+    )
     name: str = Field(max_length=100, nullable=False)
     birth_date: date | None = Field(default=None, nullable=True)
     avatar_url: str | None = Field(default=None, nullable=True)

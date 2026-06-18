@@ -21,7 +21,9 @@ from src.services.tasks._shared import get_child_or_404
 logger = logging.getLogger(__name__)
 
 
-async def create_task(body: TaskCreateRequest, user: User, session: AsyncSession) -> Task:
+async def create_task(
+    body: TaskCreateRequest, user: User, session: AsyncSession
+) -> Task:
     """Create a task for one of the parent's children (404 if not theirs)."""
     await get_child_or_404(body.child_id, user, session)
     task = Task(
@@ -35,7 +37,9 @@ async def create_task(body: TaskCreateRequest, user: User, session: AsyncSession
     )
     session.add(task)
     await session.commit()
-    logger.info("Task created: task_id=%s user_id=%s type=%s", task.id, user.id, task.task_type)
+    logger.info(
+        "Task created: task_id=%s user_id=%s type=%s", task.id, user.id, task.task_type
+    )
     return task
 
 
@@ -69,7 +73,9 @@ async def list_tasks(
     return list(result.scalars().all())
 
 
-async def update_task(task: Task, body: TaskUpdateRequest, session: AsyncSession) -> Task:
+async def update_task(
+    task: Task, body: TaskUpdateRequest, session: AsyncSession
+) -> Task:
     """Apply a partial update — only the fields present in ``body`` change."""
     if body.title is not None:
         task.title = body.title

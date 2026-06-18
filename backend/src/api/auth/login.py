@@ -64,7 +64,10 @@ async def login(
         logger.warning("Login blocked: account disabled (user_id=%s)", user.id)
         raise HTTPException(
             status_code=403,
-            detail={"error": "account_disabled", "message": "This account has been disabled."},
+            detail={
+                "error": "account_disabled",
+                "message": "This account has been disabled.",
+            },
         )
 
     if user.email_verified_at is None:

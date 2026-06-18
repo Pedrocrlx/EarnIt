@@ -1,6 +1,5 @@
 from uuid import uuid4
 
-import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +8,11 @@ from tests.conftest import register_and_verify
 
 _TASKS_URL = "/api/v1/tasks"
 _SUBS_URL = "/api/v1/tasks/submissions"
-_OTHER = {"email": "other@example.com", "password": "Password123!", "family_name": "Costa"}
+_OTHER = {
+    "email": "other@example.com",
+    "password": "Password123!",
+    "family_name": "Costa",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -27,7 +30,9 @@ async def _child(client: AsyncClient, token: str, name: str = "Leo") -> str:
     return res.json()["id"]
 
 
-async def _duty(client: AsyncClient, token: str, child_id: str, title: str = "Brush teeth") -> dict:
+async def _duty(
+    client: AsyncClient, token: str, child_id: str, title: str = "Brush teeth"
+) -> dict:
     res = await client.post(
         _TASKS_URL,
         json={"child_id": child_id, "title": title, "task_type": "duty"},
@@ -37,10 +42,17 @@ async def _duty(client: AsyncClient, token: str, child_id: str, title: str = "Br
     return res.json()
 
 
-async def _extra(client: AsyncClient, token: str, child_id: str, reward: str = "5.00") -> dict:
+async def _extra(
+    client: AsyncClient, token: str, child_id: str, reward: str = "5.00"
+) -> dict:
     res = await client.post(
         _TASKS_URL,
-        json={"child_id": child_id, "title": "Clean room", "task_type": "extra_task", "reward_amount": reward},
+        json={
+            "child_id": child_id,
+            "title": "Clean room",
+            "task_type": "extra_task",
+            "reward_amount": reward,
+        },
         cookies={"access_token": token},
     )
     assert res.status_code == 201
@@ -80,7 +92,12 @@ async def test_create_extra_task_returns_201(client: AsyncClient, mock_mail):
     child_id = await _child(client, token)
     res = await client.post(
         _TASKS_URL,
-        json={"child_id": child_id, "title": "Clean room", "task_type": "extra_task", "reward_amount": "3.50"},
+        json={
+            "child_id": child_id,
+            "title": "Clean room",
+            "task_type": "extra_task",
+            "reward_amount": "3.50",
+        },
         cookies={"access_token": token},
     )
     assert res.status_code == 201
@@ -92,24 +109,38 @@ async def test_duty_reward_must_be_zero_returns_422(client: AsyncClient, mock_ma
     child_id = await _child(client, token)
     res = await client.post(
         _TASKS_URL,
-        json={"child_id": child_id, "title": "Brush teeth", "task_type": "duty", "reward_amount": "1.00"},
+        json={
+            "child_id": child_id,
+            "title": "Brush teeth",
+            "task_type": "duty",
+            "reward_amount": "1.00",
+        },
         cookies={"access_token": token},
     )
     assert res.status_code == 422
 
 
-async def test_extra_task_reward_must_be_positive_returns_422(client: AsyncClient, mock_mail):
+async def test_extra_task_reward_must_be_positive_returns_422(
+    client: AsyncClient, mock_mail
+):
     token = await register_and_verify(client, mock_mail)
     child_id = await _child(client, token)
     res = await client.post(
         _TASKS_URL,
-        json={"child_id": child_id, "title": "Clean room", "task_type": "extra_task", "reward_amount": "0.00"},
+        json={
+            "child_id": child_id,
+            "title": "Clean room",
+            "task_type": "extra_task",
+            "reward_amount": "0.00",
+        },
         cookies={"access_token": token},
     )
     assert res.status_code == 422
 
 
-async def test_create_task_for_unknown_child_returns_404(client: AsyncClient, mock_mail):
+async def test_create_task_for_unknown_child_returns_404(
+    client: AsyncClient, mock_mail
+):
     token = await register_and_verify(client, mock_mail)
     res = await client.post(
         _TASKS_URL,
@@ -139,7 +170,9 @@ async def test_list_tasks_filter_by_task_type(client: AsyncClient, mock_mail):
     await _duty(client, token, child_id)
     await _extra(client, token, child_id)
 
-    res = await client.get(_TASKS_URL, params={"task_type": "duty"}, cookies={"access_token": token})
+    res = await client.get(
+        _TASKS_URL, params={"task_type": "duty"}, cookies={"access_token": token}
+    )
     assert all(t["task_type"] == "duty" for t in res.json())
 
 
@@ -162,7 +195,9 @@ async def test_soft_delete_sets_is_active_false(client: AsyncClient, mock_mail):
     child_id = await _child(client, token)
     task = await _duty(client, token, child_id)
 
-    res = await client.delete(f"{_TASKS_URL}/{task['id']}", cookies={"access_token": token})
+    res = await client.delete(
+        f"{_TASKS_URL}/{task['id']}", cookies={"access_token": token}
+    )
     assert res.status_code == 200
     assert res.json()["is_active"] is False
 
@@ -182,7 +217,9 @@ async def test_task_of_other_user_returns_404(client: AsyncClient, mock_mail):
 
 
 async def test_create_task_without_token_returns_401(client: AsyncClient):
-    res = await client.post(_TASKS_URL, json={"child_id": str(uuid4()), "title": "T", "task_type": "duty"})
+    res = await client.post(
+        _TASKS_URL, json={"child_id": str(uuid4()), "title": "T", "task_type": "duty"}
+    )
     assert res.status_code == 401
 
 
@@ -191,7 +228,9 @@ async def test_create_task_without_token_returns_401(client: AsyncClient):
 # ---------------------------------------------------------------------------
 
 
-async def test_submit_duty_happy_path(client: AsyncClient, mock_mail, db_session: AsyncSession):
+async def test_submit_duty_happy_path(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
     token = await register_and_verify(client, mock_mail)
     child_id = await _child(client, token)
     task = await _duty(client, token, child_id)
@@ -214,7 +253,9 @@ async def test_submit_extra_task_happy_path(client: AsyncClient, mock_mail):
     assert res.json()["status"] == "pending"
 
 
-async def test_duty_double_submit_returns_409(client: AsyncClient, mock_mail, db_session: AsyncSession):
+async def test_duty_double_submit_returns_409(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
     token = await register_and_verify(client, mock_mail)
     child_id = await _child(client, token)
     task = await _duty(client, token, child_id)
@@ -250,17 +291,23 @@ async def test_duty_submit_without_slot_returns_404(client: AsyncClient, mock_ma
 # ---------------------------------------------------------------------------
 
 
-async def test_approve_extra_task_creates_wallet_transaction(client: AsyncClient, mock_mail):
+async def test_approve_extra_task_creates_wallet_transaction(
+    client: AsyncClient, mock_mail
+):
     token = await register_and_verify(client, mock_mail)
     child_id = await _child(client, token)
     task = await _extra(client, token, child_id, reward="2.50")
     sub = (await _submit(client, token, child_id, task["id"])).json()
 
-    res = await client.post(f"{_SUBS_URL}/{sub['id']}/approve", cookies={"access_token": token})
+    res = await client.post(
+        f"{_SUBS_URL}/{sub['id']}/approve", cookies={"access_token": token}
+    )
     assert res.status_code == 200
     assert res.json()["status"] == "approved"
 
-    wallet = await client.get(f"/api/v1/children/{child_id}/wallet", cookies={"access_token": token})
+    wallet = await client.get(
+        f"/api/v1/children/{child_id}/wallet", cookies={"access_token": token}
+    )
     assert wallet.status_code == 200
     body = wallet.json()
     assert body["balance"] == "2.50"
@@ -277,9 +324,13 @@ async def test_approve_duty_does_not_create_wallet_transaction(
     await generate_daily_duty_slots(db_session)
     sub = (await _submit(client, token, child_id, task["id"])).json()
 
-    await client.post(f"{_SUBS_URL}/{sub['id']}/approve", cookies={"access_token": token})
+    await client.post(
+        f"{_SUBS_URL}/{sub['id']}/approve", cookies={"access_token": token}
+    )
 
-    wallet = await client.get(f"/api/v1/children/{child_id}/wallet", cookies={"access_token": token})
+    wallet = await client.get(
+        f"/api/v1/children/{child_id}/wallet", cookies={"access_token": token}
+    )
     assert wallet.json()["balance"] == "0.00"
     assert wallet.json()["transactions"] == []
 
@@ -290,8 +341,12 @@ async def test_approve_non_pending_returns_409(client: AsyncClient, mock_mail):
     task = await _extra(client, token, child_id)
     sub = (await _submit(client, token, child_id, task["id"])).json()
 
-    await client.post(f"{_SUBS_URL}/{sub['id']}/approve", cookies={"access_token": token})
-    res = await client.post(f"{_SUBS_URL}/{sub['id']}/approve", cookies={"access_token": token})
+    await client.post(
+        f"{_SUBS_URL}/{sub['id']}/approve", cookies={"access_token": token}
+    )
+    res = await client.post(
+        f"{_SUBS_URL}/{sub['id']}/approve", cookies={"access_token": token}
+    )
     assert res.status_code == 409
 
 
@@ -365,7 +420,12 @@ async def test_batch_approve_flips_all_pending(client: AsyncClient, mock_mail):
     # Give t2 a different title to avoid unique constraint issue
     t2_res = await client.post(
         _TASKS_URL,
-        json={"child_id": child_id, "title": "Tidy room", "task_type": "extra_task", "reward_amount": "2.00"},
+        json={
+            "child_id": child_id,
+            "title": "Tidy room",
+            "task_type": "extra_task",
+            "reward_amount": "2.00",
+        },
         cookies={"access_token": token},
     )
     t2 = t2_res.json()
@@ -373,7 +433,9 @@ async def test_batch_approve_flips_all_pending(client: AsyncClient, mock_mail):
     await _submit(client, token, child_id, t1["id"])
     await _submit(client, token, child_id, t2["id"])
 
-    res = await client.post(f"{_SUBS_URL}/approve-all", json={}, cookies={"access_token": token})
+    res = await client.post(
+        f"{_SUBS_URL}/approve-all", json={}, cookies={"access_token": token}
+    )
     assert res.status_code == 200
     assert res.json()["approved"] == 2
 
@@ -384,16 +446,25 @@ async def test_batch_approve_skips_already_approved(client: AsyncClient, mock_ma
     t1 = await _extra(client, token, child_id)
     t2_res = await client.post(
         _TASKS_URL,
-        json={"child_id": child_id, "title": "Tidy room", "task_type": "extra_task", "reward_amount": "1.00"},
+        json={
+            "child_id": child_id,
+            "title": "Tidy room",
+            "task_type": "extra_task",
+            "reward_amount": "1.00",
+        },
         cookies={"access_token": token},
     )
     t2 = t2_res.json()
 
     s1 = (await _submit(client, token, child_id, t1["id"])).json()
     await _submit(client, token, child_id, t2["id"])
-    await client.post(f"{_SUBS_URL}/{s1['id']}/approve", cookies={"access_token": token})
+    await client.post(
+        f"{_SUBS_URL}/{s1['id']}/approve", cookies={"access_token": token}
+    )
 
-    res = await client.post(f"{_SUBS_URL}/approve-all", json={}, cookies={"access_token": token})
+    res = await client.post(
+        f"{_SUBS_URL}/approve-all", json={}, cookies={"access_token": token}
+    )
     assert res.json()["approved"] == 1
 
 
@@ -414,7 +485,9 @@ async def test_batch_approve_filter_by_child_id(client: AsyncClient, mock_mail):
     assert res.json()["approved"] == 1
 
     subs = await client.get(
-        _SUBS_URL, params={"child_id": child2_id, "status": "pending"}, cookies={"access_token": token}
+        _SUBS_URL,
+        params={"child_id": child2_id, "status": "pending"},
+        cookies={"access_token": token},
     )
     assert len(subs.json()) == 1
 
@@ -430,16 +503,27 @@ async def test_wallet_balance_sums_credits(client: AsyncClient, mock_mail):
     t1 = await _extra(client, token, child_id, reward="1.50")
     t2_res = await client.post(
         _TASKS_URL,
-        json={"child_id": child_id, "title": "Tidy room", "task_type": "extra_task", "reward_amount": "2.50"},
+        json={
+            "child_id": child_id,
+            "title": "Tidy room",
+            "task_type": "extra_task",
+            "reward_amount": "2.50",
+        },
         cookies={"access_token": token},
     )
     t2 = t2_res.json()
     s1 = (await _submit(client, token, child_id, t1["id"])).json()
     s2 = (await _submit(client, token, child_id, t2["id"])).json()
-    await client.post(f"{_SUBS_URL}/{s1['id']}/approve", cookies={"access_token": token})
-    await client.post(f"{_SUBS_URL}/{s2['id']}/approve", cookies={"access_token": token})
+    await client.post(
+        f"{_SUBS_URL}/{s1['id']}/approve", cookies={"access_token": token}
+    )
+    await client.post(
+        f"{_SUBS_URL}/{s2['id']}/approve", cookies={"access_token": token}
+    )
 
-    wallet = await client.get(f"/api/v1/children/{child_id}/wallet", cookies={"access_token": token})
+    wallet = await client.get(
+        f"/api/v1/children/{child_id}/wallet", cookies={"access_token": token}
+    )
     assert wallet.status_code == 200
     assert wallet.json()["balance"] == "4.00"
 
@@ -450,17 +534,28 @@ async def test_wallet_history_ordered_newest_first(client: AsyncClient, mock_mai
     t1 = await _extra(client, token, child_id, reward="1.00")
     t2_res = await client.post(
         _TASKS_URL,
-        json={"child_id": child_id, "title": "Tidy room", "task_type": "extra_task", "reward_amount": "2.00"},
+        json={
+            "child_id": child_id,
+            "title": "Tidy room",
+            "task_type": "extra_task",
+            "reward_amount": "2.00",
+        },
         cookies={"access_token": token},
     )
     t2 = t2_res.json()
     s1 = (await _submit(client, token, child_id, t1["id"])).json()
     s2 = (await _submit(client, token, child_id, t2["id"])).json()
-    await client.post(f"{_SUBS_URL}/{s1['id']}/approve", cookies={"access_token": token})
-    await client.post(f"{_SUBS_URL}/{s2['id']}/approve", cookies={"access_token": token})
+    await client.post(
+        f"{_SUBS_URL}/{s1['id']}/approve", cookies={"access_token": token}
+    )
+    await client.post(
+        f"{_SUBS_URL}/{s2['id']}/approve", cookies={"access_token": token}
+    )
 
     transactions = (
-        await client.get(f"/api/v1/children/{child_id}/wallet", cookies={"access_token": token})
+        await client.get(
+            f"/api/v1/children/{child_id}/wallet", cookies={"access_token": token}
+        )
     ).json()["transactions"]
     assert len(transactions) == 2
     assert float(transactions[0]["amount"]) >= float(transactions[1]["amount"]) or True

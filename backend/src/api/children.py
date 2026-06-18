@@ -24,7 +24,12 @@ from src.schemas.tasks import (
     WalletBalanceResponse,
     WalletTransactionResponse,
 )
-from src.services.tasks import get_balance, get_transaction_history, resubmit_task, submit_task
+from src.services.tasks import (
+    get_balance,
+    get_transaction_history,
+    resubmit_task,
+    submit_task,
+)
 from src.services.tasks._shared import get_child_or_404
 
 logger = logging.getLogger(__name__)
@@ -37,7 +42,12 @@ router = APIRouter(prefix="/api/v1/children")
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{child_id}/tasks", response_model=list[ChildTaskResponse], tags=["children/tasks"], summary="List tasks for a child")
+@router.get(
+    "/{child_id}/tasks",
+    response_model=list[ChildTaskResponse],
+    tags=["children/tasks"],
+    summary="List tasks for a child",
+)
 async def list_child_tasks(
     child_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -54,24 +64,32 @@ async def list_child_tasks(
     today = datetime.now(UTC).date()
 
     duties = (
-        await session.execute(
-            select(Task).where(
-                Task.child_id == child_id,
-                Task.task_type == "duty",
-                Task.is_active.is_(True),
+        (
+            await session.execute(
+                select(Task).where(
+                    Task.child_id == child_id,
+                    Task.task_type == "duty",
+                    Task.is_active.is_(True),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     extra_tasks = (
-        await session.execute(
-            select(Task).where(
-                Task.child_id == child_id,
-                Task.task_type == "extra_task",
-                Task.is_active.is_(True),
+        (
+            await session.execute(
+                select(Task).where(
+                    Task.child_id == child_id,
+                    Task.task_type == "extra_task",
+                    Task.is_active.is_(True),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     items: list[ChildTaskResponse] = []
 
@@ -123,7 +141,13 @@ async def list_child_tasks(
     return items
 
 
-@router.post("/{child_id}/tasks/{task_id}/submit", status_code=201, response_model=SubmissionResponse, tags=["children/tasks"], summary="Submit a task completion")
+@router.post(
+    "/{child_id}/tasks/{task_id}/submit",
+    status_code=201,
+    response_model=SubmissionResponse,
+    tags=["children/tasks"],
+    summary="Submit a task completion",
+)
 async def submit_task_endpoint(
     child_id: UUID,
     task_id: UUID,
@@ -141,7 +165,12 @@ async def submit_task_endpoint(
     return SubmissionResponse.model_validate(sub)
 
 
-@router.patch("/{child_id}/submissions/{submission_id}", response_model=SubmissionResponse, tags=["children/tasks"], summary="Resubmit a rejected task")
+@router.patch(
+    "/{child_id}/submissions/{submission_id}",
+    response_model=SubmissionResponse,
+    tags=["children/tasks"],
+    summary="Resubmit a rejected task",
+)
 async def resubmit_task_endpoint(
     child_id: UUID,
     submission_id: UUID,
@@ -158,7 +187,12 @@ async def resubmit_task_endpoint(
     return SubmissionResponse.model_validate(sub)
 
 
-@router.get("/{child_id}/wallet", response_model=WalletBalanceResponse, tags=["children/wallet"], summary="Get wallet balance and history")
+@router.get(
+    "/{child_id}/wallet",
+    response_model=WalletBalanceResponse,
+    tags=["children/wallet"],
+    summary="Get wallet balance and history",
+)
 async def get_wallet(
     child_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -175,5 +209,7 @@ async def get_wallet(
     return WalletBalanceResponse(
         child_id=child_id,
         balance=balance,
-        transactions=[WalletTransactionResponse.model_validate(t) for t in transactions],
+        transactions=[
+            WalletTransactionResponse.model_validate(t) for t in transactions
+        ],
     )

@@ -50,7 +50,8 @@ async def reset_password(
         or not password_reset.verify(user, body.code)
     ):
         logger.warning(
-            "Password reset failed: user_id=%s", user.id if user is not None else "unknown"
+            "Password reset failed: user_id=%s",
+            user.id if user is not None else "unknown",
         )
         raise HTTPException(status_code=400, detail=_INVALID)
 

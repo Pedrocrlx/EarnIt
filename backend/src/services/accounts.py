@@ -61,7 +61,9 @@ async def _purge_after_limbo(user_id: UUID, deadline: datetime) -> None:
 
 def schedule_limbo_purge(user: User) -> None:
     """Arm the background purge for a freshly-registered (or re-armed) account."""
-    task = asyncio.create_task(_purge_after_limbo(user.id, _limbo_deadline(user.created_at)))
+    task = asyncio.create_task(
+        _purge_after_limbo(user.id, _limbo_deadline(user.created_at))
+    )
     _pending[user.id] = task
     task.add_done_callback(lambda _t, uid=user.id: _pending.pop(uid, None))
 
@@ -81,7 +83,9 @@ async def rearm_pending_purges() -> None:
     pending promises survive a restart. Accounts already past their deadline are
     deleted on the next tick (remaining <= 0 → no sleep)."""
     async with AsyncSessionLocal() as session:
-        result = await session.execute(select(User).where(User.email_verified_at.is_(None)))
+        result = await session.execute(
+            select(User).where(User.email_verified_at.is_(None))
+        )
         limbo_users = result.scalars().all()
     for user in limbo_users:
         schedule_limbo_purge(user)
@@ -103,7 +107,11 @@ async def maybe_complete_onboarding(user: User, session: AsyncSession) -> None:
 
     One-way: never reverts once set.
     """
-    if user.onboarding_completed or user.parent_pin_hash is None or not user.family_name:
+    if (
+        user.onboarding_completed
+        or user.parent_pin_hash is None
+        or not user.family_name
+    ):
         return
     count = await session.scalar(select(func.count()).where(Child.user_id == user.id))
     if count >= settings.MIN_CHILDREN_FOR_ONBOARDING:

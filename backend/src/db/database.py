@@ -1,5 +1,4 @@
-""" Database configuration and session management."""
-
+"""Database configuration and session management."""
 
 from collections.abc import AsyncGenerator
 

@@ -301,22 +301,9 @@ Every flow shares one **stateless verification code** primitive (`src/services/v
 3. **`GET /api/v1/profiles/family`** *(`access_token` required)*
    - Returns the parent's profile (`id`, `family_name`, `onboarding_completed`) plus all `children` rows, active and inactive. → `200`
 
-### Epic 1 (Authentication & Profiles) — Progress
+### Tests
 
-Implementation follows `specs/epic1/spec.md`, split into chunks:
-
-| Chunk | Scope | Status |
-|---|---|---|
-| 0 | Infrastructure: FastAPI/CORS boilerplate, async DB engine, Alembic migrations, fastapi-mail + email templates, durable limbo-purge background task | ✅ Done |
-| 1 | Crypto & auth utilities: JWT tokens, bcrypt hashing, stateless verification-code service, request schemas, `get_current_user` / `get_pending_verification_user` guards | ✅ Done |
-| 2 | `POST /auth/register`, `POST /auth/verify`, `POST /auth/verify/resend` | ✅ Done |
-| 3 | `POST /auth/login`, `POST /auth/logout` | ✅ Done |
-| 4 | `POST /auth/forgot-password`, `POST /auth/reset-password` (2-step: request code → validate code + set password in one call) | ✅ Done |
-| 5 | `POST /auth/pin`, `POST /auth/verify-pin`, `POST /auth/forgot-pin`, `POST /auth/reset-pin` (parental PIN gate + reset) | ✅ Done |
-| 6 | `POST/PATCH /profiles/children`, `GET /profiles/family`, `PATCH /profiles/family-name` | ✅ Done |
-| 7 | Final ruff lint pass across all modules | ✅ Done |
-
-All implemented endpoints are covered by tests in `tests/` (one file per feature, e.g. `test_registration.py`, `test_login_logout.py`). `tests/conftest.py` centralizes shared fixtures plus the example account (`VALID_USER`), cookie-extraction (`extract_cookie`), and register+verify (`register_and_verify`) helpers used across feature files.
+Endpoints are covered by tests in `tests/` (one file per feature, e.g. `test_registration.py`, `test_login_logout.py`). `tests/conftest.py` centralizes shared fixtures plus the example account (`VALID_USER`), cookie-extraction (`extract_cookie`), and register+verify (`register_and_verify`) helpers used across feature files.
 
 ### Logging
 
@@ -404,22 +391,3 @@ On every app startup (`lifespan` in `main.py`), `start_daily_slot_job()` runs:
 2. Spawns an `asyncio.Task` (`_slot_task`) that loops, sleeping until the next UTC midnight, and repeats step 1 daily.
 
 The task reference is stored at module level in `src/services/tasks/submissions.py` to prevent garbage collection. `stop_daily_slot_job()` cancels it cleanly on shutdown. Tests call `generate_daily_duty_slots(session)` directly (bypassing the background loop).
-
-### Epic 2 (Task Management) — Progress
-
-Implementation follows `backend/main-spec.md`, split into 37 numbered tasks:
-
-| Group | Scope | Status |
-|---|---|---|
-| Models (1–3) | `tasks`, `task_submissions`, `wallet_transactions` tables + Alembic migration | ✅ Done |
-| Schemas (4–6) | `TaskCreateRequest/Response`, `SubmissionResponse`, `WalletBalanceResponse`, etc. | ✅ Done |
-| Task CRUD services (7–8) | `create_task`, `list_tasks`, `update_task`, `soft_delete_task` | ✅ Done |
-| Submission services (9–12) | `submit_task`, `resubmit_task`, `approve_submission`, `reject_submission` | ✅ Done |
-| Wallet services (13–14) | `get_balance`, `get_transaction_history` | ✅ Done |
-| Background job (15–16) | `generate_daily_duty_slots`, `start/stop_daily_slot_job`, lifespan wiring | ✅ Done |
-| Task CRUD API (17–20) | `POST/GET /tasks`, `PATCH/DELETE /tasks/{id}` | ✅ Done |
-| Submission review API (21–24) | `GET /submissions`, `approve`, `reject`, `approve-all` | ✅ Done |
-| Child task view API (25–28) | `GET /{child_id}/tasks`, `submit`, `resubmit`, `GET /{child_id}/wallet` | ✅ Done |
-| Tests (29–37) | 34 tests covering CRUD, submit, approve, reject/resubmit, batch approve, wallet, duty slots | ✅ Done |
-
-All 143 tests pass (112 auth/profile + 31 task-management).

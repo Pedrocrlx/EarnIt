@@ -12,7 +12,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
-
 # ---------------------------------------------------------------------------
 # Task schemas (tasks 4)
 # ---------------------------------------------------------------------------
@@ -42,7 +41,7 @@ class TaskCreateRequest(BaseModel):
     }
 
     @model_validator(mode="after")
-    def check_reward_rules(self) -> "TaskCreateRequest":
+    def check_reward_rules(self) -> TaskCreateRequest:
         """Tie reward to task type: duties pay 0, extra tasks pay > 0."""
         if self.task_type == "duty" and self.reward_amount != Decimal("0.00"):
             raise ValueError("Duty tasks must have reward_amount of 0")
@@ -152,7 +151,9 @@ class ChildTaskResponse(BaseModel):
     task_type: str
     reward_amount: Decimal
     expires_at: datetime | None
-    submission: SubmissionResponse | None  # today's slot for duties; latest for extra_tasks
+    submission: (
+        SubmissionResponse | None
+    )  # today's slot for duties; latest for extra_tasks
 
     model_config = {"from_attributes": True}
 

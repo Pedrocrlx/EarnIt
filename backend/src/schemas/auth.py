@@ -121,7 +121,9 @@ def _validate_pin_format(v: str) -> str:
     """Require the PIN to be exactly ``PARENT_PIN_LENGTH`` digits (0–9)."""
     pattern = r"\d{" + str(settings.PARENT_PIN_LENGTH) + r"}"
     if not re.fullmatch(pattern, v):
-        raise ValueError(f"PIN must be exactly {settings.PARENT_PIN_LENGTH} digits (0–9)")
+        raise ValueError(
+            f"PIN must be exactly {settings.PARENT_PIN_LENGTH} digits (0–9)"
+        )
     return v
 
 

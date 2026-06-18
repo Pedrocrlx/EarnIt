@@ -27,7 +27,10 @@ async def get_balance(child_id: UUID, user: User, session: AsyncSession) -> Deci
             func.coalesce(
                 func.sum(
                     case(
-                        (WalletTransaction.transaction_type == "credit", WalletTransaction.amount),
+                        (
+                            WalletTransaction.transaction_type == "credit",
+                            WalletTransaction.amount,
+                        ),
                         else_=-WalletTransaction.amount,
                     )
                 ),

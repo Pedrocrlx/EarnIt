@@ -54,8 +54,13 @@ async def forgot_password(
                 status_code=429,
                 content={
                     "status": "error",
-                    "message": "A password reset code is still active. Please wait before requesting another.",
-                    "retry_after_seconds": password_reset.seconds_until_resend(user, now),
+                    "message": (
+                        "A password reset code is still active. "
+                        "Please wait before requesting another."
+                    ),
+                    "retry_after_seconds": password_reset.seconds_until_resend(
+                        user, now
+                    ),
                 },
             )
         await password_reset.rotate(user, session)
