@@ -51,7 +51,7 @@ export const LandingPage = () => {
                 <span className="text-[#c2cf40]">Achievements.</span>
               </h1>
               <p className="mt-5 max-w-[520px] text-base font-normal leading-7 text-[#404940] sm:text-lg sm:leading-8 lg:text-[22px] lg:leading-9">
-                Make responsibility fun. Earnit helps parents organize tasks while rewarding kids
+                Make responsibility fun. EarnIt helps parents organize tasks while rewarding kids
                 for building great habits through a playful, gamified experience.
               </p>
               <Button onClick={handleRegister} className={cn(ctaButtonClass, "mt-8")}>
@@ -161,7 +161,7 @@ export const LandingPage = () => {
             ))}
           </nav>
           <p className="text-center text-xs font-semibold leading-5 text-[#404940]">
-            © 2024 Earnit Family. All rights reserved.
+            © 2024 EarnIt Family. All rights reserved.
           </p>
         </div>
       </footer>

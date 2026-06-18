@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
@@ -23,6 +23,18 @@ const PageFallback = () => (
   </main>
 );
 
+const OnboardingRoute = ({ children }: { children: ReactNode }) => (
+  <ProtectedRoute blockWhenOnboardingComplete>{children}</ProtectedRoute>
+);
+
+const CompletedOnboardingRoute = ({
+  children,
+}: {
+  children: ReactNode;
+}) => (
+  <ProtectedRoute requireOnboardingComplete>{children}</ProtectedRoute>
+);
+
 function App() {
   return (
     <BrowserRouter>
@@ -35,7 +47,11 @@ function App() {
             <Route path="/verification" element={<VerificationCode />} />
             <Route
               path="/onboarding"
-              element={<Navigate to="/onboarding/step1" replace />}
+              element={
+                <OnboardingRoute>
+                  <Navigate to="/onboarding/step1" replace />
+                </OnboardingRoute>
+              }
             />
             <Route
               path="/profile"
@@ -48,33 +64,33 @@ function App() {
             <Route
               path="/onboarding/step1"
               element={
-                <ProtectedRoute>
+                <OnboardingRoute>
                   <OnboardingStep1Page />
-                </ProtectedRoute>
+                </OnboardingRoute>
               }
             />
             <Route
               path="/onboarding/step2"
               element={
-                <ProtectedRoute>
+                <OnboardingRoute>
                   <OnboardingStep2Page />
-                </ProtectedRoute>
+                </OnboardingRoute>
               }
             />
             <Route
               path="/onboarding/step3"
               element={
-                <ProtectedRoute>
+                <OnboardingRoute>
                   <OnboardingStep3Page />
-                </ProtectedRoute>
+                </OnboardingRoute>
               }
             />
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute>
+                <CompletedOnboardingRoute>
                   <DashboardPage />
-                </ProtectedRoute>
+                </CompletedOnboardingRoute>
               }
             />
           </Routes>

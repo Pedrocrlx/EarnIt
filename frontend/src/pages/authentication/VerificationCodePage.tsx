@@ -18,7 +18,7 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-const OTP_LENGTH = 8;
+const OTP_LENGTH = 6;
 
 export const VerificationCode = () => {
   const [code, setCode] = useState<string[]>(Array(OTP_LENGTH).fill(""));
@@ -129,7 +129,7 @@ export const VerificationCode = () => {
     }),
     onSuccess: async () => {
       const profile = await login();
-      navigate(profile?.onboarding_completed ? "/profile" : "/onboarding/step1", {
+      navigate(profile?.onboarding_completed ? "/dashboard" : "/onboarding/step1", {
         replace: true,
       });
     },
@@ -186,9 +186,9 @@ export const VerificationCode = () => {
             </div>
 
             <form className="w-full space-y-8" onSubmit={handleSubmit}>
-              <fieldset className="flex justify-between gap-2">
+              <fieldset className="flex justify-center gap-2">
                 <legend className="sr-only">
-                  Enter the 8-character verification code
+                  Enter the {OTP_LENGTH}-character verification code
                 </legend>
                 {otpSlots.map((slotIndex) => {
                   const isFilled = code[slotIndex] !== "";
@@ -215,7 +215,7 @@ export const VerificationCode = () => {
                       onKeyDown={(event) => handleKeyDown(slotIndex, event)}
                       onPaste={(event) => handlePaste(slotIndex, event)}
                       onFocus={(event) => event.target.select()}
-                      className={`w-12 sm:w-14 h-16 rounded-lg border-2 border-solid text-center font-semibold text-[#003514] text-2xl transition-all ${
+                      className={`h-14 w-10 rounded-lg border-2 border-solid text-center text-xl font-semibold text-[#003514] transition-all min-[380px]:w-12 sm:h-16 sm:w-14 sm:text-2xl ${
                         isFilled || isActive
                           ? "bg-white border-[#003514] ring-2 ring-[#003514]/10"
                           : "bg-gray-50 border-transparent"

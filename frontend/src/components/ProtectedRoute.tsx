@@ -1,8 +1,19 @@
+import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/useAuth";
 
-export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, status } = useAuth();
+type ProtectedRouteProps = {
+  children: ReactNode;
+  blockWhenOnboardingComplete?: boolean;
+  requireOnboardingComplete?: boolean;
+};
+
+export const ProtectedRoute = ({
+  children,
+  blockWhenOnboardingComplete = false,
+  requireOnboardingComplete = false,
+}: ProtectedRouteProps) => {
+  const { familyProfile, isAuthenticated, status } = useAuth();
   const location = useLocation();
 
   if (status === "loading") {
@@ -17,6 +28,14 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (blockWhenOnboardingComplete && familyProfile?.onboarding_completed) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (requireOnboardingComplete && !familyProfile?.onboarding_completed) {
+    return <Navigate to="/onboarding/step1" replace />;
   }
 
   return <>{children}</>;

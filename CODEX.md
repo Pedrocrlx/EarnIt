@@ -1,34 +1,233 @@
-# Repository Guidelines
+# Project Coding Guidelines
 
-## Project Structure & Module Organization
+This document provides coding standards, architectural definitions, and workflow constraints for AI agents and human developers working on the **EarnIt** family gamified allowance application.
 
-EarnIt is a full-stack app: React/Vite frontend, FastAPI backend, PostgreSQL, Mailpit, and Nginx for the full Docker stack. Root `compose.yaml` runs the complete stack. Backend code is in `backend/src/`: routes in `api/`, settings in `core/`, database setup in `db/`, models in `models/`, schemas in `schemas/`, and business logic in `services/`. Backend tests live in `backend/tests/`; migrations live in `backend/alembic/`. Frontend code is in `frontend/src/`, with components, auth context, API helpers, pages, and assets split under matching subdirectories. API contracts and contribution docs are under `docs/`.
+## 1. General Principles
 
-## Build, Test, and Development Commands
+* **English Only:** All source code, database schemas, comments, documentation, git commits, and issue trackers must be written in English.
+* **KISS (Keep It Simple, Stupid):** Prioritize clarity, explicitness, and readability over clever optimizations or overly complex structural patterns.
+* **Package & Environment Management:** - Use **Bun** exclusively as the JavaScript runtime and package manager for the frontend environment.
+* Use **uv** exclusively as the Python environment manager and package manager for the backend environment.
 
-- `docker compose up --build`: start the full stack through Nginx on port 80.
-- `cd backend && make up-ba`: start backend, PostgreSQL, and Mailpit.
-- `cd backend && uv run uvicorn main:app --reload`: run the API locally on port 8000.
-- `cd backend && uv run pytest tests/ -q`: run backend tests.
-- `cd backend && make format` / `make lint-fix`: format or auto-fix Python with Ruff.
-- `cd frontend && bun run dev`: run Vite locally.
-- `cd frontend && bun run build`: type-check and build the frontend.
-- `cd frontend && bun run lint`: run ESLint.
 
-## Coding Style & Naming Conventions
 
-Python targets 3.14 and uses Ruff with 100-character lines, double quotes, import sorting, and modern Python rules. Keep FastAPI route modules focused by feature, and place shared business rules in `backend/src/services/`. Use snake_case for Python modules, functions, and test helpers.
+## 2. Build, Lint, and Test Commands
 
-Frontend code uses TypeScript, React, Tailwind CSS, and ESLint. Name React components and pages in PascalCase, for example `DashboardPage.tsx`; use lower camelCase for hooks and helpers.
+The application can run in an integrated stack or inside isolated, decoupled frontend and backend workspaces.
 
-## Testing Guidelines
+### 2.1 Combined Integrated Environment (Docker Compose)
 
-Backend tests use pytest and pytest-asyncio. Add tests in `backend/tests/` named `test_<feature>.py`, and reuse fixtures from `tests/conftest.py`. Integration flows expect PostgreSQL and Mailpit. Frontend test infrastructure is not currently defined; validate frontend changes with `bun run lint` and `bun run build`.
+When testing full end-to-end integration, the environment sits behind an NGINX reverse proxy on port 80.
 
-## Commit & Pull Request Guidelines
+```bash
+# Spin up the entire system from the repository root
+docker compose up --build
 
-Recent history uses Conventional Commit-style messages such as `feat:`, `fix(frontend):`, `fix(CI):`, `refactor(structure):`, and `docs:`. Keep commits scoped and imperative. Pull requests should include a short description, linked issue or task, test commands run, and screenshots for visible UI changes.
+```
 
-## Security & Configuration Tips
+* **Integrated Application Landing:** `http://localhost`
+* **Interactive OpenAPI Documents:** `http://localhost/docs`
+* **Backend Framework Endpoint Routing:** Managed internally through `http://localhost/api`
 
-Never commit `.env` files, secrets, JWTs, verification codes, passwords, PINs, or hashes. Backend local setup starts from `backend/.env.example`; generate a strong `SECRET_KEY`. During local auth testing, read email codes from Mailpit at `http://localhost:8025`.
+### 2.2 Frontend Workspace (React + Vite + Bun)
+
+Located inside the `frontend/` directory. Focuses on UI orchestration and client state.
+
+```bash
+cd frontend/
+
+# Containerized execution
+docker compose up -d --build       # Starts isolated frontend container (Vite binds to port 3000)
+
+# Local Development Commands
+bun install                        # Install dependencies using Bun
+bun run dev                        # Start local Vite development server with HMR
+bun x bun linter                   # Execute Bun's internal native linter
+bun run test                       # Run frontend component unit tests via Jest
+
+```
+
+### 2.3 Backend Workspace (FastAPI + uv)
+
+Located inside the `earnit-backend/` directory. Focuses on business logic and persistence layers.
+
+```bash
+cd earnit-backend/
+
+# Containerized execution
+docker compose up -d --build       # Starts isolated backend container (FastAPI at 8000, PostgreSQL at 5432)
+
+# Local Development Commands
+uv sync                            # Lock and synchronize Python virtual environment dependencies
+uv run ruff check --fix            # Run Ruff linter with auto-fixing capabilities
+uv run ruff format                 # Format backend source files strictly via Ruff
+uv run pytest                      # Execute backend unit and integration test sweeps
+
+```
+
+## 3. Project Structure
+
+```
+.
+├── docker-compose.yml          # Top-level integration manifest for local environments
+├── nginx/                      # Gateway configuration layer mapping routes on Port 80
+│
+├── frontend/                   # Frontend client environment (React + Vite + Bun)
+│   ├── src/
+│   │   ├── components/         # Reusable presentation and layout elements
+│   │   │   └── ui/             # Radix primitives managed via shadcn/ui and Tailwind
+│   │   ├── hooks/              # Custom UI hooks mapping layout or browser lifecycle behavior
+│   │   ├── store/              # Zustand slices for light client state (Sidebar, profile toggles)
+│   │   ├── queries/            # TanStack Query infrastructure fetching and caching server data
+│   │   ├── types/              # TypeScript declarations (Autogenerated from OpenAPI specs)
+│   │   ├── App.tsx             # Application routing mapping root layout nodes
+│   │   └── main.tsx            # Vite client framework execution anchor
+│   ├── package.json            # Bun execution manifests
+│   └── bun.lockb               # Bun binary strict dependency map
+│
+└── earnit-backend/             # Asynchronous Core backend environment (FastAPI + SQLModel + uv)
+    ├── app/
+    │   ├── api/                # Domain-segmented router layers (e.g., v1/auth, tasks)
+    │   ├── core/               # Shared settings, security configuration, JWT algorithms
+    │   ├── models/             # Merged SQLModel database records (Pydantic schemas + SQLAlchemy entities)
+    │   └── main.py             # FastAPI entry point initializing application configurations
+    ├── migrations/             # Database structural evolutions managed via Alembic
+    ├── postgres/
+    │   └── init.sql            # Seed scripts executing database constraints and mock developer data
+    ├── pyproject.toml          # Centralized uv tool specifications, test settings, and Ruff definitions
+    └── uv.lock                 # Strict uv tracking dependency log
+
+```
+
+## 4. API Communication & State Management
+
+* **Contract-First Development:** The interaction between the React frontend and FastAPI backend must strictly follow the schema contracts exposed by the backend at `/docs`.
+* **No Manual Typing for Contracts:** Frontend types mapping backend parameters or entity structures must never be written manually. Use `openapi-typescript` or equivalent code generation to pull definitions directly from the backend API.
+* **Data Fetching vs Global UI State:**
+* **Server State:** Use **TanStack Query (React Query)** exclusively to manage remote asynchronous transactions, local caching, refetch sequences, and mutations.
+* **Global UI State:** Use **Zustand** exclusively for lightweight client-side interactions (e.g., toggling the Child Profile balance view mode, controlling sidebar expansions, tracking active dark mode states).
+
+
+
+```typescript
+// Example Pattern: Separation of remote async logic using TanStack Query hooks
+import { useQuery } from "@tanstack/react-query";
+import { apiFetchClient } from "@/queries/client";
+import { paths } from "@/types/api"; // Generated directly from FastAPI spec
+
+type AvailableTasksList = paths["/api/v1/tasks"]["get"]["responses"]["200"]["content"]["application/json"];
+
+export function useFetchAvailableTasks() {
+  return useQuery({
+    queryKey: ["tasks", "list"],
+    queryFn: async (): Promise<AvailableTasksList> => {
+      const response = await apiFetchClient.get("/api/v1/tasks");
+      return response.data;
+    },
+  });
+}
+
+```
+
+## 5. Coding & Language Rules
+
+### 5.1 Project Layout and Format Layer (`.editorconfig`)
+
+Consistent file formats are enforced directly via the editor on file write operations:
+
+* **Python Source Files:** 4 spaces indentation.
+* **TypeScript, TSX, JS, JSON Files:** 2 spaces indentation.
+* **Line Feed Formatting:** Explicitly enforce **LF** endings across all platforms.
+
+### 5.2 Local Pre-Commit Validations
+
+Local git verification runs checks automatically ahead of finalizing commits:
+
+* **Backend Workspace:** Automated checks running **Ruff linter** and **Ruff formatter** execution rules.
+* **Frontend Workspace:** Automated checks executing **Bun linter** formatting evaluations.
+
+### 5.3 Technical Invariants
+
+* **TypeScript Strict Mode:** `"strict": true` is enforced. The use of `any` is forbidden. All functional components, hook variables, and helper outputs must provide explicit type data.
+* **Python Modernity (3.14+):** Leverage modern language definitions, optimized text structures, and explicit typing notation. All database connections and controllers must execute via `async`/`await` patterns to guarantee non-blocking asynchronous execution.
+
+## 6. Testing Guidelines
+
+* **Frontend Environment:** Utilize **Jest** combined with React Testing Library to write functional specs for core UI components and balance state switches.
+* **Backend Environment:** Utilize **Pytest** alongside FastAPI's `TestClient` to construct integration specs validation workflows, task state transitions, and router rules.
+* **Isolation Boundaries:** Mock third-party dependencies, network layer thresholds, and isolated file management pipelines to keep local automated sweeps decoupled and stable.
+
+## 7. Core Business & Security Realizations
+
+* **Stateless Session Management:** Parent authentication must utilize stateless **JWT (JSON Web Tokens)** managed by the backend engine.
+* **Cookie Security Measures:** Passwords and authentications must be persisted client-side within **secure, HTTP-Only cookies** to prevent cross-site scripting (XSS) compromise avenues.
+* **Parental Boundary Enforcement:** Access to parent administrative tools from a child view mode requires typing a Parent PIN code.
+* Parent PIN structures must never be stored in plaintext. They must be securely salted and hashed within PostgreSQL.
+* The security validation interface must check signatures asynchronously against the backend at `/api/v1/auth/verify-pin` utilizing robust libraries like `passlib` configured with `bcrypt` or `argon2-cffi`.
+
+
+
+## 8. Interface and Visual Token Specifications
+
+* **Atomic Styles Layer:** Leverage **Tailwind CSS** configurations exclusively. Hardcoded, inline `style={...}` configurations inside React structures are forbidden.
+* **Component Primitives:** Use layout structures derived from **shadcn/ui** frameworks (underpinned by accessible Radix UI parts). Implement support for CSS theme tokens to guarantee consistent behavior across light and dark mode targets.
+
+## 9. Naming Conventions
+
+| Language Layer | Code Architecture Element | Case Protocol | Concrete Pattern Sample |
+| --- | --- | --- | --- |
+| **Frontend (TSX/TS)** | Functional UI Component Files | PascalCase | `TaskApprovalCard.tsx` |
+|  | Shared Logic / Custom Utilities | camelCase | `calculatePuzzlePercentage.ts` |
+|  | Variables, Hooks, and Constants | camelCase | `useActiveChild`, `selectedProfileId` |
+|  | Interface Types and Layout Specs | PascalCase | `ChildProfileModel`, `TaskProps` |
+| **Backend (Python)** | Module Scripts and Route Files | snake_case | `verify_pin.py`, `task_router.py` |
+|  | Database Schema Specifications | PascalCase | `UserAccount`, `ExtraTask`, `ChildProfile` |
+|  | Core Functions and Field Records | snake_case | `compute_streak_bonus()`, `reward_value` |
+| **Database (SQL)** | Tables and Operational Indexes | snake_case | `child_profile`, `task_completion_proof` |
+| **Universal Configurations** | Environment Flags / Absolute Targets | SCREAMING_SNAKE | `JWT_SECRET_KEY`, `MAX_PIN_ATTEMPTS` |
+
+## 10. Error Handling Protocols
+
+* **Backend Architecture:** Gracefully intercept process issues at runtime, converting exceptions into explicit and cleanly mapped JSON records using standard FastAPI `HTTPException` payloads (e.g., `{ "detail": "The specified PIN length must be exactly 4 digits." }`). Avoid letting open stack traces leak to the client side.
+* **Frontend Architecture:** Guard user interactions by enclosing unpredictable actions or mutations in local `try/catch` handlers or encapsulating rendering nodes within React Error Boundary components.
+
+## 11. Git Commit Strategy
+
+Follow an explicit **`type(scope): message`** syntax format structure:
+
+* `feat` - Implementation of an application element (e.g., introducing a batch approval flow).
+* `fix` - Resolution of a reported product defect (e.g., fixing an incremental lapse on a streak calculator).
+* `docs` - Enhancements to repository definitions, markdown files, or inline documentation blocks.
+* `style` - Code structural formatting, white spaces, or design variables that leave execution logic untouched.
+* `refactor` - Code restructuring that optimizes inner execution architecture without changing outward operational behavior.
+* `test` - Delivery of missing Pytest validation modules, Jest test suites, or testing state mocks.
+* `chore` - General workspace housecleaning, locking dependencies, or modifying local `.gitignore` declarations.
+
+**Sample Context Commits:**
+
+```
+feat(auth): develop secure parent dashboard switch pin validation route
+fix(tasks): correct child account coin increment logic during batch approval routines
+test(backend): deploy integration test suites verifying task expiration loops
+
+```
+
+## 12. Environment Variable Segregation
+
+* Store all configuration properties and security passwords inside local, non-tracked variables within a `.env` file configuration structure.
+* Never commit active developer `.env` files into public source streams. Maintain an up-to-date `example.env` structural overview file featuring dummy property entries to simplify developer onboarding setup flows.
+
+## 13. Data Modeling and Persistence Frameworks (SQLModel)
+
+* **Unified Schema Strategy:** Implement data layer schemas using **SQLModel** architectures, combining Pydantic-based payload structures and SQLAlchemy persistent configurations into unified source blueprints.
+* **Structural Database Timelines:** Manage database evolution tracks systematically using **Alembic** migration definitions.
+* **Orchestration Order Dependencies:** The FastAPI web container relies on absolute readiness checks within Docker Compose. The server initialization blocks its boot cycle until **PostgreSQL 17** answers native `pg_isready` execution triggers to avoid connection dropout states.
+* **Seeding Developer Environments:** Initial developer test databases must mount files from `postgres/init.sql` straight into `/docker-entrypoint-initdb.d/` targets on volume creation to instantly prepare mock profile structures and functional tasks.
+
+### Core MVP Entity Business Logic Invariants
+
+Ensure all ongoing development tasks align perfectly with the core MVP domain boundaries:
+
+* **Task Separation Rule:** Keep standard household **Duties** (unpaid, habit-forming structures like cleaning up shoes) distinctly isolated from **Extra Tasks** (optional activities that generate explicit parent-funded financial credit balances upon execution).
+* **Task Loop State Attributes:** Every task item requires strict fields: title, description, reward value context (€), task expiration constraints, type flag, batch approval capabilities, and child photo evidence anchors.
+* **Gamified Core Systems:** Child interface account balances map cleanly to a **Puzzle Reveal** canvas element (uncovering chunks of a desired reward target image in increments of 10%) and an integrated **Balance Toggle** switch capable of converting numeric monetary metrics into concrete real-world values (e.g., mapping `€6.00` into `= 3 Ice Creams`).
