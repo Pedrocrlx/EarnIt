@@ -27,11 +27,6 @@ _maintenance_task: asyncio.Task | None = None
 logger = logging.getLogger(__name__)
 
 
-def _is_expired(task: Task, now: datetime) -> bool:
-    """True once the deadline has passed. A task with no deadline never expires."""
-    return task.expires_at is not None and task.expires_at <= now
-
-
 async def submit_task(
     task_id: UUID, child_id: UUID, user: User, session: AsyncSession
 ) -> TaskSubmission:
@@ -50,7 +45,7 @@ async def submit_task(
     await get_child_or_404(child_id, user, session)
 
     now = datetime.now(UTC)
-    if _is_expired(task, now):
+    if task.expires_at is not None and task.expires_at <= now:
         raise HTTPException(status_code=410, detail="Task has expired")
 
     if task.task_type == "duty":
@@ -112,7 +107,7 @@ async def resubmit_task(
     # Expiry dominates: once the task is past its deadline the child can no longer
     # patch a submission, regardless of its status. The parent may still review it.
     task = await session.get(Task, submission.task_id)
-    if task and _is_expired(task, now):
+    if task and task.expires_at is not None and task.expires_at <= now:
         raise HTTPException(status_code=410, detail="Task has expired")
     if submission.status != "rejected":
         raise HTTPException(

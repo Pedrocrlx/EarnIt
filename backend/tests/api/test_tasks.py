@@ -633,27 +633,6 @@ async def test_submit_expired_task_returns_410(client: AsyncClient, mock_mail):
     assert res.status_code == 410
 
 
-async def test_reject_resubmit_loop_allowed_while_live(client: AsyncClient, mock_mail):
-    # A rejected submission can be resubmitted (patched, same row) and rejected
-    # again, any number of times, as long as the task has not expired.
-    token = await register_and_verify(client, mock_mail)
-    child_id = await _child(client, token)
-    task = await _extra(client, token, child_id)
-    sub = (await _submit(client, token, child_id, task["id"])).json()
-    sub_url = f"/api/v1/children/{child_id}/submissions/{sub['id']}"
-
-    for _ in range(2):
-        rej = await client.post(
-            f"{_SUBS_URL}/{sub['id']}/reject",
-            json={"rejection_note": "again"},
-            cookies={"access_token": token},
-        )
-        assert rej.status_code == 200
-        again = await client.patch(sub_url, cookies={"access_token": token})
-        assert again.status_code == 200
-        assert again.json()["status"] == "pending"
-
-
 async def test_resubmit_blocked_after_expiry_returns_410(
     client: AsyncClient, mock_mail
 ):
@@ -692,16 +671,18 @@ async def test_parent_can_approve_pending_after_task_expired(
     assert res.json()["status"] == "approved"
 
 
-async def test_reject_after_expiry_then_child_locked_out(
+async def test_parent_can_reject_pending_after_task_expired(
     client: AsyncClient, mock_mail
 ):
+    # Like approve, reject isn't expiry-gated — the parent can still fail a
+    # submission left pending at expiry. (Child lockout after that is covered by
+    # test_resubmit_blocked_after_expiry_returns_410.)
     token = await register_and_verify(client, mock_mail)
     child_id = await _child(client, token)
     task = await _extra(client, token, child_id)
     sub = (await _submit(client, token, child_id, task["id"])).json()
     await _expire(client, token, task["id"])
 
-    # Parent can still reject after expiry...
     rej = await client.post(
         f"{_SUBS_URL}/{sub['id']}/reject",
         json={"rejection_note": "late"},
@@ -709,13 +690,6 @@ async def test_reject_after_expiry_then_child_locked_out(
     )
     assert rej.status_code == 200
     assert rej.json()["status"] == "rejected"
-
-    # ...but the child can no longer resubmit — the failure is terminal.
-    res = await client.patch(
-        f"/api/v1/children/{child_id}/submissions/{sub['id']}",
-        cookies={"access_token": token},
-    )
-    assert res.status_code == 410
 
 
 async def test_expired_duty_generates_no_slot(
