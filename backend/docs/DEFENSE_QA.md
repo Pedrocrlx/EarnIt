@@ -2266,7 +2266,34 @@ same `axllent/mailpit` image and ports — there's no shared file between them.
 
 ---
 
-*This document covers Epic 1 (Authentication & Profiles) as implemented at the
-time of writing. As later epics (tasks, gamification, goals) are built, the
-same "why" questions should be asked of those decisions too — this is a living
-defense-prep document, not a one-time artifact.*
+## 23. Task Lifecycle & Expiry
+
+**Q244. Walk through the submission state machine — when does a submission actually "end"?**
+A child submits → `pending`. The parent reviews → `approved` (success, terminal)
+or `rejected`. **Rejection is not terminal on its own**: while the task is still
+live, the child can resubmit — which *patches the same submission row* back to
+`pending` (never creates a new row, see `resubmit_task`) — and be rejected again,
+any number of times. A submission resolves only when it's **approved**, or when
+the **task expires without an approval** (failure). There is deliberately **no
+separate `failed`/`expired` status**: the outcome is derivable from `status` +
+the task's `expires_at` (rejected + expired = failed; pending + expired = still
+awaiting the parent's final call), so there's no extra column to keep consistent.
+
+**Q245. Why does `expires_at` block the child but not the parent?**
+Once a task is past `expires_at`, `submit_task` and `resubmit_task` return **410
+Gone** — the child can no longer start or retry an attempt. But `approve_submission`
+/ `reject_submission` are intentionally *not* expiry-gated, so a submission left
+`pending` stays reviewable indefinitely: the parent may still approve (success) or
+reject (failure) it. This mirrors the real intent — "the deadline stops new
+attempts, but I can still grade what was already turned in." `generate_daily_duty_slots`
+also skips expired duties, so no new daily slots appear after a duty's deadline.
+410 (vs the 409 used for state conflicts like "already approved") is consistent
+with the auth flow's expired-window responses: 410 = the window is gone; 409 =
+wrong state but still actionable.
+
+---
+
+*This document covers Epic 1 (Authentication & Profiles) plus the task lifecycle
+as implemented at the time of writing. As later epics (gamification, goals) are
+built, the same "why" questions should be asked of those decisions too — this is
+a living defense-prep document, not a one-time artifact.*

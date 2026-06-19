@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from httpx import AsyncClient
@@ -62,6 +63,17 @@ async def _submit(client: AsyncClient, token: str, child_id: str, task_id: str) 
         cookies={"access_token": token},
     )
     return res
+
+
+async def _expire(client: AsyncClient, token: str, task_id: str) -> None:
+    """PATCH the task's expires_at into the past so it counts as expired."""
+    past = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    res = await client.patch(
+        f"{_TASKS_URL}/{task_id}",
+        json={"expires_at": past},
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 200
 
 
 # CRUD
@@ -603,6 +615,116 @@ async def test_inactive_duty_gets_no_slot(
     child_id = await _child(client, token)
     task = await _duty(client, token, child_id)
     await client.delete(f"{_TASKS_URL}/{task['id']}", cookies={"access_token": token})
+
+    count = await generate_daily_duty_slots(db_session)
+    assert count == 0
+
+
+# expiry
+
+
+async def test_submit_expired_task_returns_410(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+    await _expire(client, token, task["id"])
+
+    res = await _submit(client, token, child_id, task["id"])
+    assert res.status_code == 410
+
+
+async def test_reject_resubmit_loop_allowed_while_live(client: AsyncClient, mock_mail):
+    # A rejected submission can be resubmitted (patched, same row) and rejected
+    # again, any number of times, as long as the task has not expired.
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+    sub = (await _submit(client, token, child_id, task["id"])).json()
+    sub_url = f"/api/v1/children/{child_id}/submissions/{sub['id']}"
+
+    for _ in range(2):
+        rej = await client.post(
+            f"{_SUBS_URL}/{sub['id']}/reject",
+            json={"rejection_note": "again"},
+            cookies={"access_token": token},
+        )
+        assert rej.status_code == 200
+        again = await client.patch(sub_url, cookies={"access_token": token})
+        assert again.status_code == 200
+        assert again.json()["status"] == "pending"
+
+
+async def test_resubmit_blocked_after_expiry_returns_410(
+    client: AsyncClient, mock_mail
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+    sub = (await _submit(client, token, child_id, task["id"])).json()
+    await client.post(
+        f"{_SUBS_URL}/{sub['id']}/reject",
+        json={"rejection_note": "no"},
+        cookies={"access_token": token},
+    )
+    await _expire(client, token, task["id"])
+
+    res = await client.patch(
+        f"/api/v1/children/{child_id}/submissions/{sub['id']}",
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 410
+
+
+async def test_parent_can_approve_pending_after_task_expired(
+    client: AsyncClient, mock_mail
+):
+    # Expiry blocks the child, not the parent: a pending submission stays reviewable.
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id, reward="3.00")
+    sub = (await _submit(client, token, child_id, task["id"])).json()
+    await _expire(client, token, task["id"])
+
+    res = await client.post(
+        f"{_SUBS_URL}/{sub['id']}/approve", cookies={"access_token": token}
+    )
+    assert res.status_code == 200
+    assert res.json()["status"] == "approved"
+
+
+async def test_reject_after_expiry_then_child_locked_out(
+    client: AsyncClient, mock_mail
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+    sub = (await _submit(client, token, child_id, task["id"])).json()
+    await _expire(client, token, task["id"])
+
+    # Parent can still reject after expiry...
+    rej = await client.post(
+        f"{_SUBS_URL}/{sub['id']}/reject",
+        json={"rejection_note": "late"},
+        cookies={"access_token": token},
+    )
+    assert rej.status_code == 200
+    assert rej.json()["status"] == "rejected"
+
+    # ...but the child can no longer resubmit — the failure is terminal.
+    res = await client.patch(
+        f"/api/v1/children/{child_id}/submissions/{sub['id']}",
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 410
+
+
+async def test_expired_duty_generates_no_slot(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _duty(client, token, child_id)
+    await _expire(client, token, task["id"])
 
     count = await generate_daily_duty_slots(db_session)
     assert count == 0

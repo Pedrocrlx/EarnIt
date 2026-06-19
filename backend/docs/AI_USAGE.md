@@ -18,6 +18,17 @@ team reviewed each suggestion and decided what to cut, keeping the suite green.
   (api / services / models / schemas) and talking through the trickier designs
   before writing them — for example how unverified ("limbo") accounts get
   cleaned up, which we settled on as a daily purge sweep over a `users` query.
+- **Spec-driven development for complex features.** For the harder
+  implementations we wrote the spec first — pinning down the exact behaviour and
+  edge cases before any code — and only then implemented (and tested) against it.
+  The clearest example is the task-expiry lifecycle: we agreed the rules upfront
+  (a duty produces a fresh per-day submission; expiry blocks the child's
+  submit/resubmit but not the parent's review; a rejection is only terminal once
+  the task expires; no separate "failed" status) and then wrote the code and
+  tests to match. That spec is written up in
+  [DEFENSE_QA.md](DEFENSE_QA.md) §23 (Task Lifecycle & Expiry). The spec was the
+  team's decision; the assistant helped shape it and turn it into the
+  implementation.
 - **Spotting reuse.** A lot of the value was noticing where the same logic
   showed up in different places and writing it once instead of three times. The
   clearest case is the stateless verification-code engine: a single core reused

@@ -13,7 +13,7 @@ from datetime import UTC, datetime, time, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.database import AsyncSessionLocal
@@ -25,6 +25,11 @@ from src.services.tasks._shared import get_child_or_404, get_submission_or_404
 _maintenance_task: asyncio.Task | None = None
 
 logger = logging.getLogger(__name__)
+
+
+def _is_expired(task: Task, now: datetime) -> bool:
+    """True once the deadline has passed. A task with no deadline never expires."""
+    return task.expires_at is not None and task.expires_at <= now
 
 
 async def submit_task(
@@ -45,6 +50,8 @@ async def submit_task(
     await get_child_or_404(child_id, user, session)
 
     now = datetime.now(UTC)
+    if _is_expired(task, now):
+        raise HTTPException(status_code=410, detail="Task has expired")
 
     if task.task_type == "duty":
         result = await session.execute(
@@ -94,18 +101,25 @@ async def resubmit_task(
     """Reset a rejected submission back to pending for another review.
 
     Clears the rejection note and review timestamp and re-stamps
-    ``submitted_at``. Raises 409 unless the submission is currently rejected.
+    ``submitted_at``. Raises 410 if the task has expired (the retry window is
+    closed), or 409 unless the submission is currently rejected.
     """
     await get_child_or_404(child_id, user, session)
     submission = await session.get(TaskSubmission, submission_id)
     if submission is None or submission.child_id != child_id:
         raise HTTPException(status_code=404, detail="Submission not found")
+    now = datetime.now(UTC)
+    # Expiry dominates: once the task is past its deadline the child can no longer
+    # patch a submission, regardless of its status. The parent may still review it.
+    task = await session.get(Task, submission.task_id)
+    if task and _is_expired(task, now):
+        raise HTTPException(status_code=410, detail="Task has expired")
     if submission.status != "rejected":
         raise HTTPException(
             status_code=409, detail="Only rejected submissions can be resubmitted"
         )
     submission.status = "pending"
-    submission.submitted_at = datetime.now(UTC)
+    submission.submitted_at = now
     submission.rejection_note = None
     submission.reviewed_at = None
     await session.commit()
@@ -240,11 +254,16 @@ async def generate_daily_duty_slots(session: AsyncSession) -> int:
     Safe to call multiple times — the unique constraint on (task_id, scheduled_date)
     is the DB-level guard; the pre-check here avoids unnecessary writes.
     """
-    today = datetime.now(UTC).date()
+    now = datetime.now(UTC)
+    today = now.date()
     duties = (
         (
             await session.execute(
-                select(Task).where(Task.task_type == "duty", Task.is_active.is_(True))
+                select(Task).where(
+                    Task.task_type == "duty",
+                    Task.is_active.is_(True),
+                    or_(Task.expires_at.is_(None), Task.expires_at > now),
+                )
             )
         )
         .scalars()
