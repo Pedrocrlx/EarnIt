@@ -85,7 +85,7 @@ const LoginPage = () => {
     onSuccess: async () => {
       const profile = await login();
       navigate(
-        profile?.onboarding_completed ? "/dashboard" : "/onboarding/step1",
+        profile?.onboarding_completed ? "/profile" : "/onboarding/step1",
         { replace: true },
       );
     },

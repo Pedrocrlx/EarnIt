@@ -6,14 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/useAuth";
 import { apiFetch } from "@/lib/api";
+import {
+  PARENT_PROFILE_ID,
+  SELECTED_PROFILE_STORAGE_KEY,
+} from "@/lib/profile-selection";
 
 type PinVerificationResponse = {
   status: string;
   authenticated: boolean;
 };
-
-const PARENT_PROFILE_ID = "parent";
-const SELECTED_PROFILE_STORAGE_KEY = "earnit:selected-profile";
 const childAvatarFallbacks = [
   "/profile-selector/leo.jpg",
   "/profile-selector/maya.jpg",

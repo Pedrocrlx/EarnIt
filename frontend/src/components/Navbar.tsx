@@ -11,7 +11,13 @@ const navigationItems = [
   { name: "Como funciona", path: "/#how-it-works" },
 ];
 
-const hiddenNavbarPaths = ["/login", "/register", "/verification", "/profile"];
+const hiddenNavbarPaths = [
+  "/login",
+  "/register",
+  "/verification",
+  "/profile",
+  "/dashboard",
+];
 
 const primaryButtonStyle =
   "h-auto rounded-full bg-[#deec5a] px-4 py-2 text-xs font-bold leading-5 text-[#1a1d00] shadow-[0px_4px_0px_#5b630080] hover:bg-[#d7e652] sm:text-sm";
@@ -28,6 +34,7 @@ export const Navbar = () => {
 
   const shouldHideNavbar =
     hiddenNavbarPaths.includes(location.pathname) ||
+    location.pathname.startsWith("/dashboard/") ||
     location.pathname.startsWith("/onboarding");
 
   if (shouldHideNavbar) {
@@ -74,6 +81,13 @@ export const Navbar = () => {
                 className={cn(ghostButtonStyle)}
               >
                 Painel
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => navigate("/dashboard/profiles")}
+                className={cn(ghostButtonStyle)}
+              >
+                Perfis
               </Button>
               <Button
                 variant="default"
@@ -140,9 +154,16 @@ export const Navbar = () => {
                 <Button
                   variant="ghost"
                   onClick={() => navigateAndClose("/dashboard")}
-                className={cn(ghostButtonStyle, "w-full justify-center py-3")}
-              >
+                  className={cn(ghostButtonStyle, "w-full justify-center py-3")}
+                >
                   Painel
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => navigateAndClose("/dashboard/profiles")}
+                  className={cn(ghostButtonStyle, "w-full justify-center py-3")}
+                >
+                  Perfis
                 </Button>
                 <Button
                   variant="default"

@@ -1,23 +1,27 @@
 import {
-  CalendarDays,
-  CheckCircle2,
   ChevronRight,
-  LockKeyhole,
-  ShieldCheck,
   UsersRound,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/useAuth";
+import { selectedProfileIsParent } from "@/lib/profile-selection";
+import ChildDashboard from "@/pages/ChildDashboard";
 
 const DashboardPage = () => {
   const { familyProfile } = useAuth();
+  if (!selectedProfileIsParent()) {
+    return <ChildDashboard />;
+  }
+
   const familyName = familyProfile?.family_name?.trim() || "Família";
   const children = familyProfile?.children ?? [];
   const activeChildren = children.filter((child) => child.is_active);
 
   return (
-    <main className="min-h-screen bg-[#f8f9fb] px-4 py-6 text-[#191c1e] sm:px-6 lg:px-10">
+    <DashboardShell>
+      <main className="min-h-screen bg-[#f8f9fb] px-4 py-6 text-[#191c1e] sm:px-6 lg:px-10">
       <section className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <header className="flex flex-col gap-4 rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_8px_20px_-16px_rgba(3,78,34,0.35)] sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div>
@@ -43,57 +47,6 @@ const DashboardPage = () => {
             </Link>
           </Button>
         </header>
-
-        <section className="grid gap-4 md:grid-cols-3">
-          <article className="rounded-lg border border-[#e1e2e4] bg-white p-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold text-[#404940]">
-                  Crianças ativas
-                </p>
-                <p className="mt-2 text-3xl font-bold text-[#003514]">
-                  {activeChildren.length}
-                </p>
-              </div>
-              <span className="flex size-11 items-center justify-center rounded-full bg-[#e6f0ff] text-[#1d4ed8]">
-                <UsersRound className="size-5" aria-hidden="true" />
-              </span>
-            </div>
-          </article>
-
-          <article className="rounded-lg border border-[#e1e2e4] bg-white p-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold text-[#404940]">
-                  Estado da configuração
-                </p>
-                <p className="mt-2 text-lg font-bold text-[#003514]">
-                  Concluída
-                </p>
-              </div>
-              <span className="flex size-11 items-center justify-center rounded-full bg-[#eef7d1] text-[#5f6800]">
-                <CheckCircle2 className="size-5" aria-hidden="true" />
-              </span>
-            </div>
-          </article>
-
-          <article className="rounded-lg border border-[#e1e2e4] bg-white p-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold text-[#404940]">
-                  Área parental
-                </p>
-                <p className="mt-2 text-lg font-bold text-[#003514]">
-                  Protegida por PIN
-                </p>
-              </div>
-              <span className="flex size-11 items-center justify-center rounded-full bg-[#fff4de] text-[#9a5b00]">
-                <LockKeyhole className="size-5" aria-hidden="true" />
-              </span>
-            </div>
-          </article>
-        </section>
-
         <section className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <div className="rounded-lg border border-[#e1e2e4] bg-white p-5 sm:p-6">
             <div className="flex items-center justify-between gap-4">
@@ -142,35 +95,10 @@ const DashboardPage = () => {
               )}
             </div>
           </div>
-
-          <aside className="flex flex-col gap-4">
-            <section className="rounded-lg border border-[#e1e2e4] bg-white p-5">
-              <div className="flex items-center gap-3">
-                <span className="flex size-10 items-center justify-center rounded-full bg-[#eef7d1] text-[#5f6800]">
-                  <ShieldCheck className="size-5" aria-hidden="true" />
-                </span>
-                <div>
-                  <h2 className="font-bold text-[#003514]">Controlos parentais</h2>
-                  <p className="text-sm text-[#404940]">Prontos para acesso protegido.</p>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-lg border border-[#e1e2e4] bg-white p-5">
-              <div className="flex items-center gap-3">
-                <span className="flex size-10 items-center justify-center rounded-full bg-[#e6f0ff] text-[#1d4ed8]">
-                  <CalendarDays className="size-5" aria-hidden="true" />
-                </span>
-                <div>
-                  <h2 className="font-bold text-[#003514]">Próxima sessão</h2>
-                  <p className="text-sm text-[#404940]">Escolha um perfil para continuar.</p>
-                </div>
-              </div>
-            </section>
-          </aside>
         </section>
       </section>
-    </main>
+      </main>
+    </DashboardShell>
   );
 };
 

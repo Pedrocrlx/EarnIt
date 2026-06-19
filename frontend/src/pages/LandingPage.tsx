@@ -166,7 +166,7 @@ export const LandingPage = () => {
             ))}
           </nav>
           <p className="text-center text-xs font-semibold leading-5 text-[#404940]">
-            © 2024 EarnIt Family. Todos os direitos reservados.
+            © 2026 EarnIt Family. Todos os direitos reservados.
           </p>
         </div>
       </footer>
