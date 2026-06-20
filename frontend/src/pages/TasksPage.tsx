@@ -13,35 +13,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/useAuth";
-import { apiFetch } from "@/lib/api";
-
-type TaskType = "duty" | "extra_task";
-type SubmissionStatus = "pending" | "approved" | "rejected" | string;
-
-type TaskResponse = {
-  child_id: string;
-  created_at: string;
-  description: string | null;
-  expires_at: string | null;
-  id: string;
-  is_active: boolean;
-  reward_amount: string;
-  task_type: TaskType | string;
-  title: string;
-  updated_at: string;
-  user_id: string;
-};
-
-type SubmissionResponse = {
-  child_id: string;
-  id: string;
-  rejection_note: string | null;
-  reviewed_at: string | null;
-  scheduled_date: string | null;
-  status: SubmissionStatus;
-  submitted_at: string | null;
-  task_id: string;
-};
+import {
+  approveAllSubmissions,
+  approveSubmission as approveTaskSubmission,
+  createTask as createTaskRequest,
+  deleteTask as deleteTaskRequest,
+  getSubmissionPhotoUrl,
+  listSubmissions,
+  listTasks,
+  rejectSubmission as rejectTaskSubmission,
+  updateTask as updateTaskRequest,
+} from "@/services/taskService";
+import type { SubmissionResponse, TaskResponse, TaskType } from "@/services/types";
 
 type CreateTaskForm = {
   childId: string;
@@ -86,6 +69,7 @@ const TasksPage = () => {
   const [submissions, setSubmissions] = useState<SubmissionResponse[]>([]);
   const [taskForm, setTaskForm] = useState<CreateTaskForm>(initialTaskForm);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingChildId, setEditingChildId] = useState("");
   const [editingTitle, setEditingTitle] = useState("");
   const [editingDescription, setEditingDescription] = useState("");
   const [rejectingSubmissionId, setRejectingSubmissionId] = useState<string | null>(null);
@@ -107,6 +91,7 @@ const TasksPage = () => {
   const pendingSubmissions = submissions.filter(
     (submission) => submission.status === "pending" && submission.submitted_at,
   );
+  const selectedCreateChildId = taskForm.childId || children[0]?.id || "";
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -114,8 +99,8 @@ const TasksPage = () => {
 
     try {
       const [nextTasks, nextSubmissions] = await Promise.all([
-        apiFetch<TaskResponse[]>("/tasks"),
-        apiFetch<SubmissionResponse[]>("/tasks/submissions"),
+        listTasks(),
+        listSubmissions(),
       ]);
       setTasks(nextTasks);
       setSubmissions(nextSubmissions);
@@ -131,19 +116,15 @@ const TasksPage = () => {
   }, []);
 
   useEffect(() => {
+    // Synchronizes async server state with this page's local task review UI.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadTasks();
   }, [loadTasks]);
-
-  useEffect(() => {
-    if (!taskForm.childId && children[0]) {
-      setTaskForm((currentForm) => ({ ...currentForm, childId: children[0].id }));
-    }
-  }, [children, taskForm.childId]);
 
   const createTask = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const title = taskForm.title.trim();
-    if (!title || !taskForm.childId) {
+    if (!title || !selectedCreateChildId) {
       setErrorMessage("Escolha a criança e indique o título da tarefa.");
       setSuccessMessage("");
       return;
@@ -154,20 +135,17 @@ const TasksPage = () => {
     setSuccessMessage("");
 
     try {
-      await apiFetch("/tasks", {
-        method: "POST",
-        body: JSON.stringify({
-          child_id: taskForm.childId,
-          title,
-          description: taskForm.description.trim() || null,
-          task_type: taskForm.taskType,
-          reward_amount: taskForm.taskType === "duty" ? "0.00" : taskForm.rewardAmount,
-          expires_at: toDateTimePayload(taskForm.expiresAt),
-        }),
+      await createTaskRequest({
+        child_id: selectedCreateChildId,
+        title,
+        description: taskForm.description.trim() || null,
+        task_type: taskForm.taskType,
+        reward_amount: taskForm.taskType === "duty" ? "0.00" : taskForm.rewardAmount,
+        expires_at: toDateTimePayload(taskForm.expiresAt),
       });
       setTaskForm((currentForm) => ({
         ...initialTaskForm,
-        childId: currentForm.childId,
+        childId: currentForm.childId || selectedCreateChildId,
       }));
       await loadTasks();
       setSuccessMessage("Tarefa criada.");
@@ -182,6 +160,7 @@ const TasksPage = () => {
 
   const startEditTask = (task: TaskResponse) => {
     setEditingTaskId(task.id);
+    setEditingChildId(task.child_id);
     setEditingTitle(task.title);
     setEditingDescription(task.description ?? "");
     setErrorMessage("");
@@ -190,8 +169,8 @@ const TasksPage = () => {
 
   const updateTask = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!editingTaskId || !editingTitle.trim()) {
-      setErrorMessage("Indique o título da tarefa.");
+    if (!editingTaskId || !editingTitle.trim() || !editingChildId) {
+      setErrorMessage("Escolha a criança e indique o título da tarefa.");
       return;
     }
 
@@ -200,12 +179,10 @@ const TasksPage = () => {
     setSuccessMessage("");
 
     try {
-      await apiFetch(`/tasks/${editingTaskId}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          title: editingTitle.trim(),
-          description: editingDescription.trim() || null,
-        }),
+      await updateTaskRequest(editingTaskId, {
+        child_id: editingChildId,
+        title: editingTitle.trim(),
+        description: editingDescription.trim() || null,
       });
       setEditingTaskId(null);
       await loadTasks();
@@ -227,7 +204,7 @@ const TasksPage = () => {
     setSuccessMessage("");
 
     try {
-      await apiFetch(`/tasks/${taskId}`, { method: "DELETE" });
+      await deleteTaskRequest(taskId);
       await loadTasks();
       setSuccessMessage("Tarefa desativada.");
     } catch (caughtError) {
@@ -247,7 +224,7 @@ const TasksPage = () => {
     setSuccessMessage("");
 
     try {
-      await apiFetch(`/tasks/submissions/${submissionId}/approve`, { method: "POST" });
+      await approveTaskSubmission(submissionId);
       await loadTasks();
       setSuccessMessage("Submissão aprovada.");
     } catch (caughtError) {
@@ -272,10 +249,7 @@ const TasksPage = () => {
     setSuccessMessage("");
 
     try {
-      await apiFetch(`/tasks/submissions/${rejectingSubmissionId}/reject`, {
-        method: "POST",
-        body: JSON.stringify({ rejection_note: rejectionNote.trim() || null }),
-      });
+      await rejectTaskSubmission(rejectingSubmissionId, rejectionNote.trim() || null);
       setRejectingSubmissionId(null);
       setRejectionNote("");
       await loadTasks();
@@ -297,10 +271,7 @@ const TasksPage = () => {
     setSuccessMessage("");
 
     try {
-      const response = await apiFetch<{ approved: number }>("/tasks/submissions/approve-all", {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
+      const response = await approveAllSubmissions();
       await loadTasks();
       setSuccessMessage(`${response.approved} submissões aprovadas.`);
     } catch (caughtError) {
@@ -381,7 +352,7 @@ const TasksPage = () => {
                   <Label htmlFor="task-child" className="text-[#404940]">Criança</Label>
                   <select
                     id="task-child"
-                    value={taskForm.childId}
+                    value={selectedCreateChildId}
                     onChange={(event) =>
                       setTaskForm((currentForm) => ({
                         ...currentForm,
@@ -415,7 +386,7 @@ const TasksPage = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="task-description" className="text-[#404940]">Descrição</Label>
+                  <Label htmlFor="task-description" className="text-[#404940]">Descrição (opcional)</Label>
                   <Input
                     id="task-description"
                     value={taskForm.description}
@@ -538,6 +509,16 @@ const TasksPage = () => {
                     <article key={task.id} className="py-4 first:pt-0 last:pb-0">
                       {editingTaskId === task.id ? (
                         <form onSubmit={updateTask} className="grid gap-3">
+                          <select
+                            value={editingChildId}
+                            onChange={(event) => setEditingChildId(event.target.value)}
+                            disabled={actionIsRunning || children.length === 0}
+                            className="h-11 w-full rounded-lg border border-[#e1e2e4] bg-white px-3 text-sm font-semibold text-[#191c1e] outline-none focus:border-[#003514] focus:ring-[3px] focus:ring-[#003514]/15"
+                          >
+                            {children.map((child) => (
+                              <option key={child.id} value={child.id}>{child.name}</option>
+                            ))}
+                          </select>
                           <Input
                             value={editingTitle}
                             onChange={(event) => setEditingTitle(event.target.value)}
@@ -548,6 +529,7 @@ const TasksPage = () => {
                             value={editingDescription}
                             onChange={(event) => setEditingDescription(event.target.value)}
                             disabled={actionIsRunning}
+                            placeholder="Descrição (opcional)"
                             className="h-11 rounded-lg border-[#e1e2e4] bg-white"
                           />
                           <div className="flex gap-2">
@@ -637,6 +619,15 @@ const TasksPage = () => {
                           {submission.rejection_note ? (
                             <p className="mt-1 text-sm text-[#7a4100]">{submission.rejection_note}</p>
                           ) : null}
+                          {submission.has_photo ? (
+                            <img
+                              src={getSubmissionPhotoUrl(submission.id)}
+                              alt={`Prova da tarefa ${task?.title ?? "submetida"}`}
+                              className="mt-3 h-36 w-full max-w-xs rounded-lg border border-[#e1e2e4] object-cover"
+                            />
+                          ) : (
+                            <p className="mt-2 text-sm text-[#59625a]">Sem fotografia de prova anexada.</p>
+                          )}
                         </div>
 
                         {canReview ? (

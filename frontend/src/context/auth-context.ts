@@ -5,7 +5,10 @@ export type ChildProfile = {
   name: string;
   birth_date: string | null;
   avatar_url: string | null;
+  goal_description: string | null;
+  goal_title: string | null;
   is_active: boolean;
+  reward_amount: string | null;
 };
 
 export type FamilyProfile = {

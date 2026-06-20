@@ -1,20 +1,20 @@
-import { KeyRound, LoaderCircle, Mail, Save, ShieldCheck } from "lucide-react";
+import { KeyRound, LoaderCircle, Mail, Save, ShieldCheck, Sigma } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/useAuth";
-import { apiFetch } from "@/lib/api";
+import { DEFAULT_POINTS_PER_EURO } from "@/lib/points";
+import {
+  requestPinResetCode,
+  resetPin as resetPinRequest,
+  type PinResetCodeResponse,
+} from "@/services/authService";
+import { updateFamilyName as updateFamilyNameRequest } from "@/services/profileService";
+import { getSettings, updateSettings } from "@/services/settingsService";
 
-type BusyAction = "family-name" | "request-pin-code" | "reset-pin" | null;
-
-type PinResetCodeResponse = {
-  expires_at?: string;
-  message: string;
-  retry_after_seconds?: number;
-  status: string;
-};
+type BusyAction = "family-name" | "request-pin-code" | "reset-pin" | "points" | null;
 
 const SettingsPage = () => {
   const { familyProfile, refreshSession } = useAuth();
@@ -27,10 +27,30 @@ const SettingsPage = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [pinCodeExpiresAt, setPinCodeExpiresAt] = useState<string | null>(null);
+  const [pointsPerEuroInput, setPointsPerEuroInput] = useState(String(DEFAULT_POINTS_PER_EURO));
 
   useEffect(() => {
-    setFamilyNameInput(familyName);
-  }, [familyName]);
+    let isMounted = true;
+
+    const loadSettings = async () => {
+      try {
+        const settings = await getSettings();
+        if (isMounted) {
+          setPointsPerEuroInput(String(settings.points_per_euro));
+        }
+      } catch {
+        if (isMounted) {
+          setErrorMessage("Não foi possível carregar a conversão de pontos.");
+        }
+      }
+    };
+
+    void loadSettings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const actionIsRunning = busyAction !== null;
 
@@ -49,10 +69,7 @@ const SettingsPage = () => {
     setSuccessMessage("");
 
     try {
-      await apiFetch("/profiles/family-name", {
-        method: "PATCH",
-        body: JSON.stringify({ family_name: nextFamilyName }),
-      });
+      await updateFamilyNameRequest(nextFamilyName);
       await refreshSession();
       setSuccessMessage("Nome da família atualizado.");
     } catch (caughtError) {
@@ -72,9 +89,7 @@ const SettingsPage = () => {
     setSuccessMessage("");
 
     try {
-      const response = await apiFetch<PinResetCodeResponse>("/auth/forgot-pin", {
-        method: "POST",
-      });
+      const response: PinResetCodeResponse = await requestPinResetCode();
       setPinCodeExpiresAt(response.expires_at ?? null);
       setSuccessMessage("Código de redefinição enviado para o email da conta.");
     } catch (caughtError) {
@@ -118,10 +133,7 @@ const SettingsPage = () => {
     setSuccessMessage("");
 
     try {
-      await apiFetch("/auth/reset-pin", {
-        method: "POST",
-        body: JSON.stringify({ code: normalizedCode, new_pin: normalizedPin }),
-      });
+      await resetPinRequest({ code: normalizedCode, new_pin: normalizedPin });
       setResetCode("");
       setNewPin("");
       setConfirmPin("");
@@ -133,6 +145,35 @@ const SettingsPage = () => {
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível redefinir o PIN parental.",
+      );
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const savePointsConversion = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const pointsPerEuro = Number(pointsPerEuroInput);
+    if (!Number.isInteger(pointsPerEuro) || pointsPerEuro < 1) {
+      setErrorMessage("A conversão deve ser um número inteiro positivo.");
+      setSuccessMessage("");
+      return;
+    }
+
+    setBusyAction("points");
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const nextSettings = await updateSettings(pointsPerEuro);
+      setPointsPerEuroInput(String(nextSettings.points_per_euro));
+      setSuccessMessage("Conversão de pontos atualizada.");
+    } catch (caughtError) {
+      setErrorMessage(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Não foi possível atualizar a conversão de pontos.",
       );
     } finally {
       setBusyAction(null);
@@ -202,6 +243,53 @@ const SettingsPage = () => {
           ) : null}
 
           <section className="grid w-full max-w-[946px] gap-6 lg:grid-cols-2">
+            <form
+              onSubmit={savePointsConversion}
+              className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)] sm:p-6"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex size-10 items-center justify-center rounded-full bg-[#eef7d1] text-[#5f6800]">
+                  <Sigma className="size-5" aria-hidden="true" />
+                </span>
+                <div>
+                  <h2 className="text-lg font-bold text-[#003514]">Conversão de pontos</h2>
+                  <p className="mt-1 text-sm leading-5 text-[#404940]">
+                    Defina quantos pontos equivalem a 1 €.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 space-y-2">
+                <Label htmlFor="points-per-euro" className="text-[#404940]">
+                  Pontos por euro
+                </Label>
+                <Input
+                  id="points-per-euro"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={pointsPerEuroInput}
+                  onChange={(event) => setPointsPerEuroInput(event.target.value)}
+                  disabled={actionIsRunning}
+                  className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
+                />
+                <p className="text-sm text-[#59625a]">
+                  Exemplo: {pointsPerEuroInput || DEFAULT_POINTS_PER_EURO} pontos = 1 €.
+                </p>
+              </div>
+              <Button
+                type="submit"
+                disabled={actionIsRunning}
+                className="mt-5 h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+              >
+                {busyAction === "points" ? (
+                  <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Save className="mr-2 size-4" aria-hidden="true" />
+                )}
+                Guardar conversão
+              </Button>
+            </form>
+
             <form
               onSubmit={updateFamilyName}
               className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)] sm:p-6"

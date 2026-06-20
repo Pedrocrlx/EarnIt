@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/useAuth";
-import { apiFetch } from "@/lib/api";
+import { createChild as createChildRequest } from "@/services/profileService";
 
 type MutationState = "idle" | "saving-family" | "creating-child";
 
@@ -57,13 +57,10 @@ const ManageProfilesPage = () => {
     setSuccessMessage("");
 
     try {
-      await apiFetch("/profiles/children", {
-        method: "POST",
-        body: JSON.stringify({
-          name: childName,
-          birth_date: childForm.birthDate || null,
-          avatar_url: childForm.avatarUrl.trim() || null,
-        }),
+      await createChildRequest({
+        name: childName,
+        birth_date: childForm.birthDate || null,
+        avatar_url: childForm.avatarUrl.trim() || null,
       });
       setChildForm(initialChildForm);
       await refreshFamily();
@@ -163,7 +160,7 @@ const ManageProfilesPage = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="child-birth-date" className="text-[#404940]">
-                    Data de nascimento
+                    Data de nascimento (opcional)
                   </Label>
                   <Input
                     id="child-birth-date"

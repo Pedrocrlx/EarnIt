@@ -14,48 +14,17 @@ import { Link } from "react-router-dom";
 import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/useAuth";
-import { apiFetch } from "@/lib/api";
+import { DEFAULT_POINTS_PER_EURO, eurosToPoints, formatPoints } from "@/lib/points";
 import { getSelectedProfileId } from "@/lib/profile-selection";
 import { cn } from "@/lib/utils";
-
-type SubmissionStatus = "approved" | "pending" | "rejected" | string;
-
-type ChildSubmission = {
-  child_id: string;
-  id: string;
-  rejection_note: string | null;
-  reviewed_at: string | null;
-  scheduled_date: string | null;
-  status: SubmissionStatus;
-  submitted_at: string | null;
-  task_id: string;
-};
-
-type ChildTask = {
-  description: string | null;
-  expires_at: string | null;
-  id: string;
-  reward_amount: string;
-  submission: ChildSubmission | null;
-  task_type: "duty" | "extra_task" | string;
-  title: string;
-};
-
-type WalletTransaction = {
-  amount: string;
-  child_id: string;
-  created_at: string;
-  description: string | null;
-  id: string;
-  task_submission_id: string | null;
-  transaction_type: string;
-};
-
-type WalletResponse = {
-  balance: string;
-  child_id: string;
-  transactions: WalletTransaction[];
-};
+import { getSettings } from "@/services/settingsService";
+import {
+  getWallet,
+  listChildTasks,
+  resubmitTask as resubmitTaskRequest,
+  submitTask as submitTaskRequest,
+} from "@/services/taskService";
+import type { ChildTaskResponse, WalletResponse } from "@/services/types";
 
 type TaskAction =
   | { label: string; mode: "disabled"; reason?: string }
@@ -79,9 +48,7 @@ const taskTypeLabels: Record<string, string> = {
   extra_task: "Extra",
 };
 
-const formatMoney = (amount: string) => `${Number(amount).toFixed(2)} €`;
-
-const getTaskAction = (task: ChildTask): TaskAction => {
+const getTaskAction = (task: ChildTaskResponse): TaskAction => {
   const submission = task.submission;
 
   if (!submission) {
@@ -125,8 +92,10 @@ const ChildDashboard = () => {
       ) ?? null,
     [familyProfile?.children, selectedProfileId],
   );
-  const [tasks, setTasks] = useState<ChildTask[]>([]);
+  const [tasks, setTasks] = useState<ChildTaskResponse[]>([]);
   const [wallet, setWallet] = useState<WalletResponse | null>(null);
+  const [pointsPerEuro, setPointsPerEuro] = useState(DEFAULT_POINTS_PER_EURO);
+  const [proofPhotos, setProofPhotos] = useState<Record<string, File | null>>({});
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -143,8 +112,8 @@ const ChildDashboard = () => {
 
     try {
       const [nextTasks, nextWallet] = await Promise.all([
-        apiFetch<ChildTask[]>(`/children/${selectedChild.id}/tasks`),
-        apiFetch<WalletResponse>(`/children/${selectedChild.id}/wallet`),
+        listChildTasks(selectedChild.id),
+        getWallet(selectedChild.id),
       ]);
       setTasks(nextTasks);
       setWallet(nextWallet);
@@ -160,11 +129,52 @@ const ChildDashboard = () => {
   }, [selectedChild]);
 
   useEffect(() => {
+    // Synchronizes async server state with the selected child dashboard.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadDashboard();
   }, [loadDashboard]);
 
-  const submitTask = async (task: ChildTask) => {
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSettings = async () => {
+      try {
+        const settings = await getSettings();
+        if (isMounted) {
+          setPointsPerEuro(settings.points_per_euro);
+        }
+      } catch {
+        if (isMounted) {
+          setPointsPerEuro(DEFAULT_POINTS_PER_EURO);
+        }
+      }
+    };
+
+    void loadSettings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const setProofPhoto = (taskId: string, file: File | null) => {
+    setProofPhotos((currentPhotos) => ({
+      ...currentPhotos,
+      [taskId]: file,
+    }));
+  };
+
+  const getProofPhoto = (taskId: string) => proofPhotos[taskId] ?? null;
+
+  const submitTask = async (task: ChildTaskResponse) => {
     if (!selectedChild) {
+      return;
+    }
+
+    const photo = getProofPhoto(task.id);
+    if (!photo) {
+      setErrorMessage("Anexa uma fotografia de prova antes de enviar.");
+      setSuccessMessage("");
       return;
     }
 
@@ -173,9 +183,8 @@ const ChildDashboard = () => {
     setSuccessMessage("");
 
     try {
-      await apiFetch(`/children/${selectedChild.id}/tasks/${task.id}/submit`, {
-        method: "POST",
-      });
+      await submitTaskRequest(selectedChild.id, task.id, photo);
+      setProofPhoto(task.id, null);
       await loadDashboard();
       setSuccessMessage("Tarefa enviada para aprovação.");
     } catch (caughtError) {
@@ -189,8 +198,15 @@ const ChildDashboard = () => {
     }
   };
 
-  const resubmitTask = async (submissionId: string) => {
+  const resubmitTask = async (taskId: string, submissionId: string) => {
     if (!selectedChild) {
+      return;
+    }
+
+    const photo = getProofPhoto(taskId);
+    if (!photo) {
+      setErrorMessage("Anexa uma nova fotografia de prova antes de reenviar.");
+      setSuccessMessage("");
       return;
     }
 
@@ -199,9 +215,8 @@ const ChildDashboard = () => {
     setSuccessMessage("");
 
     try {
-      await apiFetch(`/children/${selectedChild.id}/submissions/${submissionId}`, {
-        method: "PATCH",
-      });
+      await resubmitTaskRequest(selectedChild.id, submissionId, photo);
+      setProofPhoto(taskId, null);
       await loadDashboard();
       setSuccessMessage("Tarefa reenviada para aprovação.");
     } catch (caughtError) {
@@ -227,6 +242,7 @@ const ChildDashboard = () => {
   }).length;
   const latestTransactions = wallet?.transactions.slice(0, 3) ?? [];
   const actionIsRunning = busyAction !== null;
+  const walletPoints = formatPoints(eurosToPoints(wallet?.balance ?? "0", pointsPerEuro));
 
   return (
     <DashboardShell>
@@ -262,8 +278,7 @@ const ChildDashboard = () => {
                   Olá, {selectedChild.name}
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-[#404940]">
-                  Vê as tuas tarefas, envia o que terminaste e acompanha as moedas
-                  ganhas.
+                  Vê as tuas tarefas, envia o que terminaste e acompanha os pontos ganhos.
                 </p>
               </div>
               <Button
@@ -282,9 +297,9 @@ const ChildDashboard = () => {
               <article className="rounded-lg border border-[#e1e2e4] bg-white p-5">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-sm font-semibold text-[#404940]">Moedas</p>
+                    <p className="text-sm font-semibold text-[#404940]">Pontos</p>
                     <p className="mt-2 text-3xl font-bold text-[#003514]">
-                      {formatMoney(wallet?.balance ?? "0")}
+                      {walletPoints}
                     </p>
                   </div>
                   <WalletCards className="size-5 text-[#5f6800]" aria-hidden="true" />
@@ -381,7 +396,7 @@ const ChildDashboard = () => {
                             ) : null}
                             <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[#59625a]">
                               <Coins className="size-4" aria-hidden="true" />
-                              {formatMoney(task.reward_amount)}
+                              {formatPoints(eurosToPoints(task.reward_amount, pointsPerEuro))}
                               {task.expires_at ? (
                                 <>
                                   <span aria-hidden="true">·</span>
@@ -402,43 +417,51 @@ const ChildDashboard = () => {
                             ) : null}
                           </div>
 
-                          {action.mode === "submit" ? (
-                            <Button
-                              type="button"
-                              onClick={() => submitTask(task)}
-                              disabled={actionIsRunning}
-                              className="h-11 shrink-0 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
-                            >
-                              {isBusy ? (
-                                <LoaderCircle
-                                  className="mr-2 size-4 animate-spin"
-                                  aria-hidden="true"
+                          {action.mode === "submit" || action.mode === "resubmit" ? (
+                            <div className="flex shrink-0 flex-col gap-2">
+                              <label className="text-xs font-semibold text-[#404940]">
+                                Fotografia de prova
+                                <input
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp"
+                                  disabled={actionIsRunning}
+                                  onChange={(event) =>
+                                    setProofPhoto(task.id, event.target.files?.[0] ?? null)
+                                  }
+                                  className="mt-1 block w-full max-w-[220px] text-xs text-[#404940] file:mr-3 file:rounded-full file:border-0 file:bg-[#f3f4f6] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#003514]"
                                 />
-                              ) : (
-                                <ClipboardCheck
-                                  className="mr-2 size-4"
-                                  aria-hidden="true"
-                                />
-                              )}
-                              {action.label}
-                            </Button>
-                          ) : action.mode === "resubmit" ? (
-                            <Button
-                              type="button"
-                              onClick={() => resubmitTask(action.submissionId)}
-                              disabled={actionIsRunning}
-                              className="h-11 shrink-0 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
-                            >
-                              {isBusy ? (
-                                <LoaderCircle
-                                  className="mr-2 size-4 animate-spin"
-                                  aria-hidden="true"
-                                />
-                              ) : (
-                                <RotateCcw className="mr-2 size-4" aria-hidden="true" />
-                              )}
-                              {action.label}
-                            </Button>
+                              </label>
+                              {getProofPhoto(task.id) ? (
+                                <p className="max-w-[220px] truncate text-xs font-semibold text-[#59625a]">
+                                  {getProofPhoto(task.id)?.name}
+                                </p>
+                              ) : null}
+                              <Button
+                                type="button"
+                                onClick={() =>
+                                  action.mode === "submit"
+                                    ? submitTask(task)
+                                    : resubmitTask(task.id, action.submissionId)
+                                }
+                                disabled={actionIsRunning}
+                                className="h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+                              >
+                                {isBusy ? (
+                                  <LoaderCircle
+                                    className="mr-2 size-4 animate-spin"
+                                    aria-hidden="true"
+                                  />
+                                ) : action.mode === "submit" ? (
+                                  <ClipboardCheck
+                                    className="mr-2 size-4"
+                                    aria-hidden="true"
+                                  />
+                                ) : (
+                                  <RotateCcw className="mr-2 size-4" aria-hidden="true" />
+                                )}
+                                {action.label}
+                              </Button>
+                            </div>
                           ) : (
                             <span className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-[#f3f4f6] px-5 text-sm font-semibold text-[#404940]">
                               <CheckCircle2 className="mr-2 size-4" aria-hidden="true" />
@@ -457,6 +480,23 @@ const ChildDashboard = () => {
               </section>
 
               <aside className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
+                {selectedChild.goal_title || selectedChild.reward_amount ? (
+                  <div className="mb-5 rounded-lg bg-[#eef7d1] px-4 py-3">
+                    <p className="text-sm font-bold text-[#003514]">
+                      {selectedChild.goal_title ?? "Objetivo"}
+                    </p>
+                    {selectedChild.goal_description ? (
+                      <p className="mt-1 text-xs font-semibold text-[#59625a]">
+                        {selectedChild.goal_description}
+                      </p>
+                    ) : null}
+                    {selectedChild.reward_amount ? (
+                      <p className="mt-2 text-sm font-bold text-[#5f6800]">
+                        {formatPoints(eurosToPoints(selectedChild.reward_amount, pointsPerEuro))}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
                 <h2 className="text-lg font-bold text-[#003514]">Carteira</h2>
                 <p className="mt-1 text-sm text-[#404940]">
                   Últimos movimentos aprovados.
@@ -469,7 +509,7 @@ const ChildDashboard = () => {
                         className="rounded-lg bg-[#f8f9fb] px-4 py-3"
                       >
                         <p className="text-sm font-semibold text-[#191c1e]">
-                          {formatMoney(transaction.amount)}
+                          {formatPoints(eurosToPoints(transaction.amount, pointsPerEuro))}
                         </p>
                         <p className="mt-1 text-xs font-semibold text-[#59625a]">
                           {transaction.description ?? "Movimento da carteira"}

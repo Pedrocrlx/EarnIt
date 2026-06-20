@@ -8,6 +8,7 @@ const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
 const ManageProfilesPage = lazy(() => import("@/pages/ManageProfilesPage"));
 const LoginPage = lazy(() => import("@/pages/authentication/LoginPage"));
+const ForgotPasswordPage = lazy(() => import("@/pages/authentication/ForgotPasswordPage"));
 const OnboardingStep1Page = lazy(() => import("@/pages/onboarding/Step1Page"));
 const OnboardingStep2Page = lazy(() => import("@/pages/onboarding/Step2Page"));
 const OnboardingStep3Page = lazy(() => import("@/pages/onboarding/Step3Page"));
@@ -19,6 +20,12 @@ const RegistrationPage = lazy(
 );
 const VerificationCode = lazy(
   () => import("@/pages/authentication/VerificationCodePage"),
+);
+const VerifyResetCodePage = lazy(
+  () => import("@/pages/authentication/VerifyResetCodePage"),
+);
+const ResetPasswordPage = lazy(
+  () => import("@/pages/authentication/ResetPasswordPage"),
 );
 
 const PageFallback = () => (
@@ -56,6 +63,9 @@ function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/register" element={<RegistrationPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/forgot-password/verify" element={<VerifyResetCodePage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/verification" element={<VerificationCode />} />
             <Route
               path="/onboarding"
