@@ -8,12 +8,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
-import src.db.database as app_database
+import src.database as app_database
 import src.models.auth
 import src.models.tasks  # noqa: F401 — registers task tables with SQLModel.metadata
 import src.services.tasks.submissions as app_tasks_submissions
-from src.core.config import settings
-from src.db.database import get_session
+from src.config import settings
+from src.database import get_session
 
 # ---------------------------------------------------------------------------
 # Shared test data & helpers

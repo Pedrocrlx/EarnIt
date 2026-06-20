@@ -702,3 +702,42 @@ async def test_expired_duty_generates_no_slot(
 
     count = await generate_daily_duty_slots(db_session)
     assert count == 0
+
+
+# review guards — a duty slot is only reviewable once the child has submitted it
+
+
+async def test_approve_unsubmitted_duty_returns_409(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    # The slot exists (pending, submitted_at=NULL) before the child does it; the
+    # parent must not be able to approve work that was never submitted.
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    await _duty(client, token, child_id)
+    await generate_daily_duty_slots(db_session)
+
+    sub_id = (await client.get(_SUBS_URL, cookies={"access_token": token})).json()[0][
+        "id"
+    ]
+    res = await client.post(
+        f"{_SUBS_URL}/{sub_id}/approve", cookies={"access_token": token}
+    )
+    assert res.status_code == 409
+
+
+async def test_reject_unsubmitted_duty_returns_409(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    await _duty(client, token, child_id)
+    await generate_daily_duty_slots(db_session)
+
+    sub_id = (await client.get(_SUBS_URL, cookies={"access_token": token})).json()[0][
+        "id"
+    ]
+    res = await client.post(
+        f"{_SUBS_URL}/{sub_id}/reject", cookies={"access_token": token}
+    )
+    assert res.status_code == 409

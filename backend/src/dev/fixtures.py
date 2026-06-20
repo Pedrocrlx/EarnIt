@@ -2,7 +2,7 @@
 
 When ``DISABLE_AUTH`` is on, ``get_current_user`` returns this seeded dev user
 instead of decoding a token, so the API is usable without logging in. Run as a
-module (``python -m src.dev.seed``) to seed manually, or it runs on startup.
+module (``python -m src.dev.fixtures``) to seed manually, or it runs on startup.
 NEVER enable this path in production.
 """
 
@@ -13,7 +13,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from src.db.database import AsyncSessionLocal
+from src.database import AsyncSessionLocal
 from src.models.auth import Child, User
 from src.security.hashing import hash_secret
 

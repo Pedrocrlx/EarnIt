@@ -13,8 +13,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.auth._shared import clear_pending_cookie, set_access_cookie
-from src.db.database import get_session
-from src.dependencies.auth import get_pending_verification_user
+from src.database import get_session
+from src.dependencies import get_pending_verification_user
 from src.models.auth import User
 from src.schemas.auth import VerifyCodeRequest
 from src.services.verification import core, flows

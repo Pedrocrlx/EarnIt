@@ -1,7 +1,7 @@
 """Child profiles & family view: create/deactivate children, view the family summary.
 
 All three routes require a full access_token session (see
-app/dependencies/auth.py). Creating a child re-checks the onboarding trigger
+app/dependencies.py). Creating a child re-checks the onboarding trigger
 (app/services/accounts.maybe_complete_onboarding) — this may be the second of
 its two conditions (PIN set in app/routers/auth/pin.py + >=1 child) to become
 true.
@@ -14,9 +14,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.config import settings
-from src.db.database import get_session
-from src.dependencies.auth import get_current_user
+from src.config import settings
+from src.database import get_session
+from src.dependencies import get_current_user
 from src.models.auth import Child, User
 from src.schemas.profiles import (
     ChildCreateRequest,

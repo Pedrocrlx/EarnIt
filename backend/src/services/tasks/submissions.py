@@ -16,7 +16,7 @@ from fastapi import HTTPException
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.database import AsyncSessionLocal
+from src.database import AsyncSessionLocal
 from src.models.auth import Child, User
 from src.models.tasks import Task, TaskSubmission, WalletTransaction
 from src.services import accounts
@@ -154,6 +154,8 @@ async def approve_submission(
     submission = await get_submission_or_404(submission_id, user, session)
     if submission.status != "pending":
         raise HTTPException(status_code=409, detail="Submission is not pending")
+    if submission.submitted_at is None:
+        raise HTTPException(status_code=409, detail="Duty has not been submitted yet")
     task = await session.get(Task, submission.task_id)
     _apply_approval(session, submission, task, datetime.now(UTC))
     await session.commit()
@@ -172,6 +174,8 @@ async def reject_submission(
     submission = await get_submission_or_404(submission_id, user, session)
     if submission.status != "pending":
         raise HTTPException(status_code=409, detail="Submission is not pending")
+    if submission.submitted_at is None:
+        raise HTTPException(status_code=409, detail="Duty has not been submitted yet")
     submission.status = "rejected"
     submission.reviewed_at = datetime.now(UTC)
     submission.rejection_note = rejection_note

@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.database import get_session
+from src.database import get_session
 from src.models.auth import User
 from src.schemas.auth import ResetPasswordRequest
 from src.security.hashing import hash_secret

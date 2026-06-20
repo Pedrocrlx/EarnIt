@@ -9,8 +9,8 @@ from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.config import settings
-from src.dependencies.auth import (
+from src.config import settings
+from src.dependencies import (
     get_current_user,
     get_pending_verification_user,
 )

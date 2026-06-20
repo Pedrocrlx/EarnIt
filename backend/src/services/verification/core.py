@@ -17,7 +17,7 @@ import hmac
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from src.core.config import settings
+from src.config import settings
 
 PURPOSE_ACCOUNT = "account_verification"
 PURPOSE_PASSWORD_RESET = "password_reset"

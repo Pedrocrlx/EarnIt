@@ -15,8 +15,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
 from src.api.routes import api_router
-from src.core.config import settings
-from src.dev.seed import DEV_USER_EMAIL, seed_dev_fixtures
+from src.config import settings
+from src.dev.fixtures import DEV_USER_EMAIL, seed_dev_fixtures
 from src.services.tasks import start_daily_maintenance, stop_daily_maintenance
 
 # Never log secrets (codes, passwords, PINs, hashes, JWTs); log the non-enumerable

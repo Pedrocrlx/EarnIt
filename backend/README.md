@@ -60,7 +60,7 @@ Set `DISABLE_AUTH=true` in `.env`. Every request is served as `dev@earnit.local`
 
 ```bash
 # Seed the dev user manually without starting the server:
-uv run python -m src.dev.seed
+uv run python -m src.dev.fixtures
 ```
 
 ### Run tests
@@ -93,6 +93,68 @@ uv run pytest -q     # requires the db + mailpit containers to be running
 ```bash
 cp .env.example .env   # then fill in SECRET_KEY (openssl rand -hex 32)
 ```
+
+#### Environment variables
+Settings are read from the environment (and `.env`) in [`src/config.py`](src/config.py):
+each value comes from a matching variable, falling back to a default where one
+exists. **Required** variables have no default — the app refuses to start without
+them. Everything else is **optional** (commented in `.env.example`, with its
+default shown; uncomment only to override).
+
+```bash
+# Required — app won't boot without these
+POSTGRES_USER=earnit_user
+POSTGRES_PASSWORD=earnit
+POSTGRES_DB=earnit_db
+SECRET_KEY=                 # openssl rand -hex 32
+
+# Optional — defaults in src/config.py; uncomment to override
+#POSTGRES_HOST=localhost    #POSTGRES_PORT=5432
+#CORS_ORIGINS=http://localhost:3000,http://localhost:5173   # CSV or JSON array
+#MAIL_SERVER=mailpit  #MAIL_PORT=1025  #MAIL_FROM=noreply@earnit.app
+#VERIFICATION_CODE_EXPIRY_MINUTES=10  #ACCOUNT_LIMBO_PURGE_HOURS=24
+#ACCESS_TOKEN_EXPIRE_MINUTES=43200    #MAX_CHILDREN_PER_USER=10
+#LOG_LEVEL=INFO
+DISABLE_AUTH=false          # src/config.py defaults to true (auth OFF) — keep false unless you want the dev bypass
+```
+
+**Full reference** — every variable read by [`src/config.py`](src/config.py):
+
+_Required_ (no default — the app raises at startup if missing):
+
+| Variable | Purpose |
+|---|---|
+| `POSTGRES_USER` | Postgres role the API connects as (and the `db` container bootstraps on first run) |
+| `POSTGRES_PASSWORD` | Password for that role |
+| `POSTGRES_DB` | Database name |
+| `SECRET_KEY` | Signs JWT session tokens (HS256) **and** the HMAC verification/reset codes — generate with `openssl rand -hex 32` |
+
+_Optional_ (default shown; override via env var or `.env`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `POSTGRES_HOST` | `localhost` | DB host; the Docker `api` container overrides this to `db` via `compose.yaml` |
+| `POSTGRES_PORT` | `5432` | DB port |
+| `CORS_ORIGINS` | `http://localhost:3000, http://localhost:5173` | Browser origins allowed to send credentialed requests (comma-separated **or** JSON array) |
+| `MAIL_SERVER` | `mailpit` | SMTP host (`localhost` when running outside Docker) |
+| `MAIL_PORT` | `1025` | SMTP port |
+| `MAIL_FROM` | `noreply@earnit.app` | Sender address on outgoing mail |
+| `MAIL_USERNAME` | _(empty)_ | SMTP username (Mailpit needs none) |
+| `MAIL_PASSWORD` | _(empty)_ | SMTP password (Mailpit needs none) |
+| `PASSWORD_MIN_LENGTH` | `12` | Minimum password length enforced at registration |
+| `PASSWORD_SPECIAL_CHARS` | _(symbol set)_ | Characters that satisfy the "special character" password rule |
+| `VERIFICATION_CODE_CHARSET` | `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` | Alphabet for emailed codes (omits look-alikes `0/O`, `1/I`) |
+| `VERIFICATION_CODE_LENGTH` | `6` | Number of characters in a code |
+| `VERIFICATION_CODE_EXPIRY_MINUTES` | `10` | Lifetime of a verification/reset code window |
+| `ACCOUNT_LIMBO_PURGE_HOURS` | `24` | How long an unverified account survives before the purge sweep deletes it |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `43200` | Full-session token lifetime (30 days) |
+| `PENDING_VERIFICATION_TOKEN_EXPIRE_MINUTES` | `1440` | Pending-verification token lifetime (1 day) |
+| `MAX_CHILDREN_PER_USER` | `10` | Cap on child profiles per parent (counts active + inactive) |
+| `PARENT_PIN_LENGTH` | `4` | Required number of digits in the parental PIN |
+| `LOG_LEVEL` | `INFO` | Root logging level (`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`) |
+| `DISABLE_AUTH` | `true` | ⚠️ **Dev only** — bypasses JWT; every request runs as `dev@earnit.local`. Set `false` for real auth. Never enable in production. |
+
+See [`.env.example`](.env.example) for a copy-paste template.
 
 #### Running the Backend Stack
 
@@ -134,7 +196,7 @@ When running, services are available at:
 - **Linting:** We use `ruff` for linting and formatting (`uv run ruff check .`, `uv run ruff format .`). The lint rule set (`pyproject.toml`) covers pycodestyle, Pyflakes, import sorting, pyupgrade, bugbear, simplify, comprehensions, async, and ruff-specific checks — with `B008` (FastAPI `Depends(...)` in argument defaults) and `RUF001-003` (ambiguous dashes in user-facing strings) intentionally ignored.
 - **Testing:** `uv run pytest tests/ -q` (requires the `db` and `mailpit` containers running — `mailpit` is defined in [`mail/compose.yaml`](mail/README.md) and included automatically by `docker compose up`). Coverage: `uv run pytest --cov=app --cov-report=term-missing`.
 - **API Docs:** When running, access the interactive docs at `/docs`.
-- **Dev auth bypass:** `DISABLE_AUTH=true` in `.env` skips JWT checks and returns a seeded `dev@earnit.local` parent on every request. Seed is created on startup; run `uv run python -m src.dev.seed` to seed without starting the server. See `src/dev/seed.py`.
+- **Dev auth bypass:** `DISABLE_AUTH=true` in `.env` skips JWT checks and returns a seeded `dev@earnit.local` parent on every request. Seed is created on startup; run `uv run python -m src.dev.fixtures` to seed without starting the server. See `src/dev/fixtures.py`.
 
 ### Project Structure
 
@@ -148,13 +210,11 @@ backend/
 │   │   ├── profiles.py       # /api/v1/profiles/* endpoints
 │   │   ├── tasks.py          # /api/v1/tasks/* endpoints (parent task management)
 │   │   └── routes.py         # Centralized API router inclusion
-│   ├── core/
-│   │   └── config.py         # Settings (env-driven), token lifetimes, password/PIN rules
-│   ├── db/
-│   │   └── database.py       # Async SQLAlchemy engine + get_session dependency
-│   ├── dependencies/         # Dependency injection guards (e.g., auth)
+│   ├── config.py             # Settings (env-driven via os.getenv + .env), token lifetimes, password/PIN rules
+│   ├── database.py           # Async SQLAlchemy engine + get_session dependency
+│   ├── dependencies.py       # FastAPI dependency guards (auth: current-user / pending-verification)
 │   ├── dev/
-│   │   └── seed.py           # Dev fixture seeding (dev@earnit.local + child); importable + standalone
+│   │   └── fixtures.py       # Dev fixture seeding (dev@earnit.local + child); importable + standalone
 │   ├── email/                # HTML email templates (verification code, etc.)
 │   ├── mail.py               # fastapi-mail config
 │   ├── models/               # SQLModel tables: User, Child, Task, TaskSubmission, WalletTransaction

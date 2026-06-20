@@ -2,7 +2,7 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.config import settings
+from src.config import settings
 from tests.conftest import VALID_USER, register_and_verify
 
 _PIN_URL = "/api/v1/auth/pin"

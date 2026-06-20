@@ -12,7 +12,7 @@ from fastapi_mail import (
     FastMail,
 )
 
-from src.core.config import settings
+from src.config import settings
 
 # HTML templates live in src/email/ and are rendered by Jinja2 inside fastapi-mail.
 _TEMPLATE_FOLDER = Path(__file__).parent / "email"

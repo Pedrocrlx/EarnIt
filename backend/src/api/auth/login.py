@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.auth._shared import set_access_cookie, set_pending_cookie
-from src.db.database import get_session
+from src.database import get_session
 from src.models.auth import User
 from src.schemas.auth import LoginRequest
 from src.security.hashing import verify_secret

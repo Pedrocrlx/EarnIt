@@ -986,8 +986,8 @@ it succeeds, `api` is allowed to start.
 **Q114. Why `env_file: ./backend/.env` for the `db` service specifically?**
 The official `postgres` image bootstraps its superuser/database from
 `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB` env vars on *first* startup.
-Pointing `db` at the *same* `.env` file the API reads (`app/config.py`'s
-`Settings` also loads `.env`) guarantees the credentials Postgres creates and
+Pointing `db` at the *same* `.env` file the API reads (`app/config.py` also
+loads `.env` via `load_dotenv()`) guarantees the credentials Postgres creates and
 the credentials the API connects with are always identical — one file, one
 source of truth, instead of duplicating credentials in `compose.yaml` and
 `.env` separately.
@@ -1317,7 +1317,7 @@ MVP has no "log out all devices" requirement, this tradeoff is accepted rather
 than building a token-blocklist.
 
 **Q150. How would `get_current_user` actually reject a request — walk through the failure modes.**
-From `app/dependencies/auth.py`: missing/unparseable `access_token` cookie →
+From `app/dependencies.py`: missing/unparseable `access_token` cookie →
 401; JWT signature invalid or `exp` passed → 401 (pyjwt raises, caught and
 re-raised as `HTTPException(401)`); `scope` claim isn't `"full"` → 401 (wrong
 token type used on this endpoint); `sub` claim isn't a valid UUID → 401
@@ -1478,13 +1478,14 @@ characters — no `0`/`O`, no `1`/`I`/`L` (note `I` and `L` and `1` and `0` are
 absent) — so a user reading "O" vs "0" or "I" vs "1" off a phone screen doesn't
 transcribe it wrong. Base64/hex include exactly these ambiguous characters.
 
-**Q167. `generate_code` does `charset[b % len(charset)] for b in digest[:VERIFICATION_CODE_LENGTH]` — why take the *first 8 bytes* of a 32-byte SHA256 digest, and why `% len(charset)`?**
-`VERIFICATION_CODE_LENGTH = 8` defines the desired *output length* in
-characters — only 8 digest bytes are needed to produce 8 characters (one byte
+**Q167. `generate_code` does `charset[b % len(charset)] for b in digest[:VERIFICATION_CODE_LENGTH]` — why take the *first 6 bytes* of a 32-byte SHA256 digest, and why `% len(charset)`?**
+`VERIFICATION_CODE_LENGTH = 6` defines the desired *output length* in
+characters — only 6 digest bytes are needed to produce 6 characters (one byte
 → one charset index via modulo). Using more of the digest wouldn't add
-meaningful security (8 bytes of a keyed HMAC already gives 32 charset-symbols^8
-≈ astronomically many possibilities — far more than the 10-minute window allows
-to brute-force) but would require a longer code, hurting usability. `% len(charset)`
+meaningful security (6 characters over the 32-symbol charset already gives
+32^6 ≈ 1 billion possibilities — far more than can be guessed against the
+verify endpoint within the 10-minute window) but would require a longer code,
+hurting usability. `% len(charset)`
 (32 here) maps each byte (0-255) onto one of 32 charset positions —
 note 256 isn't evenly divisible by 32... actually it is (256/32=8), so the
 modulo introduces no bias here, which is a deliberate charset-length choice.
@@ -1519,7 +1520,7 @@ support complaints.
 `hmac.compare_digest` is a constant-time comparison — `==` on strings
 short-circuits at the first differing character, so the *time* a comparison
 takes can leak how many leading characters of a guess are correct (a timing
-side-channel for brute-forcing one character at a time). For an 8-character
+side-channel for brute-forcing one character at a time). For a 6-character
 code with a 10-minute window this is a fairly low-severity concern in
 practice, but `hmac.compare_digest` is the textbook-correct primitive for
 "comparing a secret to user input" and costs nothing to use.
@@ -1989,17 +1990,17 @@ manages background tasks, and *calls into* `app/security/` and
 "primitives" vs. "flows that use primitives," which also makes
 `app/security/` trivially unit-testable without any DB/app context.
 
-**Q220. Why does `app/dependencies/` exist as its own package for just `auth.py`?**
-`app/dependencies/auth.py`'s two public providers
-(`get_current_user`/`get_pending_verification_user`, sharing the private
-`_user_from_token`/`_extract_user_id` helpers)
-are FastAPI `Depends(...)` providers — a distinct *role* in the architecture
-(request-scoped guards that routers declare as parameters) from both
-"primitives" (`app/security/`) and "orchestration" (`app/services/`), even
-though they're implemented using primitives (`app/security/tokens.py`'s
-decode functions). Naming the package `dependencies/` signals "these are
-things you put in a route's function signature," distinct from things you
-*call* from inside a route body.
+**Q220. Why is `app/dependencies.py` a plain module, not its own `dependencies/` package?**
+It used to be a package (`dependencies/auth.py`) but held exactly one file, so it
+was flattened to a single `app/dependencies.py` — the same call we made for
+`core/config.py → config.py` and `db/database.py → database.py`. A one-file
+package is a folder with one occupant: the indirection buys nothing until there's
+a second file. The module's role is still distinct, though — its two public
+providers (`get_current_user`/`get_pending_verification_user`, sharing the private
+`_user_from_token`/`_extract_user_id` helpers) are FastAPI `Depends(...)` *guards*
+you put in a route's signature, as opposed to "primitives" (`app/security/`) or
+"orchestration" (`app/services/`) that you *call* from inside a route body. If a
+second kind of dependency ever appears, promoting it back to a package is trivial.
 
 **Q221. The `backend/README.md` "Project Structure" tree is fairly detailed (down to individual files with one-line descriptions) — why maintain that by hand instead of, say, generating it?**
 For a project at this size (a few dozen files), a hand-maintained tree with
@@ -2010,6 +2011,25 @@ without updating the README — a tradeoff accepted because the README is
 explicitly the onboarding document for "Connecting the Frontend" /
 understanding the system, where *intent* matters more than an always-perfectly-synced
 file listing.
+
+**Q221b. Why does `app/config.py` read settings with plain `os.environ` + `load_dotenv()` instead of `pydantic-settings`' `BaseSettings`?**
+Honest answer: it's a readability/explicitness preference the team chose
+deliberately, and it's a *worse* trade by the usual measure — `pydantic-settings`
+already does typed, validated, env-or-default config, so re-implementing it by
+hand ends up as slightly *more* code, not less (we use minimalism-review tooling
+that flagged exactly this; see `docs/AI_USAGE.md`). We kept it because the
+explicit `_require`/`_str`/`_int`/`_bool`/`_csv` readers make "where does this
+value come from, and what's its default" obvious at a glance, with no framework
+indirection. Crucially, the two properties that actually matter were preserved:
+**type coercion** (ports/minutes/lengths via `_int`, `DISABLE_AUTH` via `_bool`,
+`CORS_ORIGINS` via `_csv`) and **fail-closed required vars** — `_require`
+(`POSTGRES_*`, `SECRET_KEY`) raises a `RuntimeError` at import, so the app refuses
+to boot half-configured rather than running with a missing secret. `.env` is
+still loaded (now by an explicit `load_dotenv()` at module top), and `settings`
+is a plain mutable instance, which is what lets tests override a field
+(`conftest.py`'s `_force_auth_on`, the `MAX_CHILDREN_PER_USER` monkeypatch).
+`pydantic-settings` was dropped from `pyproject.toml`; `python-dotenv` (already a
+transitive dep) became direct.
 
 ---
 
@@ -2152,7 +2172,7 @@ api` or in CI output. The format string lives in the one `basicConfig` call in
 call sites that call `logger.info(...)`.
 
 **Q235. How is the log level controlled, and what would you set in each environment?**
-`LOG_LEVEL` is a new `Settings` field in `app/config.py` (default `"INFO"`,
+`LOG_LEVEL` is a setting read in `app/config.py`'s `Settings` (default `"INFO"`,
 documented in `.env.example`). Locally, `DEBUG` would show more detail while
 developing a new flow; `INFO` (the default) is right for normal development
 and for the CI test run — it captures every lifecycle event in this Q&A
@@ -2290,6 +2310,36 @@ also skips expired duties, so no new daily slots appear after a duty's deadline.
 410 (vs the 409 used for state conflicts like "already approved") is consistent
 with the auth flow's expired-window responses: 410 = the window is gone; 409 =
 wrong state but still actionable.
+
+**Q246. A `duty` is a daily recurring chore and an `extra_task` is one-off — how does "recurring" actually work in the data model?**
+The recurring part is the **submission**, not the task. A `duty` is **one** row in
+`tasks` that persists — it is *not* duplicated or regenerated each day. What
+regenerates is the per-day instance: every midnight `generate_daily_duty_slots`
+inserts a **new `task_submissions` row** for each active, non-expired duty, tagged
+with that day's `scheduled_date` and pointing at the same `task_id`. The
+`UniqueConstraint(task_id, scheduled_date)` guarantees exactly one slot per duty
+per day (and makes the job idempotent — re-running it inserts nothing). So
+"Task A on day 2" is the *same* Task A row plus a *brand-new* submission, fully
+independent of day 1's: yesterday's row is frozen in whatever state it ended
+(`approved`/`pending`/`rejected`), never patched or reused to represent today.
+An `extra_task`, by contrast, has no daily job — the child creates its single
+submission once via `submit_task`.
+
+This per-day history is deliberate: because each day is its own row keyed by
+`(task_id, scheduled_date)`, the stable `task_id` is a natural anchor for a future
+**streak** feature (a streak = consecutive `scheduled_date`s where that duty's
+submission is `approved`). Note there's no explicit "missed" status — a past day's
+un-acted slot just stays `pending` with `submitted_at = NULL`; a miss is *derived*
+(`scheduled_date < today AND status != 'approved'`), not stored.
+
+Because the slot is pre-created `pending` *before* the child does anything, the
+review endpoints guard on **`submitted_at`**, not just `status`: a duty slot is
+only approvable/rejectable once the child has actually submitted it
+(`submitted_at` set). All three review paths apply this rule — `approve_submission`
+and `reject_submission` return `409` if `submitted_at is None`, and `batch_approve`
+filters `submitted_at IS NOT NULL` in its query. (Extra-task submissions always
+have `submitted_at` set at creation, so the guard only ever affects un-done duty
+slots.)
 
 ---
 

@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.config import settings
+from src.config import settings
 from src.models.auth import Child, User
 from src.services import accounts
 

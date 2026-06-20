@@ -14,9 +14,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.config import settings
-from src.db.database import get_session
-from src.dev.seed import DEV_USER_EMAIL
+from src.config import settings
+from src.database import get_session
+from src.dev.fixtures import DEV_USER_EMAIL
 from src.models.auth import User
 from src.security.tokens import decode_token
 

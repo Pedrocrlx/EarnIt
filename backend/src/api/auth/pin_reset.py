@@ -13,8 +13,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.database import get_session
-from src.dependencies.auth import get_current_user
+from src.database import get_session
+from src.dependencies import get_current_user
 from src.models.auth import User
 from src.schemas.auth import ResetPinRequest
 from src.security.hashing import hash_secret

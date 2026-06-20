@@ -11,7 +11,7 @@ from datetime import datetime
 from fastapi_mail import MessageSchema, MessageType
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.config import settings
+from src.config import settings
 from src.mail import mail
 from src.models.auth import User
 from src.services.verification import core

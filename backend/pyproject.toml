@@ -12,8 +12,8 @@ dependencies = [
     "fastapi-mail>=1.6.4",
     "fastapi[standard]>=0.136.3",
     "greenlet>=3.5.1",
-    "pydantic-settings>=2.14.1",
     "pyjwt>=2.13.0",
+    "python-dotenv>=1.0.1",
     "sqlmodel>=0.0.38",
 ]
 
