@@ -284,7 +284,7 @@ Two tables (`src/models/auth.py`). Verification codes are **not** a table — th
 | `child_id` | UUID (FK → `children.id`) | denormalised for query ease — `ON DELETE CASCADE` |
 | `scheduled_date` | date, nullable | set for auto-generated duty slots; `NULL` for extra_tasks |
 | `submitted_at` | timestamptz, nullable | `NULL` = not yet submitted (duty slots start `NULL`) |
-| `status` | varchar(20) | `pending` \| `approved` \| `rejected` |
+| `status` | varchar(20) | duty: `open` → `pending` → `approved`/`rejected`, or `failed` (day ended un-attempted) · extra: `pending` → `approved`/`rejected` |
 | `reviewed_at` | timestamptz, nullable | stamped when a parent approves or rejects |
 | `rejection_note` | text, nullable | free-text from the parent on rejection |
 
@@ -457,13 +457,13 @@ All task-management endpoints require a full `access_token` session (parent). `c
      - **Extra tasks:** the latest submission (any status), or `null` if never submitted.
    - → `200 list[ChildTaskResponse]`
 2. **`POST /api/v1/children/{child_id}/tasks/{task_id}/submit`** *(`access_token` required)*
-   - For `duty`: stamps `submitted_at = now()` on today's slot, sets `status = pending`. `409` if already submitted or no slot exists for today.
+   - For `duty`: flips today's **`open`** slot to `status = pending` (stamps `submitted_at`). `409` if the slot isn't `open` (already submitted, reviewed, or missed); `404` if no slot exists for today.
    - For `extra_task`: creates a new `task_submissions` row with `status = pending`. `409` if a `pending` or `approved` submission already exists.
    - `410` if the task has expired (`expires_at` in the past) — the child can no longer submit.
    - → `201 SubmissionResponse`
 3. **`PATCH /api/v1/children/{child_id}/submissions/{submission_id}`** *(`access_token` required)*
-   - Resubmit after a parent rejection. Resets `status → pending`, clears `rejection_note`, stamps `submitted_at = now()` on the **same** submission row (no new row created). A rejected submission can be resubmitted (and re-rejected) any number of times **while the task is live** — rejection is only terminal once the task expires.
-   - `410` if the task has expired (the retry window is closed) · `404` if submission doesn't belong to the child · `409` if status is not `rejected`. → `200 SubmissionResponse`
+   - Resubmit after a parent rejection. Resets `status → pending`, clears `rejection_note`, stamps `submitted_at = now()` on the **same** submission row (no new row created). A rejected submission can be resubmitted (and re-rejected) any number of times **while the task is live**.
+   - `410` if the task has expired, or if the duty's **day has already passed** (a duty is only resubmittable on its own day) · `404` if submission doesn't belong to the child · `409` if status is not `rejected`. → `200 SubmissionResponse`
 4. **`GET /api/v1/children/{child_id}/wallet`** *(`access_token` required)*
    - Returns `{ child_id, balance, transactions[] }`. Balance is computed as `SUM(amount) WHERE type=credit` − `SUM(amount) WHERE type=debit` via a single DB query.
    - → `200 WalletBalanceResponse`
@@ -471,7 +471,7 @@ All task-management endpoints require a full `access_token` session (parent). `c
 #### 4. Daily maintenance background loop
 
 On every app startup (`lifespan` in `main.py`), `start_daily_maintenance()` runs:
-1. Immediately runs one maintenance pass — `generate_daily_duty_slots()` creates today's `task_submissions` rows for all active, non-expired duties (idempotent: skips any `(task_id, scheduled_date)` that already exists), then `purge_expired_limbo_accounts()` deletes every account still unverified past `ACCOUNT_LIMBO_PURGE_HOURS` in one `DELETE` (CASCADE removes their children).
+1. Immediately runs one maintenance pass — `fail_overdue_duty_slots()` marks any still-`open` duty slot from a past day as `failed` (the day closed un-attempted), `generate_daily_duty_slots()` creates today's `open` slots for all active, non-expired duties (idempotent: skips any `(task_id, scheduled_date)` that already exists), then `purge_expired_limbo_accounts()` deletes every account still unverified past `ACCOUNT_LIMBO_PURGE_HOURS` in one `DELETE` (CASCADE removes their children).
 2. Spawns an `asyncio.Task` (`_maintenance_task`) that loops, sleeping until the next UTC midnight, and repeats the pass daily.
 
 The task reference is stored at module level in `src/services/tasks/submissions.py` to prevent garbage collection. `stop_daily_maintenance()` cancels it cleanly on shutdown. Tests call `generate_daily_duty_slots(session)` and `purge_expired_limbo_accounts(session)` directly (bypassing the background loop).

@@ -2288,58 +2288,44 @@ same `axllent/mailpit` image and ports — there's no shared file between them.
 
 ## 23. Task Lifecycle & Expiry
 
-**Q244. Walk through the submission state machine — when does a submission actually "end"?**
-A child submits → `pending`. The parent reviews → `approved` (success, terminal)
-or `rejected`. **Rejection is not terminal on its own**: while the task is still
-live, the child can resubmit — which *patches the same submission row* back to
-`pending` (never creates a new row, see `resubmit_task`) — and be rejected again,
-any number of times. A submission resolves only when it's **approved**, or when
-the **task expires without an approval** (failure). There is deliberately **no
-separate `failed`/`expired` status**: the outcome is derivable from `status` +
-the task's `expires_at` (rejected + expired = failed; pending + expired = still
-awaiting the parent's final call), so there's no extra column to keep consistent.
+**Q244. Walk through the duty submission state machine and its statuses.**
+Each midnight `generate_daily_duty_slots` pre-creates one row per active duty per
+day as **`open`** (awaiting the child). Lifecycle: `open` → *(child submits today)*
+→ `pending` → *(parent)* → `approved` / `rejected`. A `rejected` slot can be
+resubmitted the same day (→ `pending`) any number of times. If a day ends with the
+slot still `open` (never attempted), the midnight sweep `fail_overdue_duty_slots`
+flips it to terminal **`failed`**. So every duty-day lands on exactly one explicit
+outcome — `approved`, `rejected`, or `failed` — (or `pending` while awaiting the
+parent). `extra_task` submissions skip the `open` phase: the child creates them
+directly as `pending`. The `status` **fully describes the state**, so nothing has
+to read `submitted_at` to disambiguate — an un-attempted slot is `open`, not the
+nonsensical "pending that was never submitted." That's why `approve`/`reject` just
+require `status == "pending"`: an `open` or `failed` slot is excluded automatically
+(409), with no separate `submitted_at` guard.
 
-**Q245. Why does `expires_at` block the child but not the parent?**
-Once a task is past `expires_at`, `submit_task` and `resubmit_task` return **410
-Gone** — the child can no longer start or retry an attempt. But `approve_submission`
-/ `reject_submission` are intentionally *not* expiry-gated, so a submission left
-`pending` stays reviewable indefinitely: the parent may still approve (success) or
-reject (failure) it. This mirrors the real intent — "the deadline stops new
-attempts, but I can still grade what was already turned in." `generate_daily_duty_slots`
-also skips expired duties, so no new daily slots appear after a duty's deadline.
-410 (vs the 409 used for state conflicts like "already approved") is consistent
-with the auth flow's expired-window responses: 410 = the window is gone; 409 =
-wrong state but still actionable.
+**Q245. Deadlines — what stops the child, and what never stops the parent?**
+A duty must be done **on its own day**, enforced for free: `submit_task` only ever
+looks at *today's* slot (`scheduled_date == today`), so yesterday's can't be
+submitted, and `resubmit_task` returns **410** for a slot whose `scheduled_date` is
+in the past. (Time-of-day deadlines — "by midday" — are intentionally out of scope
+for the MVP; a duty is simply due by end of its day.) A duty's optional `expires_at`
+still ends the *whole recurrence* (no new slots; submit/resubmit → 410 once past).
+But the **parent is never deadline-gated**: a `pending` slot stays reviewable
+forever — `approve`/`reject` check only `status`, so the parent can settle
+yesterday's submission today. 410 = "the child's window is gone"; 409 = "wrong
+state."
 
-**Q246. A `duty` is a daily recurring chore and an `extra_task` is one-off — how does "recurring" actually work in the data model?**
-The recurring part is the **submission**, not the task. A `duty` is **one** row in
-`tasks` that persists — it is *not* duplicated or regenerated each day. What
-regenerates is the per-day instance: every midnight `generate_daily_duty_slots`
-inserts a **new `task_submissions` row** for each active, non-expired duty, tagged
-with that day's `scheduled_date` and pointing at the same `task_id`. The
-`UniqueConstraint(task_id, scheduled_date)` guarantees exactly one slot per duty
-per day (and makes the job idempotent — re-running it inserts nothing). So
-"Task A on day 2" is the *same* Task A row plus a *brand-new* submission, fully
-independent of day 1's: yesterday's row is frozen in whatever state it ended
-(`approved`/`pending`/`rejected`), never patched or reused to represent today.
-An `extra_task`, by contrast, has no daily job — the child creates its single
-submission once via `submit_task`.
-
-This per-day history is deliberate: because each day is its own row keyed by
-`(task_id, scheduled_date)`, the stable `task_id` is a natural anchor for a future
-**streak** feature (a streak = consecutive `scheduled_date`s where that duty's
-submission is `approved`). Note there's no explicit "missed" status — a past day's
-un-acted slot just stays `pending` with `submitted_at = NULL`; a miss is *derived*
-(`scheduled_date < today AND status != 'approved'`), not stored.
-
-Because the slot is pre-created `pending` *before* the child does anything, the
-review endpoints guard on **`submitted_at`**, not just `status`: a duty slot is
-only approvable/rejectable once the child has actually submitted it
-(`submitted_at` set). All three review paths apply this rule — `approve_submission`
-and `reject_submission` return `409` if `submitted_at is None`, and `batch_approve`
-filters `submitted_at IS NOT NULL` in its query. (Extra-task submissions always
-have `submitted_at` set at creation, so the guard only ever affects un-done duty
-slots.)
+**Q246. How does the model support the "all duties every day" streak?**
+By recording **what was expected**, not just what was done. One pre-generated row
+per duty per day means a missed duty leaves a real `failed` row — so you can tell
+"did 4 of 5" from "only 4 existed," which an on-demand model (a row only when the
+child submits) could not. The streak is then **computed** from those rows, never
+stored as a counter: a `scheduled_date` is "perfect" iff every duty row for it is
+`approved`. A `pending` row (submitted, parent hasn't confirmed) makes that day
+*temporarily* imperfect — approving it **restores** the streak on the next
+recompute, with no special logic. A `failed` (never attempted) or `rejected`-not-
+fixed-by-day's-end row is a **permanent** break. The streak/Goals computation itself
+is a future epic; the explicit per-day rows are the ledger it will read.
 
 ---
 

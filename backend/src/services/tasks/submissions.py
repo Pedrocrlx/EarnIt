@@ -13,7 +13,7 @@ from datetime import UTC, datetime, time, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import AsyncSessionLocal
@@ -32,10 +32,11 @@ async def submit_task(
 ) -> TaskSubmission:
     """Record a child's completion of a task.
 
-    Duties stamp today's pre-generated slot (409 if already submitted today);
-    extra tasks create a new pending submission (409 if one is already pending
-    or approved). The local import of ``get_task_or_404`` avoids a circular
-    import between this module and ``crud``.
+    Duties flip today's pre-generated slot from ``open`` to ``pending`` (409 if it
+    isn't ``open`` — already submitted, reviewed, or missed); extra tasks create a
+    new pending submission (409 if one is already pending or approved). The local
+    import of ``get_task_or_404`` avoids a circular import between this module and
+    ``crud``.
     """
     from src.services.tasks.crud import get_task_or_404
 
@@ -58,10 +59,11 @@ async def submit_task(
         slot = result.scalar_one_or_none()
         if slot is None:
             raise HTTPException(status_code=404, detail="No duty slot found for today")
-        if slot.submitted_at is not None:
+        if slot.status != "open":
             raise HTTPException(
                 status_code=409, detail="Duty already submitted for today"
             )
+        slot.status = "pending"
         slot.submitted_at = now
         await session.commit()
         logger.info("Duty submitted: submission_id=%s", slot.id)
@@ -109,6 +111,9 @@ async def resubmit_task(
     task = await session.get(Task, submission.task_id)
     if task and task.expires_at is not None and task.expires_at <= now:
         raise HTTPException(status_code=410, detail="Task has expired")
+    # A duty slot can only be resubmitted on its own day — yesterday's chore is closed.
+    if submission.scheduled_date is not None and submission.scheduled_date < now.date():
+        raise HTTPException(status_code=410, detail="The day for this duty has passed")
     if submission.status != "rejected":
         raise HTTPException(
             status_code=409, detail="Only rejected submissions can be resubmitted"
@@ -154,8 +159,6 @@ async def approve_submission(
     submission = await get_submission_or_404(submission_id, user, session)
     if submission.status != "pending":
         raise HTTPException(status_code=409, detail="Submission is not pending")
-    if submission.submitted_at is None:
-        raise HTTPException(status_code=409, detail="Duty has not been submitted yet")
     task = await session.get(Task, submission.task_id)
     _apply_approval(session, submission, task, datetime.now(UTC))
     await session.commit()
@@ -174,8 +177,6 @@ async def reject_submission(
     submission = await get_submission_or_404(submission_id, user, session)
     if submission.status != "pending":
         raise HTTPException(status_code=409, detail="Submission is not pending")
-    if submission.submitted_at is None:
-        raise HTTPException(status_code=409, detail="Duty has not been submitted yet")
     submission.status = "rejected"
     submission.reviewed_at = datetime.now(UTC)
     submission.rejection_note = rejection_note
@@ -248,10 +249,12 @@ async def list_submissions(
 
 
 async def generate_daily_duty_slots(session: AsyncSession) -> int:
-    """Insert a pending submission slot for every active duty task that lacks one today.
+    """Insert an ``open`` slot for every active duty task that lacks one today.
 
-    Safe to call multiple times — the unique constraint on (task_id, scheduled_date)
-    is the DB-level guard; the pre-check here avoids unnecessary writes.
+    A slot starts ``open`` (awaiting the child); it becomes ``pending`` on submit and
+    is swept to ``failed`` if its day ends still open. Safe to call multiple times —
+    the unique constraint on (task_id, scheduled_date) is the DB-level guard; the
+    pre-check here avoids unnecessary writes.
     """
     now = datetime.now(UTC)
     today = now.date()
@@ -285,7 +288,7 @@ async def generate_daily_duty_slots(session: AsyncSession) -> int:
                     task_id=duty.id,
                     child_id=duty.child_id,
                     scheduled_date=today,
-                    status="pending",
+                    status="open",
                 )
             )
             count += 1
@@ -294,6 +297,28 @@ async def generate_daily_duty_slots(session: AsyncSession) -> int:
         await session.commit()
         logger.info("Generated %d duty slot(s) for %s", count, today)
     return count
+
+
+async def fail_overdue_duty_slots(session: AsyncSession) -> int:
+    """Mark each still-``open`` duty slot from a past day as ``failed``; return count.
+
+    A duty must be done on its own day; once ``scheduled_date`` is in the past and the
+    slot was never submitted (still ``open``), the day closed unattempted → terminal
+    ``failed``. Submitted-but-unreviewed slots (``pending``) are left for the parent.
+    """
+    today = datetime.now(UTC).date()
+    result = await session.execute(
+        update(TaskSubmission)
+        .where(
+            TaskSubmission.status == "open",
+            TaskSubmission.scheduled_date < today,
+        )
+        .values(status="failed")
+    )
+    await session.commit()
+    if result.rowcount:
+        logger.info("Marked %d overdue duty slot(s) as failed", result.rowcount)
+    return result.rowcount
 
 
 def _seconds_until_next_midnight() -> float:
@@ -306,8 +331,9 @@ def _seconds_until_next_midnight() -> float:
 
 
 async def _run_maintenance() -> None:
-    """One pass: generate today's duty slots and purge expired limbo accounts."""
+    """One pass: fail overdue duty slots, open today's, and purge limbo accounts."""
     async with AsyncSessionLocal() as session:
+        await fail_overdue_duty_slots(session)
         await generate_daily_duty_slots(session)
         await accounts.purge_expired_limbo_accounts(session)
 

@@ -1,10 +1,11 @@
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.services.tasks import generate_daily_duty_slots
+from src.models.tasks import TaskSubmission
+from src.services.tasks import fail_overdue_duty_slots, generate_daily_duty_slots
 from tests.conftest import register_and_verify
 
 _TASKS_URL = "/api/v1/tasks"
@@ -592,6 +593,7 @@ async def test_generate_duty_slots_creates_slot_for_today(
     duties = [t for t in child_tasks.json() if t["task_type"] == "duty"]
     assert len(duties) == 1
     assert duties[0]["submission"] is not None
+    assert duties[0]["submission"]["status"] == "open"  # awaiting the child
     assert duties[0]["submission"]["submitted_at"] is None
 
 
@@ -710,8 +712,8 @@ async def test_expired_duty_generates_no_slot(
 async def test_approve_unsubmitted_duty_returns_409(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
-    # The slot exists (pending, submitted_at=NULL) before the child does it; the
-    # parent must not be able to approve work that was never submitted.
+    # The slot exists as `open` before the child does it; the parent must not be
+    # able to approve work that was never submitted.
     token = await register_and_verify(client, mock_mail)
     child_id = await _child(client, token)
     await _duty(client, token, child_id)
@@ -741,3 +743,82 @@ async def test_reject_unsubmitted_duty_returns_409(
         f"{_SUBS_URL}/{sub_id}/reject", cookies={"access_token": token}
     )
     assert res.status_code == 409
+
+
+# day-rollover: overdue duty slots auto-fail
+
+
+async def _past_slot(
+    db_session: AsyncSession,
+    task_id: str,
+    child_id: str,
+    *,
+    status: str,
+    days_ago: int = 1,
+) -> UUID:
+    """Insert a duty slot dated in the past (for sweep / day-rollover tests)."""
+    sub = TaskSubmission(
+        task_id=UUID(task_id),
+        child_id=UUID(child_id),
+        scheduled_date=datetime.now(UTC).date() - timedelta(days=days_ago),
+        status=status,
+        submitted_at=None if status == "open" else datetime.now(UTC),
+    )
+    db_session.add(sub)
+    await db_session.commit()
+    return sub.id
+
+
+async def test_fail_overdue_marks_open_past_slot_failed(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _duty(client, token, child_id)
+    sub_id = await _past_slot(db_session, task["id"], child_id, status="open")
+
+    assert await fail_overdue_duty_slots(db_session) == 1
+    db_session.expunge_all()  # bulk UPDATE bypasses the identity map
+    assert (await db_session.get(TaskSubmission, sub_id)).status == "failed"
+
+
+async def test_fail_overdue_leaves_submitted_past_slot_pending(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    # The child submitted (pending) but the parent never reviewed — not failed; the
+    # parent can still approve/reject it after the day.
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _duty(client, token, child_id)
+    sub_id = await _past_slot(db_session, task["id"], child_id, status="pending")
+
+    assert await fail_overdue_duty_slots(db_session) == 0
+    db_session.expunge_all()
+    assert (await db_session.get(TaskSubmission, sub_id)).status == "pending"
+
+
+async def test_fail_overdue_leaves_today_open_slot(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    await _duty(client, token, child_id)
+    await generate_daily_duty_slots(db_session)  # today's slot, still open
+
+    assert await fail_overdue_duty_slots(db_session) == 0
+
+
+async def test_resubmit_past_day_duty_returns_410(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    # A rejected duty slot from a past day can't be resubmitted — the day is closed.
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _duty(client, token, child_id)
+    sub_id = await _past_slot(db_session, task["id"], child_id, status="rejected")
+
+    res = await client.patch(
+        f"/api/v1/children/{child_id}/submissions/{sub_id}",
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 410
