@@ -1,4 +1,4 @@
-.PHONY: help up-ba down enter-db ruff format lint-fix mail-up mail-down mail-logs clean full-clean test test-api test-all
+.PHONY: help up-ba down migrate enter-db ruff format lint-fix mail-up mail-down mail-logs clean full-clean test test-api test-all
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -12,6 +12,9 @@ down: ## Stop and remove the Docker containers and volumes
 	docker compose down -v
 
 ## --- Database ---
+
+migrate: ## Apply Alembic migrations up to head (needs the db container)
+	uv run alembic upgrade head
 
 enter-db: ## Enter the PostgreSQL database and list tables
 	docker compose exec db psql -U earn_it_user -d earn_it_db -c "\dt"

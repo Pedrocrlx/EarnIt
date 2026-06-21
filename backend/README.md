@@ -179,9 +179,11 @@ make full-clean    # Full cleanup — everything in clean plus the local .venv (
 The `api` container talks to `db` over the compose network (`POSTGRES_HOST=db`,
 set in `compose.yaml`) regardless of the `POSTGRES_HOST` in `.env` — `.env` itself
 targets local/pytest (`POSTGRES_HOST=localhost`). On a fresh database, apply
-migrations once the stack is up:
+migrations once the stack is up — inside the container, or `make migrate` from the
+host (uses `.env`, talks to the exposed db port):
 ```bash
-docker compose exec api uv run alembic upgrade head
+docker compose exec api uv run alembic upgrade head   # in-container
+make migrate                                          # from the host
 ```
 
 Mailpit's service definition lives in its own [`mail/compose.yaml`](mail/README.md),
@@ -191,6 +193,7 @@ in isolation (`make mail-up` / `make mail-down` / `make mail-logs`).
 **Local Development (without Docker):**
 ```bash
 uv sync
+make migrate                      # apply migrations (db must be reachable)
 uv run uvicorn main:app --reload
 ```
 
@@ -323,11 +326,7 @@ Unique constraint: `(task_id, scheduled_date)` — one duty slot per task per da
 | `target_points` | int, nullable | NULL until the parent approves and sets the value |
 | `created_at` | timestamptz | orders the list / "requested since" |
 
-> **Trimmed by design:** no `image_url` (a goal is just text), no `completed_at` (`status = redeemed` plus the redeem `debit`'s `created_at` already capture "done when"), no `updated_at` (nothing reads it), and no stored "reached" flag (the frontend derives it from `balance_points >= target_points`).
-
-#### Goals flow
-
-A child profile (no PIN) **requests** a goal — it lands `requested` (shown as "pending" to the child). The parent (PIN-gated, frontend) either **rejects** it (kept as `rejected`, hidden from the child view) or **approves** it with a `target_points` value. The child earns points from extra tasks; once the balance reaches the target the parent **redeems** it — writing the ledger's first `debit` (of `target_points`) and flipping the goal to `redeemed` (terminal). Like the rest of the app there are **no child logins**: every goal route is the parent session, and the frontend's PIN gate decides child mode (request) vs parent mode (approve/reject/redeem), exactly as task `submit` vs `approve`.
+> **Trimmed by design:** no `image_url` (a goal is just text), no `completed_at` (`status = redeemed` plus the redeem `debit`'s `created_at` already capture "done when"), no `updated_at` (nothing reads it), and no stored "reached" flag (the frontend derives it from `balance_points >= target_points`). The lifecycle is walked through in [Goals Flow](#5-goals--request-approval--redeem).
 
 ### Auth Flows (step by step)
 
@@ -500,3 +499,18 @@ On every app startup (`lifespan` in `main.py`), `start_daily_maintenance()` runs
 2. Spawns an `asyncio.Task` (`_maintenance_task`) that loops, sleeping until the next UTC midnight, and repeats the pass daily.
 
 The task reference is stored at module level in `src/services/tasks/submissions.py` to prevent garbage collection. `stop_daily_maintenance()` cancels it cleanly on shutdown. Tests call `generate_daily_duty_slots(session)` and `purge_expired_limbo_accounts(session)` directly (bypassing the background loop).
+
+#### 5. Goals — request, approval & redeem (`/api/v1/children/{child_id}/goals`)
+
+A child's wishlist. Like everything else there are **no child logins**: every route is the parent session and child-scoped (`404` if the child isn't theirs); the frontend's PIN gate decides child mode (request) vs parent mode (approve/reject/redeem), exactly as task `submit` vs `approve`. The lifecycle is `requested → approved`/`rejected`, and `approved → redeemed` (terminal).
+
+1. **`POST /api/v1/children/{child_id}/goals`** `{ name }` *(child mode)*
+   - Records the child's wish as a `goals` row in `status = requested`, `target_points = null` (shown as "pending" to the child). → `201 GoalResponse`
+2. **`GET /api/v1/children/{child_id}/goals`** *(filter: `status?`)*
+   - Returns `{ child_id, balance_points, point_value_eur, goals[] }` — the goals newest-first plus the child's current balance, so the frontend can show progress and derive each approved goal's "reached" state from `balance_points >= target_points`. The frontend hides `rejected` goals in child mode. → `200 GoalListResponse`
+3. **`POST /api/v1/children/{child_id}/goals/{goal_id}/approve`** `{ target_points }` *(parent)*
+   - Sets the point value the child must "pay" and flips `status → approved`. `target_points` must be > 0 (`422` otherwise) · `409` unless the goal is `requested` · `404` if the goal/child isn't the parent's. → `200 GoalResponse`
+4. **`POST /api/v1/children/{child_id}/goals/{goal_id}/reject`** *(parent)*
+   - Flips `status → rejected` — the goal is **kept** (history) but hidden from the child view. `409` unless the goal is `requested`. → `200 GoalResponse`
+5. **`POST /api/v1/children/{child_id}/goals/{goal_id}/redeem`** *(parent)*
+   - Spends the points: re-reads the balance, and if `balance >= target_points` inserts a single `wallet_transactions (debit)` of `target_points` (`description = "Goal: <name>"`) and flips `status → redeemed` in one transaction. `409` unless the goal is `approved` **or** if the balance is below target · `404` if the goal/child isn't the parent's. This is the ledger's first and only `debit` writer — the balance falls out of `SUM(credits) − SUM(debits)` for free. → `200 GoalResponse`
