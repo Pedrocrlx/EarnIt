@@ -2343,9 +2343,59 @@ pure points ledger. On schema: the only migration is an **additive**
 whole-number points (nothing dropped or retyped), and the API just aliases them as
 `reward_points` / `amount_points`.
 
+## 24. Goals — Request, Approval & Redeem
+
+**Q248. Walk through the goal lifecycle and who acts at each step.**
+A child profile **requests** a goal — free text of what they want ("go to the
+park") — created in **`requested`** (shown as "pending" to the child). The parent
+either **rejects** it (→ `rejected`) or **approves** it, setting a
+**`target_points`** value (→ `approved`). The child earns points from extra tasks;
+once their balance reaches the target the parent **redeems** it (→ `redeemed`,
+terminal), spending the points. It deliberately mirrors the submission state
+machine — request/approve/reject is the same shape as submit/approve/reject — so
+`approve`/`reject` simply require `status == "requested"` (else 409) and `redeem`
+requires `status == "approved"` (else 409), with no extra flags to disambiguate.
+
+**Q249. There are no child logins — how can a child "request" a goal and the parent "approve" it on the same API?**
+Same model as the rest of the app: it's a **family account**, the parent's session
+is the only authenticated identity, and the **frontend's PIN gate** decides child
+mode (request) vs parent mode (approve/reject/redeem) — exactly like task `submit`
+(child) vs `approve` (parent) already work. So every goal route is parent-session
+authenticated and child-scoped (404 if the child isn't theirs); the backend does
+**not** try to distinguish actors, because it can't and doesn't need to. One
+consequence stated honestly: a `rejected` goal is hidden by the frontend *not
+rendering* it, not by the API withholding it — it's not leaked to a *different*
+account, but it does reach the same browser. Consistent with every other read in
+the app.
+
+**Q250. Redeeming "spends" points — how, and why is it the ledger's first `debit`?**
+The wallet is a pure credit/debit ledger and balance = Σcredits − Σdebits.
+Approving a rewarded task writes a `credit`; until goals, nothing ever wrote a
+`debit` — the type existed but was unused. Redeem is its **first writer**: it
+re-reads the balance via the shared `get_balance`, refuses with 409 if
+`balance < target_points` (you can't redeem what you can't afford), then inserts a
+single `WalletTransaction(amount=target_points, transaction_type="debit",
+description="Goal: <name>")` and flips the goal to `redeemed` in the same commit.
+The balance falls out of the ledger for free — no stored balance to keep in sync.
+
+**Q251. The `goals` table is only six columns — what did you deliberately leave out, and why?**
+YAGNI, audited column by column. **`image_url`** — a goal is just the child's text;
+there's no image in the flow, so it's not stored (the frontend can add one later if
+ever needed). **`completed_at`** — `status == "redeemed"` already says "done," and
+the *when* is the redeem `debit`'s `created_at`; storing it again would be
+derivable, drift-prone duplication. **`updated_at`** — nothing reads it; the status
+transitions are the audit trail. A stored **"reached"** flag — the list endpoint
+already returns `balance_points` and each goal's `target_points`, so the frontend
+derives `reached` itself; computing it server-side per goal would be redundant. What
+remains — `id`, `child_id` (FK CASCADE, **not** unique → many goals per child),
+`name`, `status`, `target_points` (NULL until approved), `created_at` (orders the
+list) — each earns its place. Same instinct as the points feature: the table is
+purely additive (one `CREATE TABLE`), touching nothing that already exists.
+
 ---
 
-*This document covers Epic 1 (Authentication & Profiles) plus the task lifecycle
-as implemented at the time of writing. As later epics (gamification, goals) are
-built, the same "why" questions should be asked of those decisions too — this is
-a living defense-prep document, not a one-time artifact.*
+*This document covers Epic 1 (Authentication & Profiles), the task lifecycle, and
+the goals feature as implemented at the time of writing. As later epics
+(gamification, streaks) are built, the same "why" questions should be asked of
+those decisions too — this is a living defense-prep document, not a one-time
+artifact.*

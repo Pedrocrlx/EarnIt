@@ -10,6 +10,7 @@ from sqlmodel import SQLModel
 
 import src.database as app_database
 import src.models.auth
+import src.models.goals  # registers the goals table with SQLModel.metadata
 import src.models.tasks  # noqa: F401 — registers task tables with SQLModel.metadata
 import src.services.tasks.submissions as app_tasks_submissions
 from src.config import settings

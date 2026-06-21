@@ -44,6 +44,11 @@ docker compose exec api uv run alembic upgrade head  # Migrations (first run onl
 | `POST` | `/api/v1/children/{child_id}/tasks/{task_id}/submit` | session | Submit a task completion |
 | `PATCH` | `/api/v1/children/{child_id}/submissions/{id}` | session | Resubmit after rejection |
 | `GET` | `/api/v1/children/{child_id}/wallet` | session | Balance + transaction history |
+| `POST` | `/api/v1/children/{child_id}/goals` | session | Request a goal (child mode) |
+| `GET` | `/api/v1/children/{child_id}/goals` | session | List goals + balance (filter: `status`) |
+| `POST` | `/api/v1/children/{child_id}/goals/{goal_id}/approve` | session | Approve + set point value |
+| `POST` | `/api/v1/children/{child_id}/goals/{goal_id}/reject` | session | Reject a goal request |
+| `POST` | `/api/v1/children/{child_id}/goals/{goal_id}/redeem` | session | Redeem (spend points → debit) |
 
 ### Auth flows at a glance
 
@@ -208,6 +213,7 @@ backend/
 │   ├── api/                  # API entry point and routes
 │   │   ├── auth/             # /api/v1/auth/* endpoints
 │   │   ├── children.py       # /api/v1/children/* endpoints (child task/wallet view)
+│   │   ├── goals.py          # /api/v1/children/{id}/goals/* endpoints (goal lifecycle)
 │   │   ├── profiles.py       # /api/v1/profiles/* endpoints
 │   │   ├── tasks.py          # /api/v1/tasks/* endpoints (parent task management)
 │   │   └── routes.py         # Centralized API router inclusion
@@ -218,7 +224,7 @@ backend/
 │   │   └── fixtures.py       # Dev fixture seeding (dev@earnit.local + child); importable + standalone
 │   ├── email/                # HTML email templates (verification code, etc.)
 │   ├── mail.py               # fastapi-mail config
-│   ├── models/               # SQLModel tables: User, Child, Task, TaskSubmission, WalletTransaction
+│   ├── models/               # SQLModel tables: User, Child, Task, TaskSubmission, WalletTransaction, Goal
 │   ├── schemas/              # Pydantic request/response schemas
 │   ├── security/             # Hashing, JWT creation/decoding
 │   └── services/             # Core business logic: accounts, verification, tasks (crud/submissions/wallet)
@@ -300,11 +306,28 @@ Unique constraint: `(task_id, scheduled_date)` — one duty slot per task per da
 | `child_id` | UUID (FK → `children.id`) | `ON DELETE CASCADE` |
 | `task_submission_id` | UUID (FK → `task_submissions.id`), nullable | `ON DELETE SET NULL` — keeps ledger intact if submission deleted |
 | `amount` | numeric(10,2) | ledger entry in **points** (whole numbers, positive). API exposes it as `amount_points` |
-| `transaction_type` | varchar(20) | `credit` \| `debit` |
+| `transaction_type` | varchar(20) | `credit` (task approved) \| `debit` (goal redeemed) |
 | `description` | text, nullable | |
 | `created_at` | timestamptz | |
 
 > **Points, not euros:** the backend is a pure **points** ledger — `reward_amount`/`amount`/balance are point counts (the existing `numeric` columns are reused; no schema change there). Euros are a **frontend** concern: multiply points by the family's `users.point_value_eur` rate (set via `PATCH /profiles/point-value`, exposed in `GET /family` and the wallet response). Changing the rate **re-values** everything, since only points are stored. The child only ever sees points.
+
+#### `goals` — a child's wishlist and its approval lifecycle (`src/models/goals.py`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID (PK) | |
+| `child_id` | UUID (FK → `children.id`) | `ON DELETE CASCADE`. Not unique — a child may hold many goals |
+| `name` | varchar(120) | the child's request text, e.g. "Ir ao parque" |
+| `status` | varchar(20) | `requested` → `approved`/`rejected`; `approved` → `redeemed` |
+| `target_points` | int, nullable | NULL until the parent approves and sets the value |
+| `created_at` | timestamptz | orders the list / "requested since" |
+
+> **Trimmed by design:** no `image_url` (a goal is just text), no `completed_at` (`status = redeemed` plus the redeem `debit`'s `created_at` already capture "done when"), no `updated_at` (nothing reads it), and no stored "reached" flag (the frontend derives it from `balance_points >= target_points`).
+
+#### Goals flow
+
+A child profile (no PIN) **requests** a goal — it lands `requested` (shown as "pending" to the child). The parent (PIN-gated, frontend) either **rejects** it (kept as `rejected`, hidden from the child view) or **approves** it with a `target_points` value. The child earns points from extra tasks; once the balance reaches the target the parent **redeems** it — writing the ledger's first `debit` (of `target_points`) and flipping the goal to `redeemed` (terminal). Like the rest of the app there are **no child logins**: every goal route is the parent session, and the frontend's PIN gate decides child mode (request) vs parent mode (approve/reject/redeem), exactly as task `submit` vs `approve`.
 
 ### Auth Flows (step by step)
 

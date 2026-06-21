@@ -95,6 +95,18 @@ app = FastAPI(
             "name": "children/wallet",
             "description": "Child wallet — balance and transaction history",
         },
+        {
+            "name": "goals",
+            "description": "Goals — a child requests a goal and lists their wishlist",
+        },
+        {
+            "name": "goals/review",
+            "description": "Goal review — parent approves (sets value) or rejects",
+        },
+        {
+            "name": "goals/redeem",
+            "description": "Goal redeem — parent spends the points via a wallet debit",
+        },
         {"name": "system", "description": "Health check"},
     ],
 )
