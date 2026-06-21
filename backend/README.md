@@ -398,8 +398,9 @@ The suite is split into two parts:
   — the "bonus" integration-level coverage (guide §5.3).
 
 `tests/conftest.py` (shared by both) centralizes the fixtures plus the example
-account (`VALID_USER`), cookie-extraction (`extract_cookie`), and register+verify
-(`register_and_verify`) helpers.
+account (`VALID_USER`) and a second account (`_OTHER`) for cross-user tests,
+cookie-extraction (`extract_cookie`), register+verify (`register_and_verify`),
+and child-creation (`_child`) helpers.
 
 ```bash
 make test              # essential unit suite only

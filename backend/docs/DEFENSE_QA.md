@@ -870,13 +870,15 @@ involved, and there's no security reason to randomize PINs in tests (unlike,
 say, secrets that must never be predictable in *production*). `PARENT_PIN_LENGTH
 = 4` in `app/config.py` constrains them to 4 digits either way.
 
-**Q103. `test_profiles.py` defines `_OTHER = {"email": "other@example.com", ...}` — why a second full user dict instead of just overriding `email`?**
-Some profile tests need *two independent parent accounts* to verify
-cross-account isolation (e.g. "child belonging to another user → 404" in the
-Chunk 5 plan). `_OTHER` being a complete dict (not just an email override)
-makes those tests self-documenting — `register_and_verify(client, mock_mail,
-**_OTHER)` clearly registers "the other family," with its own `family_name`
-("Costa") distinguishing it from `VALID_USER`'s "Silva" in assertions/output.
+**Q103. `tests/conftest.py` defines `_OTHER = {"email": "other@example.com", ...}` — why a second full user dict instead of just overriding `email`?**
+Several suites (profiles, tasks, goals) need *two independent parent accounts* to
+verify cross-account isolation (e.g. "child belonging to another user → 404").
+`_OTHER` being a complete dict (not just an email override) makes those tests
+self-documenting — `register_and_verify(client, mock_mail, **_OTHER)` clearly
+registers "the other family," with its own `family_name` ("Costa") distinguishing
+it from `VALID_USER`'s "Silva" in assertions/output. It lives in `conftest.py`
+alongside `_child` (create-a-child) precisely because three suites used identical
+copies — same reasoning as `register_and_verify`: one home, no drift.
 
 **Q104. Why does `tests/__init__.py` exist (an empty file, presumably)?**
 It's what makes `tests/` an importable Python *package*, which is required for
