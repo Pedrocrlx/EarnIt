@@ -3,18 +3,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
-from tests.conftest import VALID_USER, register_and_verify
+from tests.conftest import _OTHER, VALID_USER, register_and_verify
 
 _PIN_URL = "/api/v1/auth/pin"
 _CHILDREN_URL = "/api/v1/profiles/children"
 _FAMILY_URL = "/api/v1/profiles/family"
 _FAMILY_NAME_URL = "/api/v1/profiles/family-name"
 
-_OTHER = {
-    "email": "other@example.com",
-    "password": "Password123!",
-    "family_name": "Costa",
-}
 _PIN = "1234"
 
 # POST /profiles/children

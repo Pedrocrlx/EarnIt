@@ -2,28 +2,13 @@ from uuid import uuid4
 
 from httpx import AsyncClient
 
-from tests.conftest import register_and_verify
+from tests.conftest import _OTHER, _child, register_and_verify
 
 _TASKS_URL = "/api/v1/tasks"
 _SUBS_URL = "/api/v1/tasks/submissions"
-_OTHER = {
-    "email": "other@example.com",
-    "password": "Password123!",
-    "family_name": "Costa",
-}
 
 
 # Shared helpers
-
-
-async def _child(client: AsyncClient, token: str, name: str = "Leo") -> str:
-    res = await client.post(
-        "/api/v1/profiles/children",
-        json={"name": name},
-        cookies={"access_token": token},
-    )
-    assert res.status_code == 201
-    return res.json()["id"]
 
 
 def _goals_url(child_id: str) -> str:

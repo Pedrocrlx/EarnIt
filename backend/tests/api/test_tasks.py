@@ -6,27 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.tasks import TaskSubmission
 from src.services.tasks import fail_overdue_duty_slots, generate_daily_duty_slots
-from tests.conftest import register_and_verify
+from tests.conftest import _OTHER, _child, register_and_verify
 
 _TASKS_URL = "/api/v1/tasks"
 _SUBS_URL = "/api/v1/tasks/submissions"
-_OTHER = {
-    "email": "other@example.com",
-    "password": "Password123!",
-    "family_name": "Costa",
-}
 
 # Shared helpers
-
-
-async def _child(client: AsyncClient, token: str, name: str = "Leo") -> str:
-    res = await client.post(
-        "/api/v1/profiles/children",
-        json={"name": name},
-        cookies={"access_token": token},
-    )
-    assert res.status_code == 201
-    return res.json()["id"]
 
 
 async def _duty(
