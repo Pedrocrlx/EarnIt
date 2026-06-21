@@ -2327,6 +2327,22 @@ recompute, with no special logic. A `failed` (never attempted) or `rejected`-not
 fixed-by-day's-end row is a **permanent** break. The streak/Goals computation itself
 is a future epic; the explicit per-day rows are the ledger it will read.
 
+**Q247. Rewards are configurable in euros per family — why does the backend store *points*, not euros, and why almost no schema change?**
+Because a *re-valuable* rate is only possible if you store the rate-independent
+unit. Store euros and the rate is frozen at earn time; store **points** and "€ =
+points × the current rate" — so when a parent changes the family rate, a child's
+existing balance re-values for free. The rate lives per-parent on
+`users.point_value_eur` (`Numeric(10,4)`, default `0.01` — 4 decimals so fine
+rates like `0.015` fit), set via `PATCH /profiles/point-value` and exposed in
+`GET /family` + the wallet response. **€ never touches the backend**: the child
+only sees points, and the parent's "enter € → preview points" form and any €
+balance are computed *frontend*-side from points × the rate. That keeps the API a
+pure points ledger. On schema: the only migration is an **additive**
+`ADD COLUMN users.point_value_eur` — the reward/balance values reuse the existing
+`tasks.reward_amount` / `wallet_transactions.amount` `Numeric` columns to hold
+whole-number points (nothing dropped or retyped), and the API just aliases them as
+`reward_points` / `amount_points`.
+
 ---
 
 *This document covers Epic 1 (Authentication & Profiles) plus the task lifecycle

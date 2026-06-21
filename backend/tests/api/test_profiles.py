@@ -326,3 +326,60 @@ async def test_onboarding_completes_when_family_name_set_last(
         )
     ).scalar_one()
     assert onboarding is True
+
+
+# PATCH /profiles/point-value — the points→€ exchange rate
+
+_POINT_VALUE_URL = "/api/v1/profiles/point-value"
+
+
+async def test_set_point_value_returns_200(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    res = await client.patch(
+        _POINT_VALUE_URL,
+        json={"point_value_eur": "0.015"},
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 200
+    assert res.json()["status"] == "success"
+    assert float(res.json()["point_value_eur"]) == 0.015
+
+
+async def test_point_value_reflected_in_get_family(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    await client.patch(
+        _POINT_VALUE_URL, json={"point_value_eur": "1"}, cookies={"access_token": token}
+    )
+    fam = await client.get(_FAMILY_URL, cookies={"access_token": token})
+    assert float(fam.json()["point_value_eur"]) == 1.0
+
+
+async def test_get_family_default_point_value_is_001(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    fam = await client.get(_FAMILY_URL, cookies={"access_token": token})
+    assert float(fam.json()["point_value_eur"]) == 0.01
+
+
+async def test_set_point_value_zero_returns_422(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    res = await client.patch(
+        _POINT_VALUE_URL, json={"point_value_eur": "0"}, cookies={"access_token": token}
+    )
+    assert res.status_code == 422
+
+
+async def test_set_point_value_too_many_decimals_returns_422(
+    client: AsyncClient, mock_mail
+):
+    token = await register_and_verify(client, mock_mail)
+    res = await client.patch(
+        _POINT_VALUE_URL,
+        json={"point_value_eur": "0.00001"},  # 5 decimals > 4
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 422
+
+
+async def test_set_point_value_without_access_token_returns_401(client: AsyncClient):
+    res = await client.patch(_POINT_VALUE_URL, json={"point_value_eur": "0.02"})
+    assert res.status_code == 401

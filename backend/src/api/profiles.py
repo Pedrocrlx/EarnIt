@@ -20,6 +20,8 @@ from src.dependencies import get_current_user
 from src.models.auth import Child, User
 from src.schemas.profiles import (
     ChildCreateRequest,
+    SetPointValueRequest,
+    SetPointValueResponse,
     UpdateFamilyNameRequest,
     UpdateFamilyNameResponse,
 )
@@ -48,6 +50,30 @@ async def update_family_name(
     logger.info("Family name updated: user_id=%s", current_user.id)
     await maybe_complete_onboarding(current_user, session)
     return UpdateFamilyNameResponse(status="success", family_name=body.family_name)
+
+
+@router.patch(
+    "/point-value",
+    tags=["profiles/family"],
+    summary="Set the family points→€ exchange rate",
+)
+async def set_point_value(
+    body: SetPointValueRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> SetPointValueResponse:
+    """Set how many euros one point is worth for this family (e.g. `0.015`).
+
+    Rewards and balances are stored in points; this rate is what the frontend uses
+    to display euros. Changing it **re-values everything** — a child's existing
+    points are simply shown at the new rate. Must be > 0, ≤ 4 decimal places.
+    """
+    current_user.point_value_eur = body.point_value_eur
+    await session.commit()
+    logger.info("Point value updated: user_id=%s", current_user.id)
+    return SetPointValueResponse(
+        status="success", point_value_eur=current_user.point_value_eur
+    )
 
 
 @router.post(
@@ -165,6 +191,7 @@ async def get_family(
         "id": current_user.id,
         "family_name": current_user.family_name,
         "onboarding_completed": current_user.onboarding_completed,
+        "point_value_eur": current_user.point_value_eur,
         "children": [
             {
                 "id": child.id,

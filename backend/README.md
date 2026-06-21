@@ -28,6 +28,7 @@ docker compose exec api uv run alembic upgrade head  # Migrations (first run onl
 | `POST` | `/api/v1/auth/forgot-pin` | session | Email a PIN-reset code (rate-limited, 429 while active) |
 | `POST` | `/api/v1/auth/reset-pin` | session | `{ code, new_pin }` → reset PIN |
 | `PATCH` | `/api/v1/profiles/family-name` | session | Update family display name |
+| `PATCH` | `/api/v1/profiles/point-value` | session | Set the family points→€ rate |
 | `POST` | `/api/v1/profiles/children` | session | Add a child profile |
 | `PATCH` | `/api/v1/profiles/children/{id}` | session | Deactivate a child profile |
 | `GET` | `/api/v1/profiles/family` | session | Parent profile + all children |
@@ -240,6 +241,7 @@ Two tables (`src/models/auth.py`). Verification codes are **not** a table — th
 | `parent_pin_hash` | str(255), nullable | bcrypt; `NULL` until the PIN is set during onboarding |
 | `pin_set_at` | datetime (tz), nullable | when the PIN was last set/changed |
 | `family_name` | str(150), nullable | display name, e.g. *Família Silva* |
+| `point_value_eur` | numeric(10,4), default `0.0100` | family's points→€ rate (parent-set); used by the **frontend** to show euros |
 | `is_active` | bool, default `true` | soft-disable without a destructive delete |
 | `onboarding_completed` | bool, default `false` | server-flipped once `parent_pin_hash` is set **and** ≥1 child exists |
 | `email_verified_at` | datetime (tz), nullable | `NULL` = limbo (unverified); stamped on successful verify |
@@ -270,7 +272,7 @@ Two tables (`src/models/auth.py`). Verification codes are **not** a table — th
 | `title` | varchar(150) | |
 | `description` | text, nullable | |
 | `task_type` | varchar(20) | `duty` \| `extra_task` |
-| `reward_amount` | numeric(10,2) | always `0.00` for duties; > 0 for extra_tasks |
+| `reward_amount` | numeric(10,2) | reward in **points** (whole numbers); `0` for duties, > 0 for extra_tasks. API exposes it as `reward_points` |
 | `expires_at` | timestamptz, nullable | optional deadline (both types); once past, the child can't submit/resubmit and duties stop generating slots |
 | `is_active` | bool, default `true` | soft-delete; inactive tasks stop generating slots |
 | `created_at` / `updated_at` | timestamptz | |
@@ -297,12 +299,12 @@ Unique constraint: `(task_id, scheduled_date)` — one duty slot per task per da
 | `id` | UUID (PK) | |
 | `child_id` | UUID (FK → `children.id`) | `ON DELETE CASCADE` |
 | `task_submission_id` | UUID (FK → `task_submissions.id`), nullable | `ON DELETE SET NULL` — keeps ledger intact if submission deleted |
-| `amount` | numeric(10,2) | always positive |
+| `amount` | numeric(10,2) | ledger entry in **points** (whole numbers, positive). API exposes it as `amount_points` |
 | `transaction_type` | varchar(20) | `credit` \| `debit` |
 | `description` | text, nullable | |
 | `created_at` | timestamptz | |
 
-> **Points display:** all amounts are stored as euros (`numeric(10,2)`). The frontend converts to points at **1 pt = €0.01** (multiply by 100). The API always returns euro values — no backend involvement in the conversion.
+> **Points, not euros:** the backend is a pure **points** ledger — `reward_amount`/`amount`/balance are point counts (the existing `numeric` columns are reused; no schema change there). Euros are a **frontend** concern: multiply points by the family's `users.point_value_eur` rate (set via `PATCH /profiles/point-value`, exposed in `GET /family` and the wallet response). Changing the rate **re-values** everything, since only points are stored. The child only ever sees points.
 
 ### Auth Flows (step by step)
 
@@ -419,9 +421,9 @@ All task-management endpoints require a full `access_token` session (parent). `c
 
 #### 1. Parent — task CRUD (`/api/v1/tasks`)
 
-1. **`POST /api/v1/tasks`** `{ child_id, title, description?, task_type, reward_amount?, expires_at? }` *(`access_token` required)*
+1. **`POST /api/v1/tasks`** `{ child_id, title, description?, task_type, reward_points?, expires_at? }` *(`access_token` required)*
    - Validates `child_id` belongs to the authenticated parent.
-   - Enforces reward rules: `duty` → `reward_amount` must be `0`; `extra_task` → `reward_amount` must be > 0.
+   - Enforces reward rules: `duty` → `reward_points` must be `0`; `extra_task` → `reward_points` must be > 0 (whole points; the parent's frontend converts a €-input to points via the family rate).
    - Creates the `tasks` row. → `201 TaskResponse`
 2. **`GET /api/v1/tasks`** *(`access_token` required)*
    - Query params: `child_id?`, `task_type?` (`duty` | `extra_task`), `is_active?` (bool).
@@ -438,12 +440,12 @@ All task-management endpoints require a full `access_token` session (parent). `c
    - Returns all submissions for the parent's children, newest first. → `200 list[SubmissionResponse]`
 2. **`POST /api/v1/tasks/submissions/{submission_id}/approve`** *(`access_token` required)*
    - `404` if submission doesn't belong to the parent's child · `409` if already approved or not in `pending` state.
-   - Stamps `reviewed_at`, sets `status = approved`. If `reward_amount > 0`, atomically inserts a `wallet_transactions (credit)` row in the same transaction. → `200 SubmissionResponse`
+   - Stamps `reviewed_at`, sets `status = approved`. If `reward_points > 0`, atomically inserts a `wallet_transactions (credit)` row (in points) in the same transaction. → `200 SubmissionResponse`
 3. **`POST /api/v1/tasks/submissions/{submission_id}/reject`** `{ rejection_note? }` *(`access_token` required)*
    - `404` if submission doesn't belong to the parent's child · `409` if not in `pending` state.
    - Stamps `reviewed_at`, sets `status = rejected`, stores `rejection_note`. → `200 SubmissionResponse`
 4. **`POST /api/v1/tasks/submissions/approve-all`** `{ child_id? }` *(`access_token` required)*
-   - Batch-approves all `pending` submissions for the parent (optionally filtered to one child). Each approval atomically credits the wallet if `reward_amount > 0`. → `200 { approved: N }`
+   - Batch-approves all `pending` submissions for the parent (optionally filtered to one child). Each approval atomically credits the wallet (in points) if `reward_points > 0`. → `200 { approved: N }`
 
 > **Router ordering note:** `approve-all` is registered *before* `/{submission_id}/approve` in FastAPI to prevent the literal string `"approve-all"` being matched as a UUID path parameter.
 
@@ -465,7 +467,7 @@ All task-management endpoints require a full `access_token` session (parent). `c
    - Resubmit after a parent rejection. Resets `status → pending`, clears `rejection_note`, stamps `submitted_at = now()` on the **same** submission row (no new row created). A rejected submission can be resubmitted (and re-rejected) any number of times **while the task is live**.
    - `410` if the task has expired, or if the duty's **day has already passed** (a duty is only resubmittable on its own day) · `404` if submission doesn't belong to the child · `409` if status is not `rejected`. → `200 SubmissionResponse`
 4. **`GET /api/v1/children/{child_id}/wallet`** *(`access_token` required)*
-   - Returns `{ child_id, balance, transactions[] }`. Balance is computed as `SUM(amount) WHERE type=credit` − `SUM(amount) WHERE type=debit` via a single DB query.
+   - Returns `{ child_id, balance_points, point_value_eur, transactions[] }` — balance is `SUM(credits) − SUM(debits)` **in points** (single DB query); `point_value_eur` is the family rate so the frontend can show euros. The child only sees points.
    - → `200 WalletBalanceResponse`
 
 #### 4. Daily maintenance background loop
