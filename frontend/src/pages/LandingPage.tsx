@@ -1,38 +1,28 @@
-import { 
-  ClipboardList, 
-  TrendingUp, 
-  Gift, 
-  CheckCircle2, 
-  Coins, 
-  ArrowRight,
-  Shield,
-  MessageCircle,
-  HelpCircle,
-  FileText
-} from "lucide-react";
+import { ClipboardList, Gift, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+
 import Logo from "@/components/Logo";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const howItWorksSteps = [
   {
-    title: "Assign Chores",
-    description: "Parents set tasks, point values, and deadlines in seconds.",
+    title: "Atribuir tarefas",
+    description: "Os pais definem tarefas, pontos e prazos em segundos.",
     icon: ClipboardList,
     iconColor: "text-white",
     iconBg: "bg-[#034e22]",
   },
   {
-    title: "Kids Earn",
-    description: "Kids complete tasks, checking them off to earn points and level up.",
-    icon: TrendingUp,
+    title: "As crianças ganham",
+    description: "As crianças concluem tarefas, ganham pontos e sobem de nível.",
+    icon: ShieldCheck,
     iconColor: "text-[#1a1d00]",
     iconBg: "bg-[#deec5a]",
-    highlight: true,
   },
   {
-    title: "Redeem Rewards",
-    description: "Points translate to real-world rewards, screen time, or allowance.",
+    title: "Trocar recompensas",
+    description: "Os pontos transformam-se em prémios, tempo de ecrã ou semanada.",
     icon: Gift,
     iconColor: "text-white",
     iconBg: "bg-[#034e22]",
@@ -40,130 +30,117 @@ const howItWorksSteps = [
 ];
 
 const footerLinks = [
-  { name: "Privacy Policy", icon: Shield },
-  { name: "Terms of Service", icon: FileText },
-  { name: "Contact Us", icon: MessageCircle },
-  { name: "Help Center", icon: HelpCircle },
+  "Política de Privacidade",
+  "Termos de Serviço",
+  "Contacte-nos",
+  "Centro de Ajuda",
 ];
+
+const ctaButtonClass =
+  "h-auto rounded-full bg-[#deec5a] px-8 py-3 text-xs font-bold leading-5 text-[#1a1d00] shadow-[0px_4px_0px_rgba(91,99,0,0.5)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#d7e652] hover:shadow-[0px_6px_0px_rgba(91,99,0,0.45)] active:translate-y-0 active:shadow-[0px_3px_0px_rgba(91,99,0,0.45)] sm:px-10";
 
 export const LandingPage = () => {
   const navigate = useNavigate();
 
+  const handleRegister = () => navigate("/register");
+
   return (
-    <div className="flex flex-col w-full overflow-x-hidden">
-      <main className="flex-1">
-        {/* Hero Section */}
-        <section className="bg-white px-4 py-10 sm:px-6 lg:px-20 lg:py-16">
-          <div className="container mx-auto grid lg:grid-cols-2 gap-8 items-center">
-            <div className="space-y-6 max-w-lg">
-              <h1 className="font-montserrat text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight text-[#003514]">
-                Turn Chores into <br />
-                <span className="text-[#c2cf40]">Achievements.</span>
+    <div className="min-h-screen bg-[#f8f9fb] text-[#003514]">
+      <main>
+        <section className="overflow-hidden bg-[#f8f9fb] px-5 py-12 sm:px-8 sm:py-14 lg:px-16 lg:py-20 xl:py-24">
+          <div className="mx-auto grid max-w-[1180px] items-center gap-10 md:grid-cols-[minmax(0,1fr)_300px] md:gap-12 lg:min-h-[430px] lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-[72px] xl:gap-20">
+            <div className="max-w-[560px]">
+              <h1 className="text-4xl font-normal leading-[1.12] tracking-normal text-[#003514] sm:text-5xl md:text-[52px] md:leading-[62px] lg:text-[56px] lg:leading-[66px]">
+                Transforme tarefas em
+                <br />
+                <span className="text-[#c2cf40]">conquistas.</span>
               </h1>
-              <p className="text-[#404940] text-sm sm:text-base leading-relaxed max-w-md">
-                Make responsibility fun. Earnit helps parents organize tasks
-                while rewarding kids for building great habits through a
-                playful, gamified experience.
+              <p className="mt-5 max-w-[520px] text-base font-normal leading-7 text-[#404940] sm:text-lg sm:leading-8 lg:text-[22px] lg:leading-9">
+                Torne a responsabilidade divertida. A EarnIt ajuda os pais a organizar tarefas
+                e recompensa as crianças por criarem bons hábitos numa experiência lúdica.
               </p>
-              <Button 
-                onClick={() => navigate("/register")}
-                className="h-auto rounded-full bg-[#deec5a] px-6 py-3 shadow-[0px_4px_0px_#5b630080] hover:bg-[#d7e652] text-base font-bold text-[#1a1d00] transition-all hover:scale-105"
-              >
-                Get Started Free
-                <ArrowRight className="ml-2 w-4 h-4" />
+              <Button onClick={handleRegister} className={cn(ctaButtonClass, "mt-8")}>
+                Começar grátis
               </Button>
             </div>
 
-            <div className="relative max-w-sm lg:max-w-none mx-auto lg:mx-0">
-              <div className="bg-[#034e22] rounded-[24px] aspect-square overflow-hidden border-4 border-white shadow-xl relative">
-                {/* Decorative Elements */}
-                <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(0,53,20,0.4)_0%,transparent_100%)] z-10" />
-                <img 
-                  src="https://images.unsplash.com/photo-1502086223501-7ea244b05ffb?auto=format&fit=crop&q=80&w=800" 
-                  alt="Family happy"
-                  className="absolute inset-0 w-full h-full object-cover opacity-80"
-                />
-                
-                {/* Floating Badge 1 */}
-                <div className="absolute -top-3 -left-3 bg-white p-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-bounce-slow rotate-[-6deg] z-20">
-                  <div className="bg-[#deec5a]/20 p-1 rounded-md">
-                    <Coins className="w-4 h-4 text-[#003514]" />
-                  </div>
-                  <span className="font-bold text-[#003514] text-sm">+50 Points!</span>
-                </div>
+            <div className="relative mx-auto flex w-full max-w-[220px] justify-center sm:max-w-[260px] md:max-w-[280px] lg:max-w-[300px]">
+              <img
+                src="/mascot/avocado.webp"
+                alt="Mascote abacate da EarnIt"
+                className="h-auto w-full object-contain transition-transform duration-300 ease-out hover:-translate-y-1 hover:scale-[1.02]"
+              />
+            </div>
+          </div>
+        </section>
 
-                {/* Floating Badge 2 */}
-                <div className="absolute -bottom-2 -right-2 bg-white p-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-float rotate-[3deg] z-20">
-                  <div className="bg-[#034e22]/10 p-1 rounded-md">
-                    <CheckCircle2 className="w-4 h-4 text-[#034e22]" />
-                  </div>
-                  <span className="font-bold text-[#003514] text-sm">Room Cleaned</span>
-                </div>
+        <section
+          id="how-it-works"
+          className="relative overflow-hidden bg-[#f3f4f6] px-5 py-16 sm:px-8 sm:py-[72px] lg:px-16 lg:py-24"
+        >
+          <div className="mx-auto max-w-[1180px]">
+            <div className="text-center">
+              <h2 className="text-3xl font-normal leading-tight text-[#003514] sm:text-4xl lg:text-[40px] lg:leading-[56px]">
+                Como funciona
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-[#404940] sm:text-base">
+                Três passos simples para criar melhores hábitos.
+              </p>
+            </div>
+
+            <div className="group/steps relative mt-10 sm:mt-12">
+              <img
+                src="/mascot/kiwi.webp"
+                alt=""
+                aria-hidden="true"
+                className="pointer-events-none absolute -top-28 left-0 hidden w-[200px] select-none transition-transform duration-500 ease-out group-hover/steps:translate-y-1 lg:block"
+              />
+              <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:gap-8">
+                {howItWorksSteps.map((step) => {
+                  const Icon = step.icon;
+
+                  return (
+                    <article
+                      key={step.title}
+                      className="group relative z-10 flex min-h-[220px] flex-col items-center justify-center rounded-[24px] bg-white px-6 py-10 text-center shadow-[0px_8px_12px_rgba(3,78,34,0.08)] transition-all duration-200 ease-out hover:-translate-y-1 hover:shadow-[0px_18px_34px_-18px_rgba(3,78,34,0.34)] lg:min-h-[280px] lg:rounded-[32px] lg:px-8"
+                    >
+                      <div
+                        className={cn(
+                          "mb-6 flex size-14 items-center justify-center rounded-full transition-transform duration-200 ease-out group-hover:scale-105 sm:size-16",
+                          step.iconBg,
+                        )}
+                      >
+                        <Icon className={cn("size-5 sm:size-6", step.iconColor)} aria-hidden="true" />
+                      </div>
+                      <h3 className="text-xl font-normal leading-7 text-[#003514]">
+                        {step.title}
+                      </h3>
+                      <p className="mt-2 max-w-[240px] text-sm leading-6 text-[#404940]">
+                        {step.description}
+                      </p>
+                    </article>
+                  );
+                })}
               </div>
             </div>
           </div>
         </section>
 
-        {/* How it Works */}
-        <section id="how-it-works" className="bg-gray-50 py-16 px-4 sm:px-6 lg:px-20">
-          <div className="container mx-auto space-y-10">
-            <div className="text-center space-y-2">
-              <h2 className="font-montserrat text-2xl sm:text-3xl font-bold text-[#003514]">
-                How it Works
-              </h2>
-              <p className="text-[#404940] text-sm max-w-lg mx-auto">
-                Three simple steps to building better habits.
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
-              {howItWorksSteps.map((step) => {
-                const Icon = step.icon;
-                return (
-                  <article 
-                    key={step.title}
-                    className="bg-white p-6 rounded-[24px] shadow-[0px_8px_24px_#034e2214] flex flex-col items-center text-center space-y-4 transition-transform hover:-translate-y-1"
-                  >
-                    <div className={`${step.iconBg} w-14 h-14 rounded-full flex items-center justify-center shadow-sm relative`}>
-                      {step.highlight && (
-                        <div className="absolute inset-0 rounded-full animate-ping bg-[#deec5a] opacity-20" />
-                      )}
-                      <Icon className={`w-7 h-7 ${step.iconColor}`} />
-                    </div>
-                    <h3 className="font-montserrat text-lg font-bold text-[#003514]">
-                      {step.title}
-                    </h3>
-                    <p className="text-[#404940] text-xs sm:text-sm leading-relaxed">
-                      {step.description}
-                    </p>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        {/* CTA Section */}
-        <section className="px-4 py-12 sm:px-6 lg:px-20">
-          <div className="container mx-auto">
-            <div className="bg-[#034e22] rounded-[24px] p-8 lg:p-12 relative overflow-hidden text-center space-y-6 shadow-xl">
-              {/* Abstract backgrounds */}
-              <div className="absolute -top-24 -right-24 w-64 h-64 bg-[#003514] rounded-full blur-[64px] opacity-50" />
-              <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-[#deec5a] rounded-full blur-[64px] opacity-10" />
-              
-              <div className="relative z-10 space-y-4">
-                <h2 className="font-montserrat text-2xl sm:text-4xl font-bold text-white leading-tight">
-                  Join the Family
+        <section className="bg-[#f8f9fb] px-5 py-16 sm:px-8 sm:py-[72px] lg:px-16 lg:py-24">
+          <div className="mx-auto max-w-[1180px]">
+            <div className="relative overflow-hidden rounded-[28px] bg-[#034e22] px-6 py-12 text-center shadow-[0px_8px_24px_rgba(3,78,34,0.08)] sm:px-10 lg:rounded-[40px] lg:px-14 lg:py-16">
+              <div className="absolute -right-48 -top-48 size-72 rounded-full bg-[#003514] opacity-50 blur-[32px]" />
+              <div className="absolute -bottom-40 -left-40 size-64 rounded-full bg-[#dbe957] opacity-20 blur-[20px]" />
+              <div className="relative z-10 mx-auto max-w-[680px]">
+                <h2 className="text-3xl font-normal leading-tight text-white sm:text-4xl lg:text-[44px] lg:leading-[60px]">
+                  Junte-se à família
                 </h2>
-                <p className="text-[#92d69c] text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
-                  Start making chores less of a chore. Sign up today and get your first
-                  month free and join thousands of happy families.
+                <p className="mx-auto mt-4 max-w-[620px] text-sm leading-6 text-[#92d69c] sm:text-base">
+                  Comece a tornar as tarefas menos aborrecidas. Registe-se hoje,
+                  tenha o primeiro mês grátis e junte-se a milhares de famílias felizes.
                 </p>
-                <Button 
-                  onClick={() => navigate("/register")}
-                  className="h-auto rounded-full bg-[#deec5a] px-8 py-3 shadow-[0px_4px_0px_#5b630080] hover:bg-[#d7e652] text-base font-bold text-[#1a1d00] transition-all hover:scale-105"
-                >
-                  Start Earning
+                <Button onClick={handleRegister} className={cn(ctaButtonClass, "mt-8")}>
+                  Começar a ganhar
                 </Button>
               </div>
             </div>
@@ -171,30 +148,26 @@ export const LandingPage = () => {
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-gray-100 border-t border-black/5 py-6 px-4 sm:px-6 lg:px-20">
-        <div className="container mx-auto">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
-            <div className="flex flex-col items-center lg:items-start gap-2">
-              <Logo />
-              <p className="text-[#404940] font-semibold text-[10px] sm:text-xs">
-                © 2026 Earnit Family. All rights reserved.
-              </p>
-            </div>
-            
-            <nav className="flex flex-wrap justify-center gap-5">
-              {footerLinks.map((link) => (
-                <a 
-                  key={link.name}
-                  href="#" 
-                  className="flex items-center gap-1.5 text-[#404940] hover:text-[#003514] font-semibold text-[10px] sm:text-xs transition-colors"
-                >
-                  <link.icon className="w-3 h-3 sm:w-3.5 h-3.5" />
-                  {link.name}
-                </a>
-              ))}
-            </nav>
-          </div>
+      <footer className="bg-[#f3f4f6] px-5 py-10 sm:px-8 lg:px-16 lg:py-12">
+        <div className="mx-auto flex max-w-[1180px] flex-col items-center justify-between gap-8 lg:flex-row">
+          <Logo className="h-10 w-auto sm:h-12" />
+          <nav
+            aria-label="Rodapé"
+            className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 lg:gap-x-10"
+          >
+            {footerLinks.map((link) => (
+              <a
+                key={link}
+                href="#"
+                className="text-xs font-semibold leading-5 text-[#404940] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:text-[#003514]"
+              >
+                {link}
+              </a>
+            ))}
+          </nav>
+          <p className="text-center text-xs font-semibold leading-5 text-[#404940]">
+            © 2026 EarnIt Family. Todos os direitos reservados.
+          </p>
         </div>
       </footer>
     </div>

@@ -1,94 +1,194 @@
-import { LockKeyhole, Mail } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import Logo from "@/components/Logo";
+import { useMutation } from "@tanstack/react-query";
+import type { FormEvent } from "react";
+import { useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
-const formFields = [
-  {
-    id: "email",
-    label: "Email address",
-    type: "email",
-    icon: Mail,
-  },
-  {
-    id: "password",
-    label: "Password",
-    type: "password",
-    icon: LockKeyhole,
-  },
-];
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/context/useAuth";
+import { ApiError } from "@/lib/api";
+import {
+  type FieldErrors,
+  validateEmail,
+  validateRequired,
+} from "@/lib/validation";
+import { login as loginRequest } from "@/services/authService";
+import { EmailField, PasswordField } from "./AuthFields";
+import { AuthFormLayout } from "./AuthFormLayout";
+
+type LoginCredentials = {
+  email: string;
+  password: string;
+};
+
+type LoginField = keyof LoginCredentials;
+
+const isAccountUnverifiedError = (error: unknown) => {
+  if (!(error instanceof ApiError) || error.status !== 403) {
+    return false;
+  }
+
+  const data = error.data;
+
+  if (!data || typeof data !== "object" || !("detail" in data)) {
+    return false;
+  }
+
+  const { detail } = data;
+
+  return (
+    !!detail &&
+    typeof detail === "object" &&
+    "error" in detail &&
+    detail.error === "account_unverified"
+  );
+};
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<LoginField>>({});
+  const locationState = location.state as { passwordResetMessage?: string } | null;
+  const passwordResetMessage = locationState?.passwordResetMessage ?? "";
+
+  const validateForm = () => {
+    const nextErrors: FieldErrors<LoginField> = {};
+    const emailError = validateEmail(email);
+    const passwordError = validateRequired(password, "Introduza a sua palavra-passe.");
+
+    if (emailError) {
+      nextErrors.email = emailError;
+    }
+
+    if (passwordError) {
+      nextErrors.password = passwordError;
+    }
+
+    return nextErrors;
+  };
+
+  const clearFieldError = (field: LoginField) => {
+    setFieldErrors((currentErrors) => {
+      const nextErrors = { ...currentErrors };
+      delete nextErrors[field];
+      return nextErrors;
+    });
+  };
+
+  const loginMutation = useMutation({
+    mutationFn: (data: LoginCredentials) => loginRequest(data),
+    onSuccess: async () => {
+      const profile = await login();
+      navigate(
+        profile?.onboarding_completed ? "/profile" : "/onboarding/step1",
+        { replace: true },
+      );
+    },
+    onError: (error: unknown) => {
+      if (isAccountUnverifiedError(error)) {
+        navigate("/verification", { replace: true });
+        return;
+      }
+
+      setFormError(
+        error instanceof Error ? error.message : "Não foi possível iniciar sessão.",
+      );
+    },
+  });
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError("");
+    const nextErrors = validateForm();
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      return;
+    }
+
+    setFieldErrors({});
+    loginMutation.mutate({ email, password });
+  };
 
   return (
-    <main className="bg-[#f8f9fb]">
-      <section className="flex justify-center pb-10 pt-5 px-4 sm:px-6">
-        <div className="flex w-full max-w-[620px] flex-col items-center gap-10">
-          <header className="flex flex-col items-center">
-            <Logo />
-            <p className="mt-2 text-center  text-lg font-normal leading-[26px] text-[#404940]">
-              Welcome Back! Ready to see progress?
-            </p>
-          </header>
-          <Card className="w-full rounded-xl border-0 bg-white shadow-[0px_8px_10px_-6px_#034e221a,0px_10px_25px_-5px_#034e2226]">
-            <CardContent className="px-6 pb-9 pt-9 sm:px-10 sm:pb-8 sm:pt-10">
-              <form className="space-y-6">
-                {formFields.map((field) => {
-                  const Icon = field.icon;
+    <AuthFormLayout subtitle="Bem-vindo de volta! Pronto para ver o progresso?">
+      <form className="space-y-6" onSubmit={handleSubmit}>
+        <EmailField
+          error={fieldErrors.email}
+          value={email}
+          onChange={(value) => {
+            setEmail(value);
+            clearFieldError("email");
+            setFormError("");
+          }}
+        />
+        <PasswordField
+          id="password"
+          error={fieldErrors.password}
+          isVisible={showPassword}
+          label="Palavra-passe"
+          onChange={(value) => {
+            setPassword(value);
+            clearFieldError("password");
+            setFormError("");
+          }}
+          onVisibilityChange={setShowPassword}
+          value={password}
+        />
 
-                  return (
-                    <div key={field.id} className="space-y-1">
-                      <Label
-                        htmlFor={field.id}
-                        className=" text-sm font-semibold leading-5 text-[#191c1e]"
-                      >
-                        {field.label}
-                      </Label>
-                      <div className="relative">
-                        <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#404940]" />
-                        <Input
-                          id={field.id}
-                          type={field.type}
-                          defaultValue={field.defaultValue}
-                          className="h-[51px] rounded-lg border-2 border-[#e1e2e4] bg-[#f8f9fb] pl-10 pr-3  text-base font-normal leading-normal text-[#6b7280] placeholder:text-[#6b7280] focus-visible:ring-0 focus-visible:ring-offset-0"
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+        {formError ? (
+          <p className="rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            {formError}
+          </p>
+        ) : null}
 
-                <Button
-                  type="submit"
-                  className="h-auto w-full rounded-lg bg-[#dbe957] px-4 py-[18px] shadow-[0px_8px_10px_-6px_#034e221a,0px_10px_25px_-5px_#034e2226] hover:bg-[#d2e24f]  text-sm font-semibold tracking-[0.70px] text-[#5f6800]"
-                >
-                  SIGN IN
-                </Button>
-                <div className="space-y-2 pt-3">
-                  <Separator className="bg-[#e1e2e4]" />
-                  <div className="flex items-center justify-center gap-1 pt-0.5 text-center">
-                    <span className=" text-base font-normal leading-6 text-[#404940]">
-                      Dont'have an account ?
-                    </span>
-                    <Button
-                      variant="link"
-                      onClick={() => navigate("/register")}
-                      className="h-auto p-0  text-sm font-semibold leading-5 text-[#003514] no-underline hover:no-underline"
-                    >
-                      Create an account
-                    </Button>
-                  </div>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+        {passwordResetMessage ? (
+          <p className="rounded-lg bg-[#eef7d1] px-4 py-3 text-sm font-semibold text-[#5f6800]">
+            {passwordResetMessage}
+          </p>
+        ) : null}
+
+        <Button
+          type="submit"
+          className="h-auto w-full rounded-lg bg-[#dbe957] px-4 py-[18px] text-sm font-semibold tracking-[0.70px] text-[#5f6800] shadow-[0px_8px_10px_-6px_#034e221a,0px_10px_25px_-5px_#034e2226] hover:bg-[#d2e24f]"
+          disabled={loginMutation.isPending}
+        >
+          {loginMutation.isPending ? "A ENTRAR..." : "ENTRAR"}
+        </Button>
+
+        <div className="space-y-2 pt-3">
+          <Separator className="bg-[#e1e2e4]" />
+          <div className="flex justify-center pt-0.5">
+            <Button
+              type="button"
+              variant="link"
+              onClick={() => navigate("/forgot-password")}
+              className="h-auto p-0 text-sm font-semibold leading-5 text-[#003514] no-underline hover:no-underline"
+            >
+              Esqueceu-se da palavra-passe?
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1 pt-0.5 text-center">
+            <span className="text-sm font-normal leading-6 text-[#404940] sm:text-base">
+              Ainda não tem conta?
+            </span>
+            <Button
+              type="button"
+              variant="link"
+              onClick={() => navigate("/register")}
+              className="h-auto p-0 text-sm font-semibold leading-5 text-[#003514] no-underline hover:no-underline"
+            >
+              Criar conta
+            </Button>
+          </div>
         </div>
-      </section>
-    </main>
+      </form>
+    </AuthFormLayout>
   );
 };
 

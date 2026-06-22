@@ -2,13 +2,35 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Mail, ArrowRight, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useMutation } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
+import {
+  validateVerificationCode,
+  VERIFICATION_CODE_LENGTH,
+} from "@/lib/validation";
+import { useAuth } from "@/context/useAuth";
 
-const OTP_LENGTH = 6;
+type VerifyCodeRequest = {
+  code: string;
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+};
+
+const OTP_LENGTH = VERIFICATION_CODE_LENGTH;
 
 export const VerificationCode = () => {
   const [code, setCode] = useState<string[]>(Array(OTP_LENGTH).fill(""));
+  const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"neutral" | "error">("neutral");
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const isComplete = useMemo(() => code.every((digit) => digit !== ""), [code]);
 
@@ -17,10 +39,12 @@ export const VerificationCode = () => {
   }, []);
 
   const updateDigit = (index: number, value: string) => {
-    const sanitizedValue = value.replace(/\D/g, "").slice(-1);
+    // Allow alphanumeric, sanitize to uppercase
+    const sanitizedValue = value.replace(/[^a-zA-Z0-9]/g, "").slice(-1).toUpperCase();
     const nextCode = [...code];
     nextCode[index] = sanitizedValue;
     setCode(nextCode);
+    setMessage("");
 
     if (sanitizedValue && index < OTP_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
@@ -34,10 +58,13 @@ export const VerificationCode = () => {
       return;
     }
 
+    // Allow alphanumeric, sanitize to uppercase
     const pastedDigits = value
-      .replace(/\D/g, "")
+      .replace(/[^a-zA-Z0-9]/g, "")
       .slice(0, OTP_LENGTH - index)
-      .split("");
+      .split("")
+      .map(char => char.toUpperCase());
+
     if (pastedDigits.length === 0) {
       return;
     }
@@ -47,6 +74,7 @@ export const VerificationCode = () => {
       nextCode[index + offset] = digit;
     });
     setCode(nextCode);
+    setMessage("");
 
     const nextFocusIndex = Math.min(
       index + pastedDigits.length,
@@ -65,6 +93,7 @@ export const VerificationCode = () => {
         const nextCode = [...code];
         nextCode[index] = "";
         setCode(nextCode);
+        setMessage("");
         return;
       }
 
@@ -72,6 +101,7 @@ export const VerificationCode = () => {
         const nextCode = [...code];
         nextCode[index - 1] = "";
         setCode(nextCode);
+        setMessage("");
         inputRefs.current[index - 1]?.focus();
         inputRefs.current[index - 1]?.select();
       }
@@ -101,12 +131,50 @@ export const VerificationCode = () => {
     handleChange(index, pastedText);
   };
 
+  const verifyMutation = useMutation({
+    mutationFn: (data: VerifyCodeRequest) => apiFetch("/auth/verify", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+    onSuccess: async () => {
+      const profile = await login();
+      navigate(profile?.onboarding_completed ? "/dashboard" : "/onboarding/step1", {
+        replace: true,
+      });
+    },
+    onError: (error: unknown) => {
+      setMessageTone("error");
+      setMessage(getErrorMessage(error, "A verificação falhou"));
+    },
+  });
+
+  const resendMutation = useMutation({
+    mutationFn: () => apiFetch("/auth/verify/resend", {
+      method: "POST",
+    }),
+    onSuccess: () => {
+      setMessageTone("neutral");
+      setMessage("Foi enviado um novo código de verificação.");
+    },
+    onError: (error: unknown) => {
+      setMessageTone("error");
+      setMessage(getErrorMessage(error, "Não foi possível reenviar o código"));
+    },
+  });
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!isComplete) return;
-    // Handle submission logic here
-    console.log("Submitting code:", code.join(""));
-    navigate("/dashboard");
+    const joinedCode = code.join("");
+    const validationError = validateVerificationCode(joinedCode);
+
+    if (validationError) {
+      setMessageTone("error");
+      setMessage(validationError);
+      return;
+    }
+
+    setMessage("");
+    verifyMutation.mutate({ code: joinedCode });
   };
 
   const otpSlots = Array.from({ length: OTP_LENGTH }, (_, index) => index);
@@ -115,7 +183,7 @@ export const VerificationCode = () => {
     <main className="bg-[#f8f9fb] pt-24 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-[448px] space-y-6">
         <section
-          className="bg-white rounded-xl overflow-hidden shadow-[0px_4px_24px_#034e2214] p-10 relative"
+          className="bg-white rounded-xl overflow-hidden shadow-[0px_4px_24px_#034e221a] p-10 relative"
           aria-labelledby="email-verification-title"
         >
           <div className="absolute -top-12 -right-12 w-32 h-32 bg-[#deec5a] rounded-full blur-[32px] opacity-20" />
@@ -130,17 +198,21 @@ export const VerificationCode = () => {
                 id="email-verification-title"
                 className="font-montserrat font-bold text-[#003514] text-3xl tracking-tight leading-10"
               >
-                Check your email
+                Verifique o seu email
               </h1>
               <p className="text-[#404940] text-base leading-relaxed">
-                We sent a code to your email. Enter it below to continue.
+                Enviámos um código para o seu email. Introduza-o abaixo para continuar.
               </p>
             </div>
 
             <form className="w-full space-y-8" onSubmit={handleSubmit}>
-              <fieldset className="flex justify-between gap-2">
+              <fieldset
+                className="flex justify-center gap-2"
+                aria-invalid={messageTone === "error"}
+                aria-describedby={message ? "verification-message" : undefined}
+              >
                 <legend className="sr-only">
-                  Enter the 6-digit verification code
+                  Introduza o código de verificação de {OTP_LENGTH} caracteres
                 </legend>
                 {otpSlots.map((slotIndex) => {
                   const isFilled = code[slotIndex] !== "";
@@ -156,11 +228,10 @@ export const VerificationCode = () => {
                         inputRefs.current[slotIndex] = element;
                       }}
                       type="text"
-                      inputMode="numeric"
+                      inputMode="text"
                       autoComplete={slotIndex === 0 ? "one-time-code" : "off"}
-                      pattern="[0-9]*"
                       maxLength={1}
-                      aria-label={`Digit ${slotIndex + 1}`}
+                      aria-label={`Carácter ${slotIndex + 1}`}
                       value={code[slotIndex]}
                       onChange={(event) =>
                         handleChange(slotIndex, event.target.value)
@@ -168,7 +239,7 @@ export const VerificationCode = () => {
                       onKeyDown={(event) => handleKeyDown(slotIndex, event)}
                       onPaste={(event) => handlePaste(slotIndex, event)}
                       onFocus={(event) => event.target.select()}
-                      className={`w-12 sm:w-14 h-16 rounded-lg border-2 border-solid text-center font-semibold text-[#003514] text-2xl transition-all ${
+                      className={`h-14 w-10 rounded-lg border-2 border-solid text-center text-xl font-semibold text-[#003514] transition-all min-[380px]:w-12 sm:h-16 sm:w-14 sm:text-2xl ${
                         isFilled || isActive
                           ? "bg-white border-[#003514] ring-2 ring-[#003514]/10"
                           : "bg-gray-50 border-transparent"
@@ -178,27 +249,42 @@ export const VerificationCode = () => {
                 })}
               </fieldset>
 
+              {message && (
+                <p
+                  id="verification-message"
+                  className={`rounded-lg px-4 py-3 text-center text-sm font-semibold ${
+                    messageTone === "error"
+                      ? "bg-red-50 text-red-700"
+                      : "bg-[#f3f4f6] text-[#003514]"
+                  }`}
+                >
+                  {message}
+                </p>
+              )}
+
               <Button
                 type="submit"
-                disabled={!isComplete}
+                disabled={verifyMutation.isPending}
                 className={`w-full h-14 rounded-lg bg-[#deec5a] hover:bg-[#d7e652] text-[#1a1d00] font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
                   !isComplete && "opacity-50 cursor-not-allowed"
                 }`}
               >
-                Verify
+                {verifyMutation.isPending ? "A verificar..." : "Verificar"}
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </form>
 
             <div className="flex flex-col items-center gap-2 pt-4">
               <div className="text-[#404940] text-base">
-                Didn't receive it?
+                Não recebeu o código?
               </div>
               <button
                 type="button"
-                className="text-[#003514] font-semibold text-sm hover:underline transition-all"
+                onClick={() => resendMutation.mutate()}
+                disabled={resendMutation.isPending}
+                className="cursor-pointer text-[#003514] font-semibold text-sm hover:underline transition-all disabled:cursor-not-allowed"
               >
-                Resend Code
+                {resendMutation.isPending ? "A reenviar..." : "Reenviar código"}
               </button>
             </div>
           </div>
@@ -208,10 +294,10 @@ export const VerificationCode = () => {
           <button
             type="button"
             onClick={() => navigate("/login")}
-            className="flex items-center gap-2 px-4 py-2 text-[#404940] font-semibold text-sm hover:text-[#003514] transition-colors rounded-lg"
+            className="flex cursor-pointer items-center gap-2 px-4 py-2 text-[#404940] font-semibold text-sm hover:text-[#003514] transition-colors rounded-lg"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Login
+            Voltar ao login
           </button>
         </div>
       </div>
