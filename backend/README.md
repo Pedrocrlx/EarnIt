@@ -224,7 +224,7 @@ backend/
 │   ├── database.py           # Async SQLAlchemy engine + get_session dependency
 │   ├── dependencies.py       # FastAPI dependency guards (auth: current-user / pending-verification)
 │   ├── dev/
-│   │   └── fixtures.py       # Dev fixture seeding (dev@earnit.local + child); importable + standalone
+│   │   └── fixtures.py       # Dev fixture seeding (dev@earnit.local + child + goals + balance); importable + standalone
 │   ├── email/                # HTML email templates (verification code, etc.)
 │   ├── mail.py               # fastapi-mail config
 │   ├── models/               # SQLModel tables: User, Child, Task, TaskSubmission, WalletTransaction, Goal

@@ -1,9 +1,13 @@
-"""Dev fixtures — seed a ready-to-use parent and child for local runs.
+"""Dev fixtures — seed a ready-to-use parent, child, and goals for local runs.
 
 When ``DISABLE_AUTH`` is on, ``get_current_user`` returns this seeded dev user
 instead of decoding a token, so the API is usable without logging in. Run as a
 module (``python -m src.dev.fixtures``) to seed manually, or it runs on startup.
 NEVER enable this path in production.
+
+Fixed UUIDs (no copy-pasting random ids into Swagger): the dev child, two
+`requested` goals (approve one, reject the other), an `approved` goal (redeem it),
+and a wallet credit so the balance covers the redeem.
 """
 
 import asyncio
@@ -15,12 +19,18 @@ from sqlalchemy import select
 
 from src.database import AsyncSessionLocal
 from src.models.auth import Child, User
+from src.models.goals import Goal
+from src.models.tasks import WalletTransaction
 from src.security.hashing import hash_secret
 
 logger = logging.getLogger(__name__)
 
 DEV_USER_EMAIL = "dev@earnit.local"
 DEV_CHILD_ID = UUID("00000000-0000-0000-0000-000000000001")
+DEV_GOAL_REQUESTED_ID = UUID("00000000-0000-0000-0000-000000000002")  # approve it
+DEV_GOAL_APPROVED_ID = UUID("00000000-0000-0000-0000-000000000003")  # redeem it
+DEV_CREDIT_ID = UUID("00000000-0000-0000-0000-000000000004")
+DEV_GOAL_REJECT_ID = UUID("00000000-0000-0000-0000-000000000005")  # reject it
 
 
 async def seed_dev_fixtures() -> None:
@@ -58,11 +68,49 @@ async def seed_dev_fixtures() -> None:
                 child.id,
             )
 
+        # Goals + a balance so the goal endpoints are exercisable in Swagger with
+        # fixed ids: approve/reject the `requested` one; redeem the `approved` one
+        # (target 100) against the 500-point credit.
+        if await session.get(WalletTransaction, DEV_CREDIT_ID) is None:
+            session.add(
+                WalletTransaction(
+                    id=DEV_CREDIT_ID,
+                    child_id=DEV_CHILD_ID,
+                    amount=500,
+                    transaction_type="credit",
+                    description="Dev seed balance",
+                )
+            )
+        if await session.get(Goal, DEV_GOAL_REQUESTED_ID) is None:
+            session.add(
+                Goal(
+                    id=DEV_GOAL_REQUESTED_ID,
+                    child_id=DEV_CHILD_ID,
+                    name="Ir ao parque (pendente)",
+                )
+            )
+        if await session.get(Goal, DEV_GOAL_REJECT_ID) is None:
+            session.add(
+                Goal(
+                    id=DEV_GOAL_REJECT_ID,
+                    child_id=DEV_CHILD_ID,
+                    name="Comprar doces (a recusar)",
+                )
+            )
+        if await session.get(Goal, DEV_GOAL_APPROVED_ID) is None:
+            session.add(
+                Goal(
+                    id=DEV_GOAL_APPROVED_ID,
+                    child_id=DEV_CHILD_ID,
+                    name="Bicicleta nova (aprovada)",
+                    status="approved",
+                    target_points=100,
+                )
+            )
+
         await session.commit()
 
 
 if __name__ == "__main__":
-    import src.models.auth
-    import src.models.tasks  # noqa: F401
-
+    # The top-level `from src.models...` imports already register every table.
     asyncio.run(seed_dev_fixtures())

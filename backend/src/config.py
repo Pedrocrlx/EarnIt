@@ -113,7 +113,7 @@ class Settings:
 
         # Dev — disables JWT auth and returns a seeded dev user on every request.
         # NEVER enable in production.
-        self.DISABLE_AUTH = _bool("DISABLE_AUTH", True)
+        self.DISABLE_AUTH = _bool("DISABLE_AUTH", False)
 
     @property
     def database_url(self) -> str:
