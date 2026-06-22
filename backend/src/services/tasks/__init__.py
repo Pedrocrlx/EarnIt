@@ -16,6 +16,7 @@ from src.services.tasks.crud import (
 from src.services.tasks.submissions import (
     approve_submission,
     batch_approve,
+    fail_overdue_duty_slots,
     generate_daily_duty_slots,
     list_submissions,
     reject_submission,
@@ -30,6 +31,7 @@ __all__ = [
     "approve_submission",
     "batch_approve",
     "create_task",
+    "fail_overdue_duty_slots",
     "generate_daily_duty_slots",
     "get_balance",
     "get_task_or_404",

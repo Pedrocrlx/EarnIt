@@ -3,7 +3,7 @@
 Tokens are signed HS256 with ``SECRET_KEY`` and carry a ``scope`` claim: a
 ``full`` access token for authenticated sessions and a short-lived ``verify``
 token for the email-verification step. Dependencies in
-``src.dependencies.auth`` decode these and enforce the expected scope.
+``src.dependencies`` decode these and enforce the expected scope.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -11,7 +11,7 @@ from uuid import UUID
 
 import jwt
 
-from src.core.config import settings
+from src.config import settings
 
 _ALGORITHM = "HS256"
 

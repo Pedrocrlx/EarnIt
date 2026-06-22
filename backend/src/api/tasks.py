@@ -12,8 +12,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.database import get_session
-from src.dependencies.auth import get_current_user
+from src.database import get_session
+from src.dependencies import get_current_user
 from src.models.auth import User
 from src.schemas.tasks import (
     BatchApproveRequest,
@@ -60,8 +60,8 @@ async def create_task_endpoint(
     Two task types are supported:
     - `duty` — recurring daily chore with zero reward. A submission slot is generated
       automatically each midnight by the background job.
-    - `extra_task` — one-off task requiring a positive `reward_amount` in euros
-      (1 point = €0.01). The child submits once and the parent approves or rejects.
+    - `extra_task` — one-off task requiring a positive `reward_points` value. The
+      child submits once and the parent approves or rejects.
 
     Returns 404 if `child_id` does not belong to the authenticated parent.
     """
@@ -184,7 +184,7 @@ async def batch_approve_endpoint(
 
     Optionally scope to a single child by passing `child_id` in the request body.
     Each approval creates a wallet transaction crediting the child's balance for tasks
-    with `reward_amount > 0`. Returns `{ "approved": N }` with the count of records
+    with `reward_points > 0`. Returns `{ "approved": N }` with the count of records
     updated.
     """
     count = await batch_approve(current_user, session, child_id=body.child_id)
@@ -204,7 +204,7 @@ async def approve_submission_endpoint(
 ) -> SubmissionResponse:
     """Mark a single pending submission as approved.
 
-    If the task has `reward_amount > 0`, a wallet transaction is created and the
+    If the task has `reward_points > 0`, a wallet transaction is created and the
     child's balance increases accordingly. Returns 409 if the submission is not in
     `pending` state.
     """

@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.config import settings
+from src.config import settings
 from src.models.auth import Child, User
 
 logger = logging.getLogger(__name__)

@@ -1,13 +1,13 @@
 """Logout: drop the access_token cookie for an authenticated session.
 
-Counterpart to login.py — see app/dependencies/auth.py for the session guard.
+Counterpart to login.py — see app/dependencies.py for the session guard.
 """
 
 import logging
 
 from fastapi import APIRouter, Depends, Response
 
-from src.dependencies.auth import get_current_user
+from src.dependencies import get_current_user
 from src.models.auth import User
 
 logger = logging.getLogger(__name__)

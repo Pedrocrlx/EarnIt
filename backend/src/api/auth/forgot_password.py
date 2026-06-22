@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.database import get_session
+from src.database import get_session
 from src.models.auth import User
 from src.schemas.auth import ForgotPasswordRequest
 from src.services.verification import core, flows

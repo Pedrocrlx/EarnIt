@@ -1,6 +1,7 @@
 """Profile schemas — bodies and responses for family/child management."""
 
 from datetime import date
+from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
@@ -24,3 +25,18 @@ class UpdateFamilyNameResponse(BaseModel):
 
     status: str
     family_name: str
+
+
+class SetPointValueRequest(BaseModel):
+    """Body for ``PATCH /profiles/point-value`` — the family's €-per-point rate."""
+
+    point_value_eur: Decimal = Field(gt=0, le=1000, max_digits=10, decimal_places=4)
+
+    model_config = {"json_schema_extra": {"example": {"point_value_eur": "0.015"}}}
+
+
+class SetPointValueResponse(BaseModel):
+    """Response echoing the saved exchange rate."""
+
+    status: str
+    point_value_eur: Decimal

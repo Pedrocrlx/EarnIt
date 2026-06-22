@@ -21,7 +21,7 @@ class Task(SQLModel, table=True):
 
     ``task_type`` is either ``"duty"`` (recurring daily chore, zero reward, a
     slot generated each midnight) or ``"extra_task"`` (one-off with a positive
-    ``reward_amount`` in euros). Deactivation is a soft delete via
+    point reward). Deactivation is a soft delete via
     ``is_active`` so existing submissions stay intact.
     """
 
@@ -39,6 +39,9 @@ class Task(SQLModel, table=True):
     title: str = Field(max_length=150, nullable=False)
     description: str | None = Field(default=None, nullable=True)
     task_type: str = Field(max_length=20, nullable=False)  # "duty" | "extra_task"
+    # Reward in **points** (duties = 0, extra_tasks > 0). Whole numbers stored in the
+    # existing Numeric column; the API exposes them as `reward_points`. Euros are the
+    # frontend's job, via the parent's `User.point_value_eur` rate.
     reward_amount: Decimal = Field(
         default=Decimal("0.00"), sa_type=sa.Numeric(10, 2), nullable=False
     )
@@ -117,6 +120,7 @@ class WalletTransaction(SQLModel, table=True):
         nullable=True,
         ondelete="SET NULL",
     )
+    # Ledger entry in **points** (whole numbers); API exposes it as `amount_points`.
     amount: Decimal = Field(sa_type=sa.Numeric(10, 2), nullable=False)
     transaction_type: str = Field(max_length=20, nullable=False)  # "credit" | "debit"
     description: str | None = Field(default=None, nullable=True)

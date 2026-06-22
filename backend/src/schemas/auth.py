@@ -10,7 +10,7 @@ import re
 
 from pydantic import BaseModel, EmailStr, field_validator
 
-from src.core.config import settings
+from src.config import settings
 
 
 def _validate_password_strength(v: str) -> str:

@@ -6,9 +6,10 @@ Task-related tables live in ``src.models.tasks``.
 """
 
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime
+from sqlalchemy import DateTime, Numeric
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -34,6 +35,12 @@ class User(SQLModel, table=True):
         default=None, nullable=True, sa_type=DateTime(timezone=True)
     )
     family_name: str | None = Field(default=None, max_length=150, nullable=True)
+    # Euros per point — the family's points→€ exchange rate (parent-set). 4 decimals
+    # so fine rates like 0.0150 fit. The backend stores only points; converting
+    # points → € with this rate is the frontend's job.
+    point_value_eur: Decimal = Field(
+        default=Decimal("0.01"), sa_type=Numeric(10, 4), nullable=False
+    )
     is_active: bool = Field(default=True, nullable=False)
     onboarding_completed: bool = Field(default=False, nullable=False)
     # null while in "limbo"; stamped on code redemption — login refused until set

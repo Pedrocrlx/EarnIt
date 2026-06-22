@@ -55,6 +55,12 @@ team reviewed each suggestion and decided what to cut, keeping the suite green.
 - **Not** used to make architectural calls we couldn't justify ourselves: the
   stack choice, the data model, and the auth/verification design were decided by
   the team and the assistant filled in the implementation.
+- We also **overrode** the assistant when we disagreed. For example, its
+  minimalism review flagged replacing `pydantic-settings` with a hand-written
+  environment reader (`src/config.py`) as a net-negative — more code for what a
+  dependency already does — but we kept the change for the readability of explicit
+  reads, taking on the responsibility of preserving type coercion and fail-closed
+  required vars ourselves (see DEFENSE_QA Q221b). The tool advises; the team decides.
 - Every refactor above kept the test suite green and the docs in sync, so the
   behaviour the assistant touched is pinned by tests we can point to.
 

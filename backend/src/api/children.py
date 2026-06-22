@@ -14,8 +14,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.database import get_session
-from src.dependencies.auth import get_current_user
+from src.database import get_session
+from src.dependencies import get_current_user
 from src.models.auth import User
 from src.models.tasks import Task, TaskSubmission
 from src.schemas.tasks import (
@@ -98,7 +98,7 @@ async def list_child_tasks(
                 title=task.title,
                 description=task.description,
                 task_type=task.task_type,
-                reward_amount=task.reward_amount,
+                reward_points=int(task.reward_amount),
                 expires_at=task.expires_at,
                 submission=SubmissionResponse.model_validate(sub) if sub else None,
             )
@@ -164,17 +164,19 @@ async def get_wallet(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> WalletBalanceResponse:
-    """Return the child's current balance and full transaction history.
+    """Return the child's balance and history — **in points** — plus the family rate.
 
-    Balance is the sum of all approved reward transactions in euros (1 pt = €0.01),
-    computed from `wallet_transactions`. History is ordered newest-first. Returns 404
-    if the child does not belong to the authenticated parent.
+    Balance is the running sum of credits − debits over `wallet_transactions`,
+    counted in points. Converting points → € (using `point_value_eur`) is the
+    frontend's job; the child only ever sees points. History is newest-first.
+    Returns 404 if the child does not belong to the authenticated parent.
     """
     balance = await get_balance(child_id, current_user, session)
     transactions = await get_transaction_history(child_id, current_user, session)
     return WalletBalanceResponse(
         child_id=child_id,
-        balance=balance,
+        balance_points=int(balance),
+        point_value_eur=current_user.point_value_eur,
         transactions=[
             WalletTransactionResponse.model_validate(t) for t in transactions
         ],

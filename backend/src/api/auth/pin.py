@@ -1,7 +1,7 @@
 """Parental PIN gate: set/update the PIN and verify it for the parent-dashboard switch.
 
 The PIN is a UX-layer lock, not a privilege escalation — both endpoints require
-an already-authenticated `access_token` session (see app/dependencies/auth.py).
+an already-authenticated `access_token` session (see app/dependencies.py).
 Forgot/reset-PIN (email-based recovery) lives in pin_reset.py, not here.
 """
 
@@ -10,8 +10,8 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.database import get_session
-from src.dependencies.auth import get_current_user
+from src.database import get_session
+from src.dependencies import get_current_user
 from src.models.auth import User
 from src.schemas.auth import PinRequest
 from src.security.hashing import hash_secret, verify_secret

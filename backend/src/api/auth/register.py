@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.auth._shared import set_pending_cookie
-from src.db.database import get_session
+from src.database import get_session
 from src.models.auth import User
 from src.schemas.auth import RegisterRequest
 from src.security.hashing import hash_secret
@@ -32,7 +32,7 @@ async def register(
 ):
     """Create a new parent account.
 
-    The account starts unverified — a one-time 8-character code is emailed and must
+    The account starts unverified — a one-time 6-character code is emailed and must
     be redeemed via `POST /verify` before the account can be used. The account is
     automatically deleted if not verified within the configured window
     (`ACCOUNT_LIMBO_PURGE_HOURS`). Returns a `pending_verification_token` cookie

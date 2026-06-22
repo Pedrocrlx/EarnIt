@@ -870,13 +870,15 @@ involved, and there's no security reason to randomize PINs in tests (unlike,
 say, secrets that must never be predictable in *production*). `PARENT_PIN_LENGTH
 = 4` in `app/config.py` constrains them to 4 digits either way.
 
-**Q103. `test_profiles.py` defines `_OTHER = {"email": "other@example.com", ...}` — why a second full user dict instead of just overriding `email`?**
-Some profile tests need *two independent parent accounts* to verify
-cross-account isolation (e.g. "child belonging to another user → 404" in the
-Chunk 5 plan). `_OTHER` being a complete dict (not just an email override)
-makes those tests self-documenting — `register_and_verify(client, mock_mail,
-**_OTHER)` clearly registers "the other family," with its own `family_name`
-("Costa") distinguishing it from `VALID_USER`'s "Silva" in assertions/output.
+**Q103. `tests/conftest.py` defines `_OTHER = {"email": "other@example.com", ...}` — why a second full user dict instead of just overriding `email`?**
+Several suites (profiles, tasks, goals) need *two independent parent accounts* to
+verify cross-account isolation (e.g. "child belonging to another user → 404").
+`_OTHER` being a complete dict (not just an email override) makes those tests
+self-documenting — `register_and_verify(client, mock_mail, **_OTHER)` clearly
+registers "the other family," with its own `family_name` ("Costa") distinguishing
+it from `VALID_USER`'s "Silva" in assertions/output. It lives in `conftest.py`
+alongside `_child` (create-a-child) precisely because three suites used identical
+copies — same reasoning as `register_and_verify`: one home, no drift.
 
 **Q104. Why does `tests/__init__.py` exist (an empty file, presumably)?**
 It's what makes `tests/` an importable Python *package*, which is required for
@@ -986,8 +988,8 @@ it succeeds, `api` is allowed to start.
 **Q114. Why `env_file: ./backend/.env` for the `db` service specifically?**
 The official `postgres` image bootstraps its superuser/database from
 `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB` env vars on *first* startup.
-Pointing `db` at the *same* `.env` file the API reads (`app/config.py`'s
-`Settings` also loads `.env`) guarantees the credentials Postgres creates and
+Pointing `db` at the *same* `.env` file the API reads (`app/config.py` also
+loads `.env` via `load_dotenv()`) guarantees the credentials Postgres creates and
 the credentials the API connects with are always identical — one file, one
 source of truth, instead of duplicating credentials in `compose.yaml` and
 `.env` separately.
@@ -1317,7 +1319,7 @@ MVP has no "log out all devices" requirement, this tradeoff is accepted rather
 than building a token-blocklist.
 
 **Q150. How would `get_current_user` actually reject a request — walk through the failure modes.**
-From `app/dependencies/auth.py`: missing/unparseable `access_token` cookie →
+From `app/dependencies.py`: missing/unparseable `access_token` cookie →
 401; JWT signature invalid or `exp` passed → 401 (pyjwt raises, caught and
 re-raised as `HTTPException(401)`); `scope` claim isn't `"full"` → 401 (wrong
 token type used on this endpoint); `sub` claim isn't a valid UUID → 401
@@ -1478,13 +1480,14 @@ characters — no `0`/`O`, no `1`/`I`/`L` (note `I` and `L` and `1` and `0` are
 absent) — so a user reading "O" vs "0" or "I" vs "1" off a phone screen doesn't
 transcribe it wrong. Base64/hex include exactly these ambiguous characters.
 
-**Q167. `generate_code` does `charset[b % len(charset)] for b in digest[:VERIFICATION_CODE_LENGTH]` — why take the *first 8 bytes* of a 32-byte SHA256 digest, and why `% len(charset)`?**
-`VERIFICATION_CODE_LENGTH = 8` defines the desired *output length* in
-characters — only 8 digest bytes are needed to produce 8 characters (one byte
+**Q167. `generate_code` does `charset[b % len(charset)] for b in digest[:VERIFICATION_CODE_LENGTH]` — why take the *first 6 bytes* of a 32-byte SHA256 digest, and why `% len(charset)`?**
+`VERIFICATION_CODE_LENGTH = 6` defines the desired *output length* in
+characters — only 6 digest bytes are needed to produce 6 characters (one byte
 → one charset index via modulo). Using more of the digest wouldn't add
-meaningful security (8 bytes of a keyed HMAC already gives 32 charset-symbols^8
-≈ astronomically many possibilities — far more than the 10-minute window allows
-to brute-force) but would require a longer code, hurting usability. `% len(charset)`
+meaningful security (6 characters over the 32-symbol charset already gives
+32^6 ≈ 1 billion possibilities — far more than can be guessed against the
+verify endpoint within the 10-minute window) but would require a longer code,
+hurting usability. `% len(charset)`
 (32 here) maps each byte (0-255) onto one of 32 charset positions —
 note 256 isn't evenly divisible by 32... actually it is (256/32=8), so the
 modulo introduces no bias here, which is a deliberate charset-length choice.
@@ -1519,7 +1522,7 @@ support complaints.
 `hmac.compare_digest` is a constant-time comparison — `==` on strings
 short-circuits at the first differing character, so the *time* a comparison
 takes can leak how many leading characters of a guess are correct (a timing
-side-channel for brute-forcing one character at a time). For an 8-character
+side-channel for brute-forcing one character at a time). For a 6-character
 code with a 10-minute window this is a fairly low-severity concern in
 practice, but `hmac.compare_digest` is the textbook-correct primitive for
 "comparing a secret to user input" and costs nothing to use.
@@ -1989,17 +1992,17 @@ manages background tasks, and *calls into* `app/security/` and
 "primitives" vs. "flows that use primitives," which also makes
 `app/security/` trivially unit-testable without any DB/app context.
 
-**Q220. Why does `app/dependencies/` exist as its own package for just `auth.py`?**
-`app/dependencies/auth.py`'s two public providers
-(`get_current_user`/`get_pending_verification_user`, sharing the private
-`_user_from_token`/`_extract_user_id` helpers)
-are FastAPI `Depends(...)` providers — a distinct *role* in the architecture
-(request-scoped guards that routers declare as parameters) from both
-"primitives" (`app/security/`) and "orchestration" (`app/services/`), even
-though they're implemented using primitives (`app/security/tokens.py`'s
-decode functions). Naming the package `dependencies/` signals "these are
-things you put in a route's function signature," distinct from things you
-*call* from inside a route body.
+**Q220. Why is `app/dependencies.py` a plain module, not its own `dependencies/` package?**
+It used to be a package (`dependencies/auth.py`) but held exactly one file, so it
+was flattened to a single `app/dependencies.py` — the same call we made for
+`core/config.py → config.py` and `db/database.py → database.py`. A one-file
+package is a folder with one occupant: the indirection buys nothing until there's
+a second file. The module's role is still distinct, though — its two public
+providers (`get_current_user`/`get_pending_verification_user`, sharing the private
+`_user_from_token`/`_extract_user_id` helpers) are FastAPI `Depends(...)` *guards*
+you put in a route's signature, as opposed to "primitives" (`app/security/`) or
+"orchestration" (`app/services/`) that you *call* from inside a route body. If a
+second kind of dependency ever appears, promoting it back to a package is trivial.
 
 **Q221. The `backend/README.md` "Project Structure" tree is fairly detailed (down to individual files with one-line descriptions) — why maintain that by hand instead of, say, generating it?**
 For a project at this size (a few dozen files), a hand-maintained tree with
@@ -2010,6 +2013,25 @@ without updating the README — a tradeoff accepted because the README is
 explicitly the onboarding document for "Connecting the Frontend" /
 understanding the system, where *intent* matters more than an always-perfectly-synced
 file listing.
+
+**Q221b. Why does `app/config.py` read settings with plain `os.environ` + `load_dotenv()` instead of `pydantic-settings`' `BaseSettings`?**
+Honest answer: it's a readability/explicitness preference the team chose
+deliberately, and it's a *worse* trade by the usual measure — `pydantic-settings`
+already does typed, validated, env-or-default config, so re-implementing it by
+hand ends up as slightly *more* code, not less (we use minimalism-review tooling
+that flagged exactly this; see `docs/AI_USAGE.md`). We kept it because the
+explicit `_require`/`_str`/`_int`/`_bool`/`_csv` readers make "where does this
+value come from, and what's its default" obvious at a glance, with no framework
+indirection. Crucially, the two properties that actually matter were preserved:
+**type coercion** (ports/minutes/lengths via `_int`, `DISABLE_AUTH` via `_bool`,
+`CORS_ORIGINS` via `_csv`) and **fail-closed required vars** — `_require`
+(`POSTGRES_*`, `SECRET_KEY`) raises a `RuntimeError` at import, so the app refuses
+to boot half-configured rather than running with a missing secret. `.env` is
+still loaded (now by an explicit `load_dotenv()` at module top), and `settings`
+is a plain mutable instance, which is what lets tests override a field
+(`conftest.py`'s `_force_auth_on`, the `MAX_CHILDREN_PER_USER` monkeypatch).
+`pydantic-settings` was dropped from `pyproject.toml`; `python-dotenv` (already a
+transitive dep) became direct.
 
 ---
 
@@ -2152,7 +2174,7 @@ api` or in CI output. The format string lives in the one `basicConfig` call in
 call sites that call `logger.info(...)`.
 
 **Q235. How is the log level controlled, and what would you set in each environment?**
-`LOG_LEVEL` is a new `Settings` field in `app/config.py` (default `"INFO"`,
+`LOG_LEVEL` is a setting read in `app/config.py`'s `Settings` (default `"INFO"`,
 documented in `.env.example`). Locally, `DEBUG` would show more detail while
 developing a new flow; `INFO` (the default) is right for normal development
 and for the CI test run — it captures every lifecycle event in this Q&A
@@ -2268,32 +2290,114 @@ same `axllent/mailpit` image and ports — there's no shared file between them.
 
 ## 23. Task Lifecycle & Expiry
 
-**Q244. Walk through the submission state machine — when does a submission actually "end"?**
-A child submits → `pending`. The parent reviews → `approved` (success, terminal)
-or `rejected`. **Rejection is not terminal on its own**: while the task is still
-live, the child can resubmit — which *patches the same submission row* back to
-`pending` (never creates a new row, see `resubmit_task`) — and be rejected again,
-any number of times. A submission resolves only when it's **approved**, or when
-the **task expires without an approval** (failure). There is deliberately **no
-separate `failed`/`expired` status**: the outcome is derivable from `status` +
-the task's `expires_at` (rejected + expired = failed; pending + expired = still
-awaiting the parent's final call), so there's no extra column to keep consistent.
+**Q244. Walk through the duty submission state machine and its statuses.**
+Each midnight `generate_daily_duty_slots` pre-creates one row per active duty per
+day as **`open`** (awaiting the child). Lifecycle: `open` → *(child submits today)*
+→ `pending` → *(parent)* → `approved` / `rejected`. A `rejected` slot can be
+resubmitted the same day (→ `pending`) any number of times. If a day ends with the
+slot still `open` (never attempted), the midnight sweep `fail_overdue_duty_slots`
+flips it to terminal **`failed`**. So every duty-day lands on exactly one explicit
+outcome — `approved`, `rejected`, or `failed` — (or `pending` while awaiting the
+parent). `extra_task` submissions skip the `open` phase: the child creates them
+directly as `pending`. The `status` **fully describes the state**, so nothing has
+to read `submitted_at` to disambiguate — an un-attempted slot is `open`, not the
+nonsensical "pending that was never submitted." That's why `approve`/`reject` just
+require `status == "pending"`: an `open` or `failed` slot is excluded automatically
+(409), with no separate `submitted_at` guard.
 
-**Q245. Why does `expires_at` block the child but not the parent?**
-Once a task is past `expires_at`, `submit_task` and `resubmit_task` return **410
-Gone** — the child can no longer start or retry an attempt. But `approve_submission`
-/ `reject_submission` are intentionally *not* expiry-gated, so a submission left
-`pending` stays reviewable indefinitely: the parent may still approve (success) or
-reject (failure) it. This mirrors the real intent — "the deadline stops new
-attempts, but I can still grade what was already turned in." `generate_daily_duty_slots`
-also skips expired duties, so no new daily slots appear after a duty's deadline.
-410 (vs the 409 used for state conflicts like "already approved") is consistent
-with the auth flow's expired-window responses: 410 = the window is gone; 409 =
-wrong state but still actionable.
+**Q245. Deadlines — what stops the child, and what never stops the parent?**
+A duty must be done **on its own day**, enforced for free: `submit_task` only ever
+looks at *today's* slot (`scheduled_date == today`), so yesterday's can't be
+submitted, and `resubmit_task` returns **410** for a slot whose `scheduled_date` is
+in the past. (Time-of-day deadlines — "by midday" — are intentionally out of scope
+for the MVP; a duty is simply due by end of its day.) A duty's optional `expires_at`
+still ends the *whole recurrence* (no new slots; submit/resubmit → 410 once past).
+But the **parent is never deadline-gated**: a `pending` slot stays reviewable
+forever — `approve`/`reject` check only `status`, so the parent can settle
+yesterday's submission today. 410 = "the child's window is gone"; 409 = "wrong
+state."
+
+**Q246. How does the model support the "all duties every day" streak?**
+By recording **what was expected**, not just what was done. One pre-generated row
+per duty per day means a missed duty leaves a real `failed` row — so you can tell
+"did 4 of 5" from "only 4 existed," which an on-demand model (a row only when the
+child submits) could not. The streak is then **computed** from those rows, never
+stored as a counter: a `scheduled_date` is "perfect" iff every duty row for it is
+`approved`. A `pending` row (submitted, parent hasn't confirmed) makes that day
+*temporarily* imperfect — approving it **restores** the streak on the next
+recompute, with no special logic. A `failed` (never attempted) or `rejected`-not-
+fixed-by-day's-end row is a **permanent** break. The streak/Goals computation itself
+is a future epic; the explicit per-day rows are the ledger it will read.
+
+**Q247. Rewards are configurable in euros per family — why does the backend store *points*, not euros, and why almost no schema change?**
+Because a *re-valuable* rate is only possible if you store the rate-independent
+unit. Store euros and the rate is frozen at earn time; store **points** and "€ =
+points × the current rate" — so when a parent changes the family rate, a child's
+existing balance re-values for free. The rate lives per-parent on
+`users.point_value_eur` (`Numeric(10,4)`, default `0.01` — 4 decimals so fine
+rates like `0.015` fit), set via `PATCH /profiles/point-value` and exposed in
+`GET /family` + the wallet response. **€ never touches the backend**: the child
+only sees points, and the parent's "enter € → preview points" form and any €
+balance are computed *frontend*-side from points × the rate. That keeps the API a
+pure points ledger. On schema: the only migration is an **additive**
+`ADD COLUMN users.point_value_eur` — the reward/balance values reuse the existing
+`tasks.reward_amount` / `wallet_transactions.amount` `Numeric` columns to hold
+whole-number points (nothing dropped or retyped), and the API just aliases them as
+`reward_points` / `amount_points`.
+
+## 24. Goals — Request, Approval & Redeem
+
+**Q248. Walk through the goal lifecycle and who acts at each step.**
+A child profile **requests** a goal — free text of what they want ("go to the
+park") — created in **`requested`** (shown as "pending" to the child). The parent
+either **rejects** it (→ `rejected`) or **approves** it, setting a
+**`target_points`** value (→ `approved`). The child earns points from extra tasks;
+once their balance reaches the target the parent **redeems** it (→ `redeemed`,
+terminal), spending the points. It deliberately mirrors the submission state
+machine — request/approve/reject is the same shape as submit/approve/reject — so
+`approve`/`reject` simply require `status == "requested"` (else 409) and `redeem`
+requires `status == "approved"` (else 409), with no extra flags to disambiguate.
+
+**Q249. There are no child logins — how can a child "request" a goal and the parent "approve" it on the same API?**
+Same model as the rest of the app: it's a **family account**, the parent's session
+is the only authenticated identity, and the **frontend's PIN gate** decides child
+mode (request) vs parent mode (approve/reject/redeem) — exactly like task `submit`
+(child) vs `approve` (parent) already work. So every goal route is parent-session
+authenticated and child-scoped (404 if the child isn't theirs); the backend does
+**not** try to distinguish actors, because it can't and doesn't need to. One
+consequence stated honestly: a `rejected` goal is hidden by the frontend *not
+rendering* it, not by the API withholding it — it's not leaked to a *different*
+account, but it does reach the same browser. Consistent with every other read in
+the app.
+
+**Q250. Redeeming "spends" points — how, and why is it the ledger's first `debit`?**
+The wallet is a pure credit/debit ledger and balance = Σcredits − Σdebits.
+Approving a rewarded task writes a `credit`; until goals, nothing ever wrote a
+`debit` — the type existed but was unused. Redeem is its **first writer**: it
+re-reads the balance via the shared `get_balance`, refuses with 409 if
+`balance < target_points` (you can't redeem what you can't afford), then inserts a
+single `WalletTransaction(amount=target_points, transaction_type="debit",
+description="Goal: <name>")` and flips the goal to `redeemed` in the same commit.
+The balance falls out of the ledger for free — no stored balance to keep in sync.
+
+**Q251. The `goals` table is only six columns — what did you deliberately leave out, and why?**
+YAGNI, audited column by column. **`image_url`** — a goal is just the child's text;
+there's no image in the flow, so it's not stored (the frontend can add one later if
+ever needed). **`completed_at`** — `status == "redeemed"` already says "done," and
+the *when* is the redeem `debit`'s `created_at`; storing it again would be
+derivable, drift-prone duplication. **`updated_at`** — nothing reads it; the status
+transitions are the audit trail. A stored **"reached"** flag — the list endpoint
+already returns `balance_points` and each goal's `target_points`, so the frontend
+derives `reached` itself; computing it server-side per goal would be redundant. What
+remains — `id`, `child_id` (FK CASCADE, **not** unique → many goals per child),
+`name`, `status`, `target_points` (NULL until approved), `created_at` (orders the
+list) — each earns its place. Same instinct as the points feature: the table is
+purely additive (one `CREATE TABLE`), touching nothing that already exists.
 
 ---
 
-*This document covers Epic 1 (Authentication & Profiles) plus the task lifecycle
-as implemented at the time of writing. As later epics (gamification, goals) are
-built, the same "why" questions should be asked of those decisions too — this is
-a living defense-prep document, not a one-time artifact.*
+*This document covers Epic 1 (Authentication & Profiles), the task lifecycle, and
+the goals feature as implemented at the time of writing. As later epics
+(gamification, streaks) are built, the same "why" questions should be asked of
+those decisions too — this is a living defense-prep document, not a one-time
+artifact.*

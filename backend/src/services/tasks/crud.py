@@ -32,7 +32,7 @@ async def create_task(
         title=body.title,
         description=body.description,
         task_type=body.task_type,
-        reward_amount=body.reward_amount,
+        reward_amount=body.reward_points,  # column holds points
         expires_at=body.expires_at,
     )
     session.add(task)

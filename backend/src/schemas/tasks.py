@@ -22,7 +22,7 @@ class TaskCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=150)
     description: str | None = None
     task_type: Literal["duty", "extra_task"]
-    reward_amount: Decimal = Field(default=Decimal("0.00"), ge=0)
+    reward_points: int = Field(default=0, ge=0)
     expires_at: datetime | None = None
 
     model_config = {
@@ -32,7 +32,7 @@ class TaskCreateRequest(BaseModel):
                 "title": "Lavar a loiça",
                 "description": "Lavar e arrumar a loiça do jantar",
                 "task_type": "extra_task",
-                "reward_amount": "1.50",
+                "reward_points": 100,
                 "expires_at": None,
             }
         }
@@ -40,11 +40,11 @@ class TaskCreateRequest(BaseModel):
 
     @model_validator(mode="after")
     def check_reward_rules(self) -> TaskCreateRequest:
-        """Tie reward to task type: duties pay 0, extra tasks pay > 0."""
-        if self.task_type == "duty" and self.reward_amount != Decimal("0.00"):
-            raise ValueError("Duty tasks must have reward_amount of 0")
-        if self.task_type == "extra_task" and self.reward_amount <= 0:
-            raise ValueError("Extra tasks must have reward_amount greater than 0")
+        """Tie reward to task type: duties pay 0 points, extra tasks pay > 0."""
+        if self.task_type == "duty" and self.reward_points != 0:
+            raise ValueError("Duty tasks must have reward_points of 0")
+        if self.task_type == "extra_task" and self.reward_points <= 0:
+            raise ValueError("Extra tasks must have reward_points greater than 0")
         return self
 
 
@@ -76,13 +76,14 @@ class TaskResponse(BaseModel):
     title: str
     description: str | None
     task_type: str
-    reward_amount: Decimal
+    # Stored in the `reward_amount` column (points); exposed as `reward_points`.
+    reward_points: int = Field(validation_alias="reward_amount")
     expires_at: datetime | None
     is_active: bool
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 
 # Submission schemas
@@ -143,7 +144,7 @@ class ChildTaskResponse(BaseModel):
     title: str
     description: str | None
     task_type: str
-    reward_amount: Decimal
+    reward_points: int
     expires_at: datetime | None
     submission: (
         SubmissionResponse | None
@@ -161,17 +162,23 @@ class WalletTransactionResponse(BaseModel):
     id: UUID
     child_id: UUID
     task_submission_id: UUID | None
-    amount: Decimal
+    # Stored in the `amount` column (points); exposed as `amount_points`.
+    amount_points: int = Field(validation_alias="amount")
     transaction_type: str
     description: str | None
     created_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 
 class WalletBalanceResponse(BaseModel):
-    """A child's wallet — current balance plus full transaction history."""
+    """A child's wallet — balance in points, the family rate, and full history.
+
+    € is the frontend's concern: multiply ``balance_points`` (and each
+    transaction's ``amount_points``) by ``point_value_eur``.
+    """
 
     child_id: UUID
-    balance: Decimal
+    balance_points: int
+    point_value_eur: Decimal
     transactions: list[WalletTransactionResponse]

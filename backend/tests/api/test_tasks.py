@@ -1,31 +1,17 @@
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.services.tasks import generate_daily_duty_slots
-from tests.conftest import register_and_verify
+from src.models.tasks import TaskSubmission
+from src.services.tasks import fail_overdue_duty_slots, generate_daily_duty_slots
+from tests.conftest import _OTHER, _child, register_and_verify
 
 _TASKS_URL = "/api/v1/tasks"
 _SUBS_URL = "/api/v1/tasks/submissions"
-_OTHER = {
-    "email": "other@example.com",
-    "password": "Password123!",
-    "family_name": "Costa",
-}
 
 # Shared helpers
-
-
-async def _child(client: AsyncClient, token: str, name: str = "Leo") -> str:
-    res = await client.post(
-        "/api/v1/profiles/children",
-        json={"name": name},
-        cookies={"access_token": token},
-    )
-    assert res.status_code == 201
-    return res.json()["id"]
 
 
 async def _duty(
@@ -41,7 +27,7 @@ async def _duty(
 
 
 async def _extra(
-    client: AsyncClient, token: str, child_id: str, reward: str = "5.00"
+    client: AsyncClient, token: str, child_id: str, reward: int = 5
 ) -> dict:
     res = await client.post(
         _TASKS_URL,
@@ -49,7 +35,7 @@ async def _extra(
             "child_id": child_id,
             "title": "Clean room",
             "task_type": "extra_task",
-            "reward_amount": reward,
+            "reward_points": reward,
         },
         cookies={"access_token": token},
     )
@@ -90,7 +76,7 @@ async def test_create_duty_returns_201(client: AsyncClient, mock_mail):
     assert res.status_code == 201
     body = res.json()
     assert body["task_type"] == "duty"
-    assert body["reward_amount"] == "0.00"
+    assert body["reward_points"] == 0
     assert body["is_active"] is True
 
 
@@ -103,12 +89,12 @@ async def test_create_extra_task_returns_201(client: AsyncClient, mock_mail):
             "child_id": child_id,
             "title": "Clean room",
             "task_type": "extra_task",
-            "reward_amount": "3.50",
+            "reward_points": 35,
         },
         cookies={"access_token": token},
     )
     assert res.status_code == 201
-    assert res.json()["reward_amount"] == "3.50"
+    assert res.json()["reward_points"] == 35
 
 
 async def test_duty_reward_must_be_zero_returns_422(client: AsyncClient, mock_mail):
@@ -120,7 +106,7 @@ async def test_duty_reward_must_be_zero_returns_422(client: AsyncClient, mock_ma
             "child_id": child_id,
             "title": "Brush teeth",
             "task_type": "duty",
-            "reward_amount": "1.00",
+            "reward_points": 1,
         },
         cookies={"access_token": token},
     )
@@ -138,7 +124,7 @@ async def test_extra_task_reward_must_be_positive_returns_422(
             "child_id": child_id,
             "title": "Clean room",
             "task_type": "extra_task",
-            "reward_amount": "0.00",
+            "reward_points": 0,
         },
         cookies={"access_token": token},
     )
@@ -299,7 +285,7 @@ async def test_approve_extra_task_creates_wallet_transaction(
 ):
     token = await register_and_verify(client, mock_mail)
     child_id = await _child(client, token)
-    task = await _extra(client, token, child_id, reward="2.50")
+    task = await _extra(client, token, child_id, reward=5)
     sub = (await _submit(client, token, child_id, task["id"])).json()
 
     res = await client.post(
@@ -313,9 +299,10 @@ async def test_approve_extra_task_creates_wallet_transaction(
     )
     assert wallet.status_code == 200
     body = wallet.json()
-    assert body["balance"] == "2.50"
+    assert body["balance_points"] == 5
     assert len(body["transactions"]) == 1
     assert body["transactions"][0]["transaction_type"] == "credit"
+    assert body["transactions"][0]["amount_points"] == 5
 
 
 async def test_approve_duty_does_not_create_wallet_transaction(
@@ -334,7 +321,7 @@ async def test_approve_duty_does_not_create_wallet_transaction(
     wallet = await client.get(
         f"/api/v1/children/{child_id}/wallet", cookies={"access_token": token}
     )
-    assert wallet.json()["balance"] == "0.00"
+    assert wallet.json()["balance_points"] == 0
     assert wallet.json()["transactions"] == []
 
 
@@ -414,8 +401,8 @@ async def test_resubmit_non_rejected_returns_409(client: AsyncClient, mock_mail)
 async def test_batch_approve_flips_all_pending(client: AsyncClient, mock_mail):
     token = await register_and_verify(client, mock_mail)
     child_id = await _child(client, token)
-    t1 = await _extra(client, token, child_id, reward="1.00")
-    t2 = await _extra(client, token, child_id, reward="2.00")
+    t1 = await _extra(client, token, child_id, reward=1)
+    t2 = await _extra(client, token, child_id, reward=2)
     # Give t2 a different title to avoid unique constraint issue
     t2_res = await client.post(
         _TASKS_URL,
@@ -423,7 +410,7 @@ async def test_batch_approve_flips_all_pending(client: AsyncClient, mock_mail):
             "child_id": child_id,
             "title": "Tidy room",
             "task_type": "extra_task",
-            "reward_amount": "2.00",
+            "reward_points": 2,
         },
         cookies={"access_token": token},
     )
@@ -449,7 +436,7 @@ async def test_batch_approve_skips_already_approved(client: AsyncClient, mock_ma
             "child_id": child_id,
             "title": "Tidy room",
             "task_type": "extra_task",
-            "reward_amount": "1.00",
+            "reward_points": 1,
         },
         cookies={"access_token": token},
     )
@@ -497,14 +484,14 @@ async def test_batch_approve_filter_by_child_id(client: AsyncClient, mock_mail):
 async def test_wallet_balance_sums_credits(client: AsyncClient, mock_mail):
     token = await register_and_verify(client, mock_mail)
     child_id = await _child(client, token)
-    t1 = await _extra(client, token, child_id, reward="1.50")
+    t1 = await _extra(client, token, child_id, reward=2)
     t2_res = await client.post(
         _TASKS_URL,
         json={
             "child_id": child_id,
             "title": "Tidy room",
             "task_type": "extra_task",
-            "reward_amount": "2.50",
+            "reward_points": 3,
         },
         cookies={"access_token": token},
     )
@@ -522,20 +509,20 @@ async def test_wallet_balance_sums_credits(client: AsyncClient, mock_mail):
         f"/api/v1/children/{child_id}/wallet", cookies={"access_token": token}
     )
     assert wallet.status_code == 200
-    assert wallet.json()["balance"] == "4.00"
+    assert wallet.json()["balance_points"] == 5
 
 
 async def test_wallet_history_ordered_newest_first(client: AsyncClient, mock_mail):
     token = await register_and_verify(client, mock_mail)
     child_id = await _child(client, token)
-    t1 = await _extra(client, token, child_id, reward="1.00")
+    t1 = await _extra(client, token, child_id, reward=1)
     t2_res = await client.post(
         _TASKS_URL,
         json={
             "child_id": child_id,
             "title": "Tidy room",
             "task_type": "extra_task",
-            "reward_amount": "2.00",
+            "reward_points": 2,
         },
         cookies={"access_token": token},
     )
@@ -555,9 +542,9 @@ async def test_wallet_history_ordered_newest_first(client: AsyncClient, mock_mai
         )
     ).json()["transactions"]
     assert len(transactions) == 2
-    # Ordered newest-first: t2 (approved last, €2.00) must precede t1 (€1.00).
-    assert float(transactions[0]["amount"]) == 2.00
-    assert float(transactions[1]["amount"]) == 1.00
+    # Ordered newest-first: t2 (approved last, 2 pts) must precede t1 (1 pt).
+    assert transactions[0]["amount_points"] == 2
+    assert transactions[1]["amount_points"] == 1
     assert all(t["transaction_type"] == "credit" for t in transactions)
 
 
@@ -592,6 +579,7 @@ async def test_generate_duty_slots_creates_slot_for_today(
     duties = [t for t in child_tasks.json() if t["task_type"] == "duty"]
     assert len(duties) == 1
     assert duties[0]["submission"] is not None
+    assert duties[0]["submission"]["status"] == "open"  # awaiting the child
     assert duties[0]["submission"]["submitted_at"] is None
 
 
@@ -660,7 +648,7 @@ async def test_parent_can_approve_pending_after_task_expired(
     # Expiry blocks the child, not the parent: a pending submission stays reviewable.
     token = await register_and_verify(client, mock_mail)
     child_id = await _child(client, token)
-    task = await _extra(client, token, child_id, reward="3.00")
+    task = await _extra(client, token, child_id, reward=3)
     sub = (await _submit(client, token, child_id, task["id"])).json()
     await _expire(client, token, task["id"])
 
@@ -702,3 +690,160 @@ async def test_expired_duty_generates_no_slot(
 
     count = await generate_daily_duty_slots(db_session)
     assert count == 0
+
+
+# review guards — a duty slot is only reviewable once the child has submitted it
+
+
+async def test_approve_unsubmitted_duty_returns_409(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    # The slot exists as `open` before the child does it; the parent must not be
+    # able to approve work that was never submitted.
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    await _duty(client, token, child_id)
+    await generate_daily_duty_slots(db_session)
+
+    sub_id = (await client.get(_SUBS_URL, cookies={"access_token": token})).json()[0][
+        "id"
+    ]
+    res = await client.post(
+        f"{_SUBS_URL}/{sub_id}/approve", cookies={"access_token": token}
+    )
+    assert res.status_code == 409
+
+
+async def test_reject_unsubmitted_duty_returns_409(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    await _duty(client, token, child_id)
+    await generate_daily_duty_slots(db_session)
+
+    sub_id = (await client.get(_SUBS_URL, cookies={"access_token": token})).json()[0][
+        "id"
+    ]
+    res = await client.post(
+        f"{_SUBS_URL}/{sub_id}/reject", cookies={"access_token": token}
+    )
+    assert res.status_code == 409
+
+
+# day-rollover: overdue duty slots auto-fail
+
+
+async def _past_slot(
+    db_session: AsyncSession,
+    task_id: str,
+    child_id: str,
+    *,
+    status: str,
+    days_ago: int = 1,
+) -> UUID:
+    """Insert a duty slot dated in the past (for sweep / day-rollover tests)."""
+    sub = TaskSubmission(
+        task_id=UUID(task_id),
+        child_id=UUID(child_id),
+        scheduled_date=datetime.now(UTC).date() - timedelta(days=days_ago),
+        status=status,
+        submitted_at=None if status == "open" else datetime.now(UTC),
+    )
+    db_session.add(sub)
+    await db_session.commit()
+    return sub.id
+
+
+async def test_fail_overdue_marks_open_past_slot_failed(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _duty(client, token, child_id)
+    sub_id = await _past_slot(db_session, task["id"], child_id, status="open")
+
+    assert await fail_overdue_duty_slots(db_session) == 1
+    db_session.expunge_all()  # bulk UPDATE bypasses the identity map
+    assert (await db_session.get(TaskSubmission, sub_id)).status == "failed"
+
+
+async def test_fail_overdue_leaves_submitted_past_slot_pending(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    # The child submitted (pending) but the parent never reviewed — not failed; the
+    # parent can still approve/reject it after the day.
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _duty(client, token, child_id)
+    sub_id = await _past_slot(db_session, task["id"], child_id, status="pending")
+
+    assert await fail_overdue_duty_slots(db_session) == 0
+    db_session.expunge_all()
+    assert (await db_session.get(TaskSubmission, sub_id)).status == "pending"
+
+
+async def test_fail_overdue_leaves_today_open_slot(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    await _duty(client, token, child_id)
+    await generate_daily_duty_slots(db_session)  # today's slot, still open
+
+    assert await fail_overdue_duty_slots(db_session) == 0
+
+
+async def test_resubmit_past_day_duty_returns_410(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    # A rejected duty slot from a past day can't be resubmitted — the day is closed.
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _duty(client, token, child_id)
+    sub_id = await _past_slot(db_session, task["id"], child_id, status="rejected")
+
+    res = await client.patch(
+        f"/api/v1/children/{child_id}/submissions/{sub_id}",
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 410
+
+
+# points→€ rate: balances are points; the rate is just reported for the frontend
+
+
+async def test_wallet_reports_rate_and_revalues_on_rate_change(
+    client: AsyncClient, mock_mail
+):
+    # Earn 5 points; the wallet stays 5 points but reports the current rate, so a
+    # later rate change re-values everything at read time (frontend multiplies).
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id, reward=5)
+    sub = (await _submit(client, token, child_id, task["id"])).json()
+    await client.post(
+        f"{_SUBS_URL}/{sub['id']}/approve", cookies={"access_token": token}
+    )
+
+    wallet = (
+        await client.get(
+            f"/api/v1/children/{child_id}/wallet", cookies={"access_token": token}
+        )
+    ).json()
+    assert wallet["balance_points"] == 5
+    assert float(wallet["point_value_eur"]) == 0.01  # default → frontend shows €0.05
+
+    # Parent raises the rate; points are unchanged, the reported rate is not.
+    await client.patch(
+        "/api/v1/profiles/point-value",
+        json={"point_value_eur": "0.02"},
+        cookies={"access_token": token},
+    )
+    wallet = (
+        await client.get(
+            f"/api/v1/children/{child_id}/wallet", cookies={"access_token": token}
+        )
+    ).json()
+    assert wallet["balance_points"] == 5  # same points
+    assert float(wallet["point_value_eur"]) == 0.02  # re-valued → frontend shows €0.10

@@ -6,7 +6,7 @@ from sqlmodel import SQLModel
 
 import src.models  # noqa: F401 — ensures all SQLModel tables are registered before autogenerate
 from alembic import context
-from src.core.config import settings
+from src.config import settings
 
 alembic_config = context.config
 

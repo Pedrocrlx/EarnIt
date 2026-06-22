@@ -28,6 +28,7 @@ docker compose exec api uv run alembic upgrade head  # Migrations (first run onl
 | `POST` | `/api/v1/auth/forgot-pin` | session | Email a PIN-reset code (rate-limited, 429 while active) |
 | `POST` | `/api/v1/auth/reset-pin` | session | `{ code, new_pin }` → reset PIN |
 | `PATCH` | `/api/v1/profiles/family-name` | session | Update family display name |
+| `PATCH` | `/api/v1/profiles/point-value` | session | Set the family points→€ rate |
 | `POST` | `/api/v1/profiles/children` | session | Add a child profile |
 | `PATCH` | `/api/v1/profiles/children/{id}` | session | Deactivate a child profile |
 | `GET` | `/api/v1/profiles/family` | session | Parent profile + all children |
@@ -43,6 +44,11 @@ docker compose exec api uv run alembic upgrade head  # Migrations (first run onl
 | `POST` | `/api/v1/children/{child_id}/tasks/{task_id}/submit` | session | Submit a task completion |
 | `PATCH` | `/api/v1/children/{child_id}/submissions/{id}` | session | Resubmit after rejection |
 | `GET` | `/api/v1/children/{child_id}/wallet` | session | Balance + transaction history |
+| `POST` | `/api/v1/children/{child_id}/goals` | session | Request a goal (child mode) |
+| `GET` | `/api/v1/children/{child_id}/goals` | session | List goals + balance (filter: `status`) |
+| `POST` | `/api/v1/children/{child_id}/goals/{goal_id}/approve` | session | Approve + set point value |
+| `POST` | `/api/v1/children/{child_id}/goals/{goal_id}/reject` | session | Reject a goal request |
+| `POST` | `/api/v1/children/{child_id}/goals/{goal_id}/redeem` | session | Redeem (spend points → debit) |
 
 ### Auth flows at a glance
 
@@ -60,7 +66,7 @@ Set `DISABLE_AUTH=true` in `.env`. Every request is served as `dev@earnit.local`
 
 ```bash
 # Seed the dev user manually without starting the server:
-uv run python -m src.dev.seed
+uv run python -m src.dev.fixtures
 ```
 
 ### Run tests
@@ -94,6 +100,68 @@ uv run pytest -q     # requires the db + mailpit containers to be running
 cp .env.example .env   # then fill in SECRET_KEY (openssl rand -hex 32)
 ```
 
+#### Environment variables
+Settings are read from the environment (and `.env`) in [`src/config.py`](src/config.py):
+each value comes from a matching variable, falling back to a default where one
+exists. **Required** variables have no default — the app refuses to start without
+them. Everything else is **optional** (commented in `.env.example`, with its
+default shown; uncomment only to override).
+
+```bash
+# Required — app won't boot without these
+POSTGRES_USER=earnit_user
+POSTGRES_PASSWORD=earnit
+POSTGRES_DB=earnit_db
+SECRET_KEY=                 # openssl rand -hex 32
+
+# Optional — defaults in src/config.py; uncomment to override
+#POSTGRES_HOST=localhost    #POSTGRES_PORT=5432
+#CORS_ORIGINS=http://localhost:3000,http://localhost:5173   # CSV or JSON array
+#MAIL_SERVER=mailpit  #MAIL_PORT=1025  #MAIL_FROM=noreply@earnit.app
+#VERIFICATION_CODE_EXPIRY_MINUTES=10  #ACCOUNT_LIMBO_PURGE_HOURS=24
+#ACCESS_TOKEN_EXPIRE_MINUTES=43200    #MAX_CHILDREN_PER_USER=10
+#LOG_LEVEL=INFO
+DISABLE_AUTH=false          # src/config.py defaults to true (auth OFF) — keep false unless you want the dev bypass
+```
+
+**Full reference** — every variable read by [`src/config.py`](src/config.py):
+
+_Required_ (no default — the app raises at startup if missing):
+
+| Variable | Purpose |
+|---|---|
+| `POSTGRES_USER` | Postgres role the API connects as (and the `db` container bootstraps on first run) |
+| `POSTGRES_PASSWORD` | Password for that role |
+| `POSTGRES_DB` | Database name |
+| `SECRET_KEY` | Signs JWT session tokens (HS256) **and** the HMAC verification/reset codes — generate with `openssl rand -hex 32` |
+
+_Optional_ (default shown; override via env var or `.env`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `POSTGRES_HOST` | `localhost` | DB host; the Docker `api` container overrides this to `db` via `compose.yaml` |
+| `POSTGRES_PORT` | `5432` | DB port |
+| `CORS_ORIGINS` | `http://localhost:3000, http://localhost:5173` | Browser origins allowed to send credentialed requests (comma-separated **or** JSON array) |
+| `MAIL_SERVER` | `mailpit` | SMTP host (`localhost` when running outside Docker) |
+| `MAIL_PORT` | `1025` | SMTP port |
+| `MAIL_FROM` | `noreply@earnit.app` | Sender address on outgoing mail |
+| `MAIL_USERNAME` | _(empty)_ | SMTP username (Mailpit needs none) |
+| `MAIL_PASSWORD` | _(empty)_ | SMTP password (Mailpit needs none) |
+| `PASSWORD_MIN_LENGTH` | `12` | Minimum password length enforced at registration |
+| `PASSWORD_SPECIAL_CHARS` | _(symbol set)_ | Characters that satisfy the "special character" password rule |
+| `VERIFICATION_CODE_CHARSET` | `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` | Alphabet for emailed codes (omits look-alikes `0/O`, `1/I`) |
+| `VERIFICATION_CODE_LENGTH` | `6` | Number of characters in a code |
+| `VERIFICATION_CODE_EXPIRY_MINUTES` | `10` | Lifetime of a verification/reset code window |
+| `ACCOUNT_LIMBO_PURGE_HOURS` | `24` | How long an unverified account survives before the purge sweep deletes it |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `43200` | Full-session token lifetime (30 days) |
+| `PENDING_VERIFICATION_TOKEN_EXPIRE_MINUTES` | `1440` | Pending-verification token lifetime (1 day) |
+| `MAX_CHILDREN_PER_USER` | `10` | Cap on child profiles per parent (counts active + inactive) |
+| `PARENT_PIN_LENGTH` | `4` | Required number of digits in the parental PIN |
+| `LOG_LEVEL` | `INFO` | Root logging level (`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`) |
+| `DISABLE_AUTH` | `true` | ⚠️ **Dev only** — bypasses JWT; every request runs as `dev@earnit.local`. Set `false` for real auth. Never enable in production. |
+
+See [`.env.example`](.env.example) for a copy-paste template.
+
 #### Running the Backend Stack
 
 **Using Docker:**
@@ -111,9 +179,11 @@ make full-clean    # Full cleanup — everything in clean plus the local .venv (
 The `api` container talks to `db` over the compose network (`POSTGRES_HOST=db`,
 set in `compose.yaml`) regardless of the `POSTGRES_HOST` in `.env` — `.env` itself
 targets local/pytest (`POSTGRES_HOST=localhost`). On a fresh database, apply
-migrations once the stack is up:
+migrations once the stack is up — inside the container, or `make migrate` from the
+host (uses `.env`, talks to the exposed db port):
 ```bash
-docker compose exec api uv run alembic upgrade head
+docker compose exec api uv run alembic upgrade head   # in-container
+make migrate                                          # from the host
 ```
 
 Mailpit's service definition lives in its own [`mail/compose.yaml`](mail/README.md),
@@ -123,6 +193,7 @@ in isolation (`make mail-up` / `make mail-down` / `make mail-logs`).
 **Local Development (without Docker):**
 ```bash
 uv sync
+make migrate                      # apply migrations (db must be reachable)
 uv run uvicorn main:app --reload
 ```
 
@@ -134,7 +205,7 @@ When running, services are available at:
 - **Linting:** We use `ruff` for linting and formatting (`uv run ruff check .`, `uv run ruff format .`). The lint rule set (`pyproject.toml`) covers pycodestyle, Pyflakes, import sorting, pyupgrade, bugbear, simplify, comprehensions, async, and ruff-specific checks — with `B008` (FastAPI `Depends(...)` in argument defaults) and `RUF001-003` (ambiguous dashes in user-facing strings) intentionally ignored.
 - **Testing:** `uv run pytest tests/ -q` (requires the `db` and `mailpit` containers running — `mailpit` is defined in [`mail/compose.yaml`](mail/README.md) and included automatically by `docker compose up`). Coverage: `uv run pytest --cov=app --cov-report=term-missing`.
 - **API Docs:** When running, access the interactive docs at `/docs`.
-- **Dev auth bypass:** `DISABLE_AUTH=true` in `.env` skips JWT checks and returns a seeded `dev@earnit.local` parent on every request. Seed is created on startup; run `uv run python -m src.dev.seed` to seed without starting the server. See `src/dev/seed.py`.
+- **Dev auth bypass:** `DISABLE_AUTH=true` in `.env` skips JWT checks and returns a seeded `dev@earnit.local` parent on every request. Seed is created on startup; run `uv run python -m src.dev.fixtures` to seed without starting the server. See `src/dev/fixtures.py`.
 
 ### Project Structure
 
@@ -145,19 +216,18 @@ backend/
 │   ├── api/                  # API entry point and routes
 │   │   ├── auth/             # /api/v1/auth/* endpoints
 │   │   ├── children.py       # /api/v1/children/* endpoints (child task/wallet view)
+│   │   ├── goals.py          # /api/v1/children/{id}/goals/* endpoints (goal lifecycle)
 │   │   ├── profiles.py       # /api/v1/profiles/* endpoints
 │   │   ├── tasks.py          # /api/v1/tasks/* endpoints (parent task management)
 │   │   └── routes.py         # Centralized API router inclusion
-│   ├── core/
-│   │   └── config.py         # Settings (env-driven), token lifetimes, password/PIN rules
-│   ├── db/
-│   │   └── database.py       # Async SQLAlchemy engine + get_session dependency
-│   ├── dependencies/         # Dependency injection guards (e.g., auth)
+│   ├── config.py             # Settings (env-driven via os.getenv + .env), token lifetimes, password/PIN rules
+│   ├── database.py           # Async SQLAlchemy engine + get_session dependency
+│   ├── dependencies.py       # FastAPI dependency guards (auth: current-user / pending-verification)
 │   ├── dev/
-│   │   └── seed.py           # Dev fixture seeding (dev@earnit.local + child); importable + standalone
+│   │   └── fixtures.py       # Dev fixture seeding (dev@earnit.local + child); importable + standalone
 │   ├── email/                # HTML email templates (verification code, etc.)
 │   ├── mail.py               # fastapi-mail config
-│   ├── models/               # SQLModel tables: User, Child, Task, TaskSubmission, WalletTransaction
+│   ├── models/               # SQLModel tables: User, Child, Task, TaskSubmission, WalletTransaction, Goal
 │   ├── schemas/              # Pydantic request/response schemas
 │   ├── security/             # Hashing, JWT creation/decoding
 │   └── services/             # Core business logic: accounts, verification, tasks (crud/submissions/wallet)
@@ -180,6 +250,7 @@ Two tables (`src/models/auth.py`). Verification codes are **not** a table — th
 | `parent_pin_hash` | str(255), nullable | bcrypt; `NULL` until the PIN is set during onboarding |
 | `pin_set_at` | datetime (tz), nullable | when the PIN was last set/changed |
 | `family_name` | str(150), nullable | display name, e.g. *Família Silva* |
+| `point_value_eur` | numeric(10,4), default `0.0100` | family's points→€ rate (parent-set); used by the **frontend** to show euros |
 | `is_active` | bool, default `true` | soft-disable without a destructive delete |
 | `onboarding_completed` | bool, default `false` | server-flipped once `parent_pin_hash` is set **and** ≥1 child exists |
 | `email_verified_at` | datetime (tz), nullable | `NULL` = limbo (unverified); stamped on successful verify |
@@ -210,7 +281,7 @@ Two tables (`src/models/auth.py`). Verification codes are **not** a table — th
 | `title` | varchar(150) | |
 | `description` | text, nullable | |
 | `task_type` | varchar(20) | `duty` \| `extra_task` |
-| `reward_amount` | numeric(10,2) | always `0.00` for duties; > 0 for extra_tasks |
+| `reward_amount` | numeric(10,2) | reward in **points** (whole numbers); `0` for duties, > 0 for extra_tasks. API exposes it as `reward_points` |
 | `expires_at` | timestamptz, nullable | optional deadline (both types); once past, the child can't submit/resubmit and duties stop generating slots |
 | `is_active` | bool, default `true` | soft-delete; inactive tasks stop generating slots |
 | `created_at` / `updated_at` | timestamptz | |
@@ -224,7 +295,7 @@ Two tables (`src/models/auth.py`). Verification codes are **not** a table — th
 | `child_id` | UUID (FK → `children.id`) | denormalised for query ease — `ON DELETE CASCADE` |
 | `scheduled_date` | date, nullable | set for auto-generated duty slots; `NULL` for extra_tasks |
 | `submitted_at` | timestamptz, nullable | `NULL` = not yet submitted (duty slots start `NULL`) |
-| `status` | varchar(20) | `pending` \| `approved` \| `rejected` |
+| `status` | varchar(20) | duty: `open` → `pending` → `approved`/`rejected`, or `failed` (day ended un-attempted) · extra: `pending` → `approved`/`rejected` |
 | `reviewed_at` | timestamptz, nullable | stamped when a parent approves or rejects |
 | `rejection_note` | text, nullable | free-text from the parent on rejection |
 
@@ -237,12 +308,25 @@ Unique constraint: `(task_id, scheduled_date)` — one duty slot per task per da
 | `id` | UUID (PK) | |
 | `child_id` | UUID (FK → `children.id`) | `ON DELETE CASCADE` |
 | `task_submission_id` | UUID (FK → `task_submissions.id`), nullable | `ON DELETE SET NULL` — keeps ledger intact if submission deleted |
-| `amount` | numeric(10,2) | always positive |
-| `transaction_type` | varchar(20) | `credit` \| `debit` |
+| `amount` | numeric(10,2) | ledger entry in **points** (whole numbers, positive). API exposes it as `amount_points` |
+| `transaction_type` | varchar(20) | `credit` (task approved) \| `debit` (goal redeemed) |
 | `description` | text, nullable | |
 | `created_at` | timestamptz | |
 
-> **Points display:** all amounts are stored as euros (`numeric(10,2)`). The frontend converts to points at **1 pt = €0.01** (multiply by 100). The API always returns euro values — no backend involvement in the conversion.
+> **Points, not euros:** the backend is a pure **points** ledger — `reward_amount`/`amount`/balance are point counts (the existing `numeric` columns are reused; no schema change there). Euros are a **frontend** concern: multiply points by the family's `users.point_value_eur` rate (set via `PATCH /profiles/point-value`, exposed in `GET /family` and the wallet response). Changing the rate **re-values** everything, since only points are stored. The child only ever sees points.
+
+#### `goals` — a child's wishlist and its approval lifecycle (`src/models/goals.py`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID (PK) | |
+| `child_id` | UUID (FK → `children.id`) | `ON DELETE CASCADE`. Not unique — a child may hold many goals |
+| `name` | varchar(120) | the child's request text, e.g. "Ir ao parque" |
+| `status` | varchar(20) | `requested` → `approved`/`rejected`; `approved` → `redeemed` |
+| `target_points` | int, nullable | NULL until the parent approves and sets the value |
+| `created_at` | timestamptz | orders the list / "requested since" |
+
+> **Trimmed by design:** no `image_url` (a goal is just text), no `completed_at` (`status = redeemed` plus the redeem `debit`'s `created_at` already capture "done when"), no `updated_at` (nothing reads it), and no stored "reached" flag (the frontend derives it from `balance_points >= target_points`). The lifecycle is walked through in [Goals Flow](#5-goals--request-approval--redeem).
 
 ### Auth Flows (step by step)
 
@@ -314,8 +398,9 @@ The suite is split into two parts:
   — the "bonus" integration-level coverage (guide §5.3).
 
 `tests/conftest.py` (shared by both) centralizes the fixtures plus the example
-account (`VALID_USER`), cookie-extraction (`extract_cookie`), and register+verify
-(`register_and_verify`) helpers.
+account (`VALID_USER`) and a second account (`_OTHER`) for cross-user tests,
+cookie-extraction (`extract_cookie`), register+verify (`register_and_verify`),
+and child-creation (`_child`) helpers.
 
 ```bash
 make test              # essential unit suite only
@@ -359,9 +444,9 @@ All task-management endpoints require a full `access_token` session (parent). `c
 
 #### 1. Parent — task CRUD (`/api/v1/tasks`)
 
-1. **`POST /api/v1/tasks`** `{ child_id, title, description?, task_type, reward_amount?, expires_at? }` *(`access_token` required)*
+1. **`POST /api/v1/tasks`** `{ child_id, title, description?, task_type, reward_points?, expires_at? }` *(`access_token` required)*
    - Validates `child_id` belongs to the authenticated parent.
-   - Enforces reward rules: `duty` → `reward_amount` must be `0`; `extra_task` → `reward_amount` must be > 0.
+   - Enforces reward rules: `duty` → `reward_points` must be `0`; `extra_task` → `reward_points` must be > 0 (whole points; the parent's frontend converts a €-input to points via the family rate).
    - Creates the `tasks` row. → `201 TaskResponse`
 2. **`GET /api/v1/tasks`** *(`access_token` required)*
    - Query params: `child_id?`, `task_type?` (`duty` | `extra_task`), `is_active?` (bool).
@@ -378,12 +463,12 @@ All task-management endpoints require a full `access_token` session (parent). `c
    - Returns all submissions for the parent's children, newest first. → `200 list[SubmissionResponse]`
 2. **`POST /api/v1/tasks/submissions/{submission_id}/approve`** *(`access_token` required)*
    - `404` if submission doesn't belong to the parent's child · `409` if already approved or not in `pending` state.
-   - Stamps `reviewed_at`, sets `status = approved`. If `reward_amount > 0`, atomically inserts a `wallet_transactions (credit)` row in the same transaction. → `200 SubmissionResponse`
+   - Stamps `reviewed_at`, sets `status = approved`. If `reward_points > 0`, atomically inserts a `wallet_transactions (credit)` row (in points) in the same transaction. → `200 SubmissionResponse`
 3. **`POST /api/v1/tasks/submissions/{submission_id}/reject`** `{ rejection_note? }` *(`access_token` required)*
    - `404` if submission doesn't belong to the parent's child · `409` if not in `pending` state.
    - Stamps `reviewed_at`, sets `status = rejected`, stores `rejection_note`. → `200 SubmissionResponse`
 4. **`POST /api/v1/tasks/submissions/approve-all`** `{ child_id? }` *(`access_token` required)*
-   - Batch-approves all `pending` submissions for the parent (optionally filtered to one child). Each approval atomically credits the wallet if `reward_amount > 0`. → `200 { approved: N }`
+   - Batch-approves all `pending` submissions for the parent (optionally filtered to one child). Each approval atomically credits the wallet (in points) if `reward_points > 0`. → `200 { approved: N }`
 
 > **Router ordering note:** `approve-all` is registered *before* `/{submission_id}/approve` in FastAPI to prevent the literal string `"approve-all"` being matched as a UUID path parameter.
 
@@ -397,21 +482,36 @@ All task-management endpoints require a full `access_token` session (parent). `c
      - **Extra tasks:** the latest submission (any status), or `null` if never submitted.
    - → `200 list[ChildTaskResponse]`
 2. **`POST /api/v1/children/{child_id}/tasks/{task_id}/submit`** *(`access_token` required)*
-   - For `duty`: stamps `submitted_at = now()` on today's slot, sets `status = pending`. `409` if already submitted or no slot exists for today.
+   - For `duty`: flips today's **`open`** slot to `status = pending` (stamps `submitted_at`). `409` if the slot isn't `open` (already submitted, reviewed, or missed); `404` if no slot exists for today.
    - For `extra_task`: creates a new `task_submissions` row with `status = pending`. `409` if a `pending` or `approved` submission already exists.
    - `410` if the task has expired (`expires_at` in the past) — the child can no longer submit.
    - → `201 SubmissionResponse`
 3. **`PATCH /api/v1/children/{child_id}/submissions/{submission_id}`** *(`access_token` required)*
-   - Resubmit after a parent rejection. Resets `status → pending`, clears `rejection_note`, stamps `submitted_at = now()` on the **same** submission row (no new row created). A rejected submission can be resubmitted (and re-rejected) any number of times **while the task is live** — rejection is only terminal once the task expires.
-   - `410` if the task has expired (the retry window is closed) · `404` if submission doesn't belong to the child · `409` if status is not `rejected`. → `200 SubmissionResponse`
+   - Resubmit after a parent rejection. Resets `status → pending`, clears `rejection_note`, stamps `submitted_at = now()` on the **same** submission row (no new row created). A rejected submission can be resubmitted (and re-rejected) any number of times **while the task is live**.
+   - `410` if the task has expired, or if the duty's **day has already passed** (a duty is only resubmittable on its own day) · `404` if submission doesn't belong to the child · `409` if status is not `rejected`. → `200 SubmissionResponse`
 4. **`GET /api/v1/children/{child_id}/wallet`** *(`access_token` required)*
-   - Returns `{ child_id, balance, transactions[] }`. Balance is computed as `SUM(amount) WHERE type=credit` − `SUM(amount) WHERE type=debit` via a single DB query.
+   - Returns `{ child_id, balance_points, point_value_eur, transactions[] }` — balance is `SUM(credits) − SUM(debits)` **in points** (single DB query); `point_value_eur` is the family rate so the frontend can show euros. The child only sees points.
    - → `200 WalletBalanceResponse`
 
 #### 4. Daily maintenance background loop
 
 On every app startup (`lifespan` in `main.py`), `start_daily_maintenance()` runs:
-1. Immediately runs one maintenance pass — `generate_daily_duty_slots()` creates today's `task_submissions` rows for all active, non-expired duties (idempotent: skips any `(task_id, scheduled_date)` that already exists), then `purge_expired_limbo_accounts()` deletes every account still unverified past `ACCOUNT_LIMBO_PURGE_HOURS` in one `DELETE` (CASCADE removes their children).
+1. Immediately runs one maintenance pass — `fail_overdue_duty_slots()` marks any still-`open` duty slot from a past day as `failed` (the day closed un-attempted), `generate_daily_duty_slots()` creates today's `open` slots for all active, non-expired duties (idempotent: skips any `(task_id, scheduled_date)` that already exists), then `purge_expired_limbo_accounts()` deletes every account still unverified past `ACCOUNT_LIMBO_PURGE_HOURS` in one `DELETE` (CASCADE removes their children).
 2. Spawns an `asyncio.Task` (`_maintenance_task`) that loops, sleeping until the next UTC midnight, and repeats the pass daily.
 
 The task reference is stored at module level in `src/services/tasks/submissions.py` to prevent garbage collection. `stop_daily_maintenance()` cancels it cleanly on shutdown. Tests call `generate_daily_duty_slots(session)` and `purge_expired_limbo_accounts(session)` directly (bypassing the background loop).
+
+#### 5. Goals — request, approval & redeem (`/api/v1/children/{child_id}/goals`)
+
+A child's wishlist. Like everything else there are **no child logins**: every route is the parent session and child-scoped (`404` if the child isn't theirs); the frontend's PIN gate decides child mode (request) vs parent mode (approve/reject/redeem), exactly as task `submit` vs `approve`. The lifecycle is `requested → approved`/`rejected`, and `approved → redeemed` (terminal).
+
+1. **`POST /api/v1/children/{child_id}/goals`** `{ name }` *(child mode)*
+   - Records the child's wish as a `goals` row in `status = requested`, `target_points = null` (shown as "pending" to the child). → `201 GoalResponse`
+2. **`GET /api/v1/children/{child_id}/goals`** *(filter: `status?`)*
+   - Returns `{ child_id, balance_points, point_value_eur, goals[] }` — the goals newest-first plus the child's current balance, so the frontend can show progress and derive each approved goal's "reached" state from `balance_points >= target_points`. The frontend hides `rejected` goals in child mode. → `200 GoalListResponse`
+3. **`POST /api/v1/children/{child_id}/goals/{goal_id}/approve`** `{ target_points }` *(parent)*
+   - Sets the point value the child must "pay" and flips `status → approved`. `target_points` must be > 0 (`422` otherwise) · `409` unless the goal is `requested` · `404` if the goal/child isn't the parent's. → `200 GoalResponse`
+4. **`POST /api/v1/children/{child_id}/goals/{goal_id}/reject`** *(parent)*
+   - Flips `status → rejected` — the goal is **kept** (history) but hidden from the child view. `409` unless the goal is `requested`. → `200 GoalResponse`
+5. **`POST /api/v1/children/{child_id}/goals/{goal_id}/redeem`** *(parent)*
+   - Spends the points: re-reads the balance, and if `balance >= target_points` inserts a single `wallet_transactions (debit)` of `target_points` (`description = "Goal: <name>"`) and flips `status → redeemed` in one transaction. `409` unless the goal is `approved` **or** if the balance is below target · `404` if the goal/child isn't the parent's. This is the ledger's first and only `debit` writer — the balance falls out of `SUM(credits) − SUM(debits)` for free. → `200 GoalResponse`
