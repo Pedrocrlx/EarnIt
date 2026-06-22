@@ -44,6 +44,11 @@ docker compose exec api uv run alembic upgrade head  # Migrations (first run onl
 | `POST` | `/api/v1/children/{child_id}/tasks/{task_id}/submit` | session | Submit a task completion |
 | `PATCH` | `/api/v1/children/{child_id}/submissions/{id}` | session | Resubmit after rejection |
 | `GET` | `/api/v1/children/{child_id}/wallet` | session | Balance + transaction history |
+| `POST` | `/api/v1/children/{child_id}/goals` | session | Request a goal (child mode) |
+| `GET` | `/api/v1/children/{child_id}/goals` | session | List goals + balance (filter: `status`) |
+| `POST` | `/api/v1/children/{child_id}/goals/{goal_id}/approve` | session | Approve + set point value |
+| `POST` | `/api/v1/children/{child_id}/goals/{goal_id}/reject` | session | Reject a goal request |
+| `POST` | `/api/v1/children/{child_id}/goals/{goal_id}/redeem` | session | Redeem (spend points → debit) |
 
 ### Auth flows at a glance
 
@@ -174,9 +179,11 @@ make full-clean    # Full cleanup — everything in clean plus the local .venv (
 The `api` container talks to `db` over the compose network (`POSTGRES_HOST=db`,
 set in `compose.yaml`) regardless of the `POSTGRES_HOST` in `.env` — `.env` itself
 targets local/pytest (`POSTGRES_HOST=localhost`). On a fresh database, apply
-migrations once the stack is up:
+migrations once the stack is up — inside the container, or `make migrate` from the
+host (uses `.env`, talks to the exposed db port):
 ```bash
-docker compose exec api uv run alembic upgrade head
+docker compose exec api uv run alembic upgrade head   # in-container
+make migrate                                          # from the host
 ```
 
 Mailpit's service definition lives in its own [`mail/compose.yaml`](mail/README.md),
@@ -186,6 +193,7 @@ in isolation (`make mail-up` / `make mail-down` / `make mail-logs`).
 **Local Development (without Docker):**
 ```bash
 uv sync
+make migrate                      # apply migrations (db must be reachable)
 uv run uvicorn main:app --reload
 ```
 
@@ -208,6 +216,7 @@ backend/
 │   ├── api/                  # API entry point and routes
 │   │   ├── auth/             # /api/v1/auth/* endpoints
 │   │   ├── children.py       # /api/v1/children/* endpoints (child task/wallet view)
+│   │   ├── goals.py          # /api/v1/children/{id}/goals/* endpoints (goal lifecycle)
 │   │   ├── profiles.py       # /api/v1/profiles/* endpoints
 │   │   ├── tasks.py          # /api/v1/tasks/* endpoints (parent task management)
 │   │   └── routes.py         # Centralized API router inclusion
@@ -218,7 +227,7 @@ backend/
 │   │   └── fixtures.py       # Dev fixture seeding (dev@earnit.local + child); importable + standalone
 │   ├── email/                # HTML email templates (verification code, etc.)
 │   ├── mail.py               # fastapi-mail config
-│   ├── models/               # SQLModel tables: User, Child, Task, TaskSubmission, WalletTransaction
+│   ├── models/               # SQLModel tables: User, Child, Task, TaskSubmission, WalletTransaction, Goal
 │   ├── schemas/              # Pydantic request/response schemas
 │   ├── security/             # Hashing, JWT creation/decoding
 │   └── services/             # Core business logic: accounts, verification, tasks (crud/submissions/wallet)
@@ -300,11 +309,24 @@ Unique constraint: `(task_id, scheduled_date)` — one duty slot per task per da
 | `child_id` | UUID (FK → `children.id`) | `ON DELETE CASCADE` |
 | `task_submission_id` | UUID (FK → `task_submissions.id`), nullable | `ON DELETE SET NULL` — keeps ledger intact if submission deleted |
 | `amount` | numeric(10,2) | ledger entry in **points** (whole numbers, positive). API exposes it as `amount_points` |
-| `transaction_type` | varchar(20) | `credit` \| `debit` |
+| `transaction_type` | varchar(20) | `credit` (task approved) \| `debit` (goal redeemed) |
 | `description` | text, nullable | |
 | `created_at` | timestamptz | |
 
 > **Points, not euros:** the backend is a pure **points** ledger — `reward_amount`/`amount`/balance are point counts (the existing `numeric` columns are reused; no schema change there). Euros are a **frontend** concern: multiply points by the family's `users.point_value_eur` rate (set via `PATCH /profiles/point-value`, exposed in `GET /family` and the wallet response). Changing the rate **re-values** everything, since only points are stored. The child only ever sees points.
+
+#### `goals` — a child's wishlist and its approval lifecycle (`src/models/goals.py`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID (PK) | |
+| `child_id` | UUID (FK → `children.id`) | `ON DELETE CASCADE`. Not unique — a child may hold many goals |
+| `name` | varchar(120) | the child's request text, e.g. "Ir ao parque" |
+| `status` | varchar(20) | `requested` → `approved`/`rejected`; `approved` → `redeemed` |
+| `target_points` | int, nullable | NULL until the parent approves and sets the value |
+| `created_at` | timestamptz | orders the list / "requested since" |
+
+> **Trimmed by design:** no `image_url` (a goal is just text), no `completed_at` (`status = redeemed` plus the redeem `debit`'s `created_at` already capture "done when"), no `updated_at` (nothing reads it), and no stored "reached" flag (the frontend derives it from `balance_points >= target_points`). The lifecycle is walked through in [Goals Flow](#5-goals--request-approval--redeem).
 
 ### Auth Flows (step by step)
 
@@ -376,8 +398,9 @@ The suite is split into two parts:
   — the "bonus" integration-level coverage (guide §5.3).
 
 `tests/conftest.py` (shared by both) centralizes the fixtures plus the example
-account (`VALID_USER`), cookie-extraction (`extract_cookie`), and register+verify
-(`register_and_verify`) helpers.
+account (`VALID_USER`) and a second account (`_OTHER`) for cross-user tests,
+cookie-extraction (`extract_cookie`), register+verify (`register_and_verify`),
+and child-creation (`_child`) helpers.
 
 ```bash
 make test              # essential unit suite only
@@ -477,3 +500,18 @@ On every app startup (`lifespan` in `main.py`), `start_daily_maintenance()` runs
 2. Spawns an `asyncio.Task` (`_maintenance_task`) that loops, sleeping until the next UTC midnight, and repeats the pass daily.
 
 The task reference is stored at module level in `src/services/tasks/submissions.py` to prevent garbage collection. `stop_daily_maintenance()` cancels it cleanly on shutdown. Tests call `generate_daily_duty_slots(session)` and `purge_expired_limbo_accounts(session)` directly (bypassing the background loop).
+
+#### 5. Goals — request, approval & redeem (`/api/v1/children/{child_id}/goals`)
+
+A child's wishlist. Like everything else there are **no child logins**: every route is the parent session and child-scoped (`404` if the child isn't theirs); the frontend's PIN gate decides child mode (request) vs parent mode (approve/reject/redeem), exactly as task `submit` vs `approve`. The lifecycle is `requested → approved`/`rejected`, and `approved → redeemed` (terminal).
+
+1. **`POST /api/v1/children/{child_id}/goals`** `{ name }` *(child mode)*
+   - Records the child's wish as a `goals` row in `status = requested`, `target_points = null` (shown as "pending" to the child). → `201 GoalResponse`
+2. **`GET /api/v1/children/{child_id}/goals`** *(filter: `status?`)*
+   - Returns `{ child_id, balance_points, point_value_eur, goals[] }` — the goals newest-first plus the child's current balance, so the frontend can show progress and derive each approved goal's "reached" state from `balance_points >= target_points`. The frontend hides `rejected` goals in child mode. → `200 GoalListResponse`
+3. **`POST /api/v1/children/{child_id}/goals/{goal_id}/approve`** `{ target_points }` *(parent)*
+   - Sets the point value the child must "pay" and flips `status → approved`. `target_points` must be > 0 (`422` otherwise) · `409` unless the goal is `requested` · `404` if the goal/child isn't the parent's. → `200 GoalResponse`
+4. **`POST /api/v1/children/{child_id}/goals/{goal_id}/reject`** *(parent)*
+   - Flips `status → rejected` — the goal is **kept** (history) but hidden from the child view. `409` unless the goal is `requested`. → `200 GoalResponse`
+5. **`POST /api/v1/children/{child_id}/goals/{goal_id}/redeem`** *(parent)*
+   - Spends the points: re-reads the balance, and if `balance >= target_points` inserts a single `wallet_transactions (debit)` of `target_points` (`description = "Goal: <name>"`) and flips `status → redeemed` in one transaction. `409` unless the goal is `approved` **or** if the balance is below target · `404` if the goal/child isn't the parent's. This is the ledger's first and only `debit` writer — the balance falls out of `SUM(credits) − SUM(debits)` for free. → `200 GoalResponse`

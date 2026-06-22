@@ -10,6 +10,7 @@ from sqlmodel import SQLModel
 
 import src.database as app_database
 import src.models.auth
+import src.models.goals  # registers the goals table with SQLModel.metadata
 import src.models.tasks  # noqa: F401 — registers task tables with SQLModel.metadata
 import src.services.tasks.submissions as app_tasks_submissions
 from src.config import settings
@@ -30,6 +31,13 @@ VALID_USER = {
     "email": "user@example.com",
     "password": "Password123!",
     "family_name": "Silva",
+}
+
+# A second, independent account — used by cross-user (404) ownership tests.
+_OTHER = {
+    "email": "other@example.com",
+    "password": "Password123!",
+    "family_name": "Costa",
 }
 
 _REGISTER_URL = "/api/v1/auth/register"
@@ -65,6 +73,17 @@ async def register_and_verify(client: AsyncClient, mock_mail, **overrides) -> st
         cookies={"pending_verification_token": pending_token},
     )
     return extract_cookie(verify_res, "access_token")
+
+
+async def _child(client: AsyncClient, token: str, name: str = "Leo") -> str:
+    """Create a child profile for the session account, returning its id."""
+    res = await client.post(
+        "/api/v1/profiles/children",
+        json={"name": name},
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 201
+    return res.json()["id"]
 
 
 # Fixtures
