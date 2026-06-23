@@ -64,6 +64,12 @@ export const requestPinResetCode = () =>
     method: "POST",
   });
 
+export const verifyPinResetCode = (code: string) =>
+  apiFetch("/auth/reset-pin/verify", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+
 export const resetPin = (data: ResetPinRequest) =>
   apiFetch("/auth/reset-pin", {
     method: "POST",

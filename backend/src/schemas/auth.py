@@ -154,3 +154,11 @@ class ResetPinRequest(BaseModel):
     @classmethod
     def validate_new_pin(cls, v: str) -> str:
         return _validate_pin_format(v)
+
+
+class VerifyPinCodeRequest(BaseModel):
+    """Body for ``POST /reset-pin/verify`` — just the emailed reset code."""
+
+    code: str
+
+    model_config = {"json_schema_extra": {"example": {"code": "748291"}}}

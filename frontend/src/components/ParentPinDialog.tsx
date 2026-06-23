@@ -9,6 +9,7 @@ import {
   requestPinResetCode,
   resetPin as resetPinRequest,
   verifyParentPin,
+  verifyPinResetCode,
 } from "@/services/authService";
 
 // The parent-profile gate, with a self-contained forgot/reset flow. Steps:
@@ -48,11 +49,13 @@ export const ParentPinDialog = ({ onClose, onUnlocked }: ParentPinDialogProps) =
   const [notice, setNotice] = useState("");
   const [isSending, setIsSending] = useState(false);
 
+  const [isCheckingCode, setIsCheckingCode] = useState(false);
+
   // New PIN (reset)
   const newPin = useSetPin();
   const [isResetting, setIsResetting] = useState(false);
 
-  const busy = isVerifying || isSending || isResetting;
+  const busy = isVerifying || isSending || isCheckingCode || isResetting;
   const { title, subtitle } = headings[step];
 
   const verify = async (pinValue: string) => {
@@ -108,14 +111,36 @@ export const ParentPinDialog = ({ onClose, onUnlocked }: ParentPinDialogProps) =
     }
   };
 
-  const continueToReset = () => {
-    if (code.trim().length === 0) {
+  const continueToReset = async () => {
+    const trimmed = code.trim();
+    if (trimmed.length === 0) {
       setActionError("Introduza o código recebido por email.");
       return;
     }
+    setIsCheckingCode(true);
     setActionError("");
-    newPin.reset();
-    setStep("reset");
+    try {
+      // Confirm the code up front so a wrong code is caught here, not only after
+      // the parent has set a new PIN. The code is not consumed by this check.
+      await verifyPinResetCode(trimmed);
+      newPin.reset();
+      setStep("reset");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 410) {
+        setActionError("O código expirou. Peça um novo.");
+        setStep("forgot");
+        return;
+      }
+      if (error instanceof ApiError && error.status === 400) {
+        setActionError("Código inválido. Verifique e tente novamente.");
+        return;
+      }
+      setActionError(
+        error instanceof Error ? error.message : "Não foi possível validar o código.",
+      );
+    } finally {
+      setIsCheckingCode(false);
+    }
   };
 
   const submitReset = async () => {
@@ -300,7 +325,7 @@ export const ParentPinDialog = ({ onClose, onUnlocked }: ParentPinDialogProps) =
               <button
                 type="button"
                 onClick={sendCode}
-                disabled={isSending}
+                disabled={busy}
                 className="text-sm font-semibold text-[#003514]/70 underline-offset-4 transition hover:text-[#003514] hover:underline disabled:opacity-50"
               >
                 Reenviar código
@@ -312,6 +337,7 @@ export const ParentPinDialog = ({ onClose, onUnlocked }: ParentPinDialogProps) =
                 type="button"
                 variant="ghost"
                 onClick={() => setStep("forgot")}
+                disabled={busy}
                 className="h-12 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
               >
                 <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
@@ -320,8 +346,12 @@ export const ParentPinDialog = ({ onClose, onUnlocked }: ParentPinDialogProps) =
               <Button
                 type="button"
                 onClick={continueToReset}
-                className="h-12 rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42]"
+                disabled={isCheckingCode}
+                className="h-12 rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
               >
+                {isCheckingCode ? (
+                  <LoaderCircle className="mr-2 size-4 animate-spin" />
+                ) : null}
                 Continuar
               </Button>
             </div>

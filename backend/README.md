@@ -26,6 +26,7 @@ docker compose exec api uv run alembic upgrade head  # Migrations (first run onl
 | `POST` | `/api/v1/auth/pin` | session | Set / update parental PIN |
 | `POST` | `/api/v1/auth/verify-pin` | session | Check PIN; gates parent dashboard |
 | `POST` | `/api/v1/auth/forgot-pin` | session | Email a PIN-reset code (rate-limited, 429 while active) |
+| `POST` | `/api/v1/auth/reset-pin/verify` | session | `{ code }` → check a PIN-reset code without consuming it (410/400) |
 | `POST` | `/api/v1/auth/reset-pin` | session | `{ code, new_pin }` → reset PIN |
 | `PATCH` | `/api/v1/profiles/family-name` | session | Update family display name |
 | `PATCH` | `/api/v1/profiles/point-value` | session | Set the family points→€ rate |
@@ -57,7 +58,7 @@ docker compose exec api uv run alembic upgrade head  # Migrations (first run onl
 |---|---|
 | Register | `POST /register` → email code → `POST /verify` |
 | Forgot password | `POST /forgot-password` → email code → `POST /reset-password` `{ email, code, new_password }` |
-| Forgot PIN | `POST /forgot-pin` → email code → `POST /reset-pin` `{ code, new_pin }` |
+| Forgot PIN | `POST /forgot-pin` → email code → `POST /reset-pin/verify` `{ code }` (optional pre-check) → `POST /reset-pin` `{ code, new_pin }` |
 
 All verification codes expire in **10 minutes**. Resend/request endpoints return `429 { retry_after_seconds }` while a code is still live — a new code can only be issued once the previous window closes.
 

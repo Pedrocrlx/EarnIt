@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database import get_session
 from src.dependencies import get_current_user
 from src.models.auth import User
-from src.schemas.auth import ResetPinRequest
+from src.schemas.auth import ResetPinRequest, VerifyPinCodeRequest
 from src.security.hashing import hash_secret
 from src.services.accounts import maybe_complete_onboarding
 from src.services.verification import core, flows
@@ -66,6 +66,25 @@ async def forgot_pin(
         "message": "A PIN reset code has been sent.",
         "expires_at": expires_at,
     }
+
+
+@router.post("/reset-pin/verify", summary="Check a PIN reset code")
+async def verify_pin_reset_code(
+    body: VerifyPinCodeRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Validate a PIN reset code without consuming it or setting a PIN.
+
+    Lets the UI confirm the emailed code before the parent picks a new PIN. Nothing
+    is rotated, so the same code still works for the subsequent `POST /reset-pin`.
+    Returns 410 if the code window has expired, 400 if the code is wrong.
+    """
+    now = core.now()
+    if not flows.is_window_open(current_user, now):
+        raise HTTPException(status_code=410, detail="PIN reset code has expired.")
+    if not flows.verify(current_user, core.PURPOSE_PIN_RESET, body.code):
+        raise HTTPException(status_code=400, detail="Invalid PIN reset code.")
+    return {"status": "success", "valid": True}
 
 
 @router.post("/reset-pin", summary="Set a new PIN from reset code")
