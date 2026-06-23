@@ -7,4 +7,4 @@ export const pointsToEuros = (points: number, pointsPerEuro: number) =>
   points / pointsPerEuro;
 
 export const formatPoints = (points: number) =>
-  `${points.toLocaleString("pt-PT")} ${points === 1 ? "ponto" : "pontos"}`;
+  `${points.toLocaleString("pt-PT")}`;
