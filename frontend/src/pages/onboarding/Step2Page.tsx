@@ -4,8 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
-import { useAuth } from "@/context/useAuth";
-import { apiFetch } from "@/lib/api";
+import { readDraft, writeDraft } from "@/lib/onboarding-draft";
 import { cn } from "@/lib/utils";
 import {
   MAX_CHILD_NAME_LENGTH,
@@ -30,23 +29,28 @@ const createChild = (id: number): ChildProfile => ({
 const invalidInputClass =
   "border-red-300 bg-red-50/40 focus-visible:border-red-500 focus-visible:ring-red-500/15";
 
-const getInitialChildren = () => {
-  const savedCount = Number(
-    window.sessionStorage.getItem("earnit:onboarding:child-count") ?? "1",
-  );
-  const childCount = Number.isFinite(savedCount)
-    ? Math.min(Math.max(savedCount, 1), 10)
+const getInitialChildren = (): ChildProfile[] => {
+  const draft = readDraft();
+
+  if (draft.children && draft.children.length > 0) {
+    return draft.children.map((child, index) => ({
+      id: index + 1,
+      firstName: child.firstName ?? "",
+      birthDate: child.birthDate ?? "",
+    }));
+  }
+
+  const count = draft.childCount
+    ? Math.min(Math.max(draft.childCount, 1), 10)
     : 1;
 
-  return Array.from({ length: childCount }, (_, index) => createChild(index + 1));
+  return Array.from({ length: count }, (_, index) => createChild(index + 1));
 };
 
 const OnboardingStep2Page = () => {
   const navigate = useNavigate();
-  const { familyProfile, refreshSession } = useAuth();
   const [children, setChildren] = useState<ChildProfile[]>(getInitialChildren);
   const [nextChildId, setNextChildId] = useState(children.length + 1);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -145,13 +149,8 @@ const OnboardingStep2Page = () => {
     );
   };
 
-  const saveChildren = async () => {
+  const saveChildren = () => {
     setError("");
-
-    const activeChildren = children.map((child) => ({
-      name: child.firstName.trim(),
-      birth_date: child.birthDate || null,
-    }));
 
     const nextErrors = validateChildren();
 
@@ -161,40 +160,14 @@ const OnboardingStep2Page = () => {
     }
 
     setFieldErrors({});
-    setIsSubmitting(true);
-
-    try {
-      const alreadyCreated =
-        window.sessionStorage.getItem("earnit:onboarding:children-created") ===
-        "true";
-      const hasExistingChildren = (familyProfile?.children.length ?? 0) > 0;
-
-      if (!alreadyCreated && !hasExistingChildren) {
-        await Promise.all(
-          activeChildren.map((child) =>
-            apiFetch("/profiles/children", {
-              method: "POST",
-              body: JSON.stringify(child),
-            }),
-          ),
-        );
-        window.sessionStorage.setItem(
-          "earnit:onboarding:children-created",
-          "true",
-        );
-      }
-
-      await refreshSession();
-      navigate("/onboarding/step3");
-    } catch (caughtError) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Não foi possível guardar os perfis das crianças.",
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
+    // No network here — the children are created in one go on step 3's Concluir.
+    writeDraft({
+      children: children.map((child) => ({
+        firstName: child.firstName.trim(),
+        birthDate: child.birthDate,
+      })),
+    });
+    navigate("/onboarding/step3");
   };
 
   return (
@@ -374,10 +347,9 @@ const OnboardingStep2Page = () => {
           <Button
             type="button"
             onClick={saveChildren}
-            disabled={isSubmitting}
             className="h-auto rounded-full bg-[#d4e251] px-10 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.08),0px_4px_6px_-4px_rgba(0,0,0,0.08)] hover:bg-[#cfdc42] disabled:opacity-60"
           >
-            {isSubmitting ? "A guardar..." : "Continuar"}
+            Continuar
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>

@@ -30,6 +30,11 @@ export type ResetPinRequest = {
   new_pin: string;
 };
 
+export type PinVerificationResponse = {
+  authenticated: boolean;
+  status: string;
+};
+
 export const login = (data: LoginCredentials) =>
   apiFetch("/auth/login", {
     method: "POST",
@@ -63,4 +68,10 @@ export const resetPin = (data: ResetPinRequest) =>
   apiFetch("/auth/reset-pin", {
     method: "POST",
     body: JSON.stringify(data),
+  });
+
+export const verifyParentPin = (pin: string) =>
+  apiFetch<PinVerificationResponse>("/auth/verify-pin", {
+    method: "POST",
+    body: JSON.stringify({ pin }),
   });
