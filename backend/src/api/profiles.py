@@ -20,6 +20,7 @@ from src.dependencies import get_current_user
 from src.models.auth import Child, User
 from src.schemas.profiles import (
     ChildCreateRequest,
+    PointValueResponse,
     SetPointValueRequest,
     SetPointValueResponse,
     UpdateFamilyNameRequest,
@@ -74,6 +75,19 @@ async def set_point_value(
     return SetPointValueResponse(
         status="success", point_value_eur=current_user.point_value_eur
     )
+
+
+@router.get(
+    "/point-value",
+    tags=["profiles/family"],
+    summary="Get the family points→€ exchange rate",
+)
+async def get_point_value(
+    current_user: User = Depends(get_current_user),
+) -> PointValueResponse:
+    """Return the family's current points→€ rate, so the frontend can show what a
+    point is worth (multiply any point amount by `point_value_eur`)."""
+    return PointValueResponse(point_value_eur=current_user.point_value_eur)
 
 
 @router.post(

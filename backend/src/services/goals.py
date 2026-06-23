@@ -64,13 +64,13 @@ async def get_goal_or_404(
 async def approve_goal(
     goal: Goal, body: GoalApproveRequest, session: AsyncSession
 ) -> Goal:
-    """Approve a requested goal and set its point value (409 if not requested)."""
+    """Approve a requested goal and set its target amount (409 if not requested)."""
     if goal.status != "requested":
         raise HTTPException(status_code=409, detail="Goal is not pending approval")
     goal.status = "approved"
-    goal.target_points = body.target_points
+    goal.target_amount = body.target_amount
     await session.commit()
-    logger.info("Goal approved: goal_id=%s target=%s", goal.id, goal.target_points)
+    logger.info("Goal approved: goal_id=%s target=%s", goal.id, goal.target_amount)
     return goal
 
 
@@ -85,7 +85,7 @@ async def reject_goal(goal: Goal, session: AsyncSession) -> Goal:
 
 
 async def redeem_goal(goal: Goal, user: User, session: AsyncSession) -> Goal:
-    """Redeem an approved goal, spending its points via a wallet ``debit``.
+    """Redeem an approved goal, spending the points via a wallet ``debit``.
 
     Raises 409 unless the goal is ``approved``, and 409 if the child's balance is
     below the target. Writes the first ``debit`` in the ledger and marks the goal
@@ -94,17 +94,17 @@ async def redeem_goal(goal: Goal, user: User, session: AsyncSession) -> Goal:
     if goal.status != "approved":
         raise HTTPException(status_code=409, detail="Goal is not approved")
     balance = await get_balance(goal.child_id, user, session)
-    if balance < goal.target_points:
+    if balance < goal.target_amount:
         raise HTTPException(status_code=409, detail="Insufficient balance to redeem")
     session.add(
         WalletTransaction(
             child_id=goal.child_id,
-            amount=goal.target_points,
+            amount=goal.target_amount,
             transaction_type="debit",
             description=f"Goal: {goal.name}",
         )
     )
     goal.status = "redeemed"
     await session.commit()
-    logger.info("Goal redeemed: goal_id=%s points=%s", goal.id, goal.target_points)
+    logger.info("Goal redeemed: goal_id=%s amount=%s", goal.id, goal.target_amount)
     return goal

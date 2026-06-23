@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("child_id", sa.Uuid(), nullable=False),
         sa.Column("name", sa.String(length=120), nullable=False),
         sa.Column("status", sa.String(length=20), nullable=False),
-        sa.Column("target_points", sa.Integer(), nullable=True),
+        sa.Column("target_amount", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["child_id"], ["children.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),

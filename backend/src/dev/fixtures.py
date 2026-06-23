@@ -104,7 +104,7 @@ async def seed_dev_fixtures() -> None:
                     child_id=DEV_CHILD_ID,
                     name="Bicicleta nova (aprovada)",
                     status="approved",
-                    target_points=100,
+                    target_amount=100,
                 )
             )
 
