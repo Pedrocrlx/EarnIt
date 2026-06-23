@@ -3,7 +3,8 @@ import { Mail, ArrowRight, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useMutation } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
+import { retryWaitMessage } from "@/lib/rate-limit";
 import {
   validateVerificationCode,
   VERIFICATION_CODE_LENGTH,
@@ -157,6 +158,13 @@ export const VerificationCode = () => {
       setMessage("Foi enviado um novo código de verificação.");
     },
     onError: (error: unknown) => {
+      if (error instanceof ApiError && error.status === 429) {
+        setMessageTone("neutral");
+        setMessage(
+          `Já enviámos um código há pouco. Aguarde ${retryWaitMessage(error)} antes de pedir outro.`,
+        );
+        return;
+      }
       setMessageTone("error");
       setMessage(getErrorMessage(error, "Não foi possível reenviar o código"));
     },

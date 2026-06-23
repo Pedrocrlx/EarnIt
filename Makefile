@@ -9,4 +9,4 @@ up: ## Build and start the full stack (detached)
 	docker compose up --build -d
 
 down: ## Stop and remove the full stack, including volumes (wipes the db)
-	docker compose down -v
+	docker compose down

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSetPin } from "@/hooks/useSetPin";
 import { ApiError } from "@/lib/api";
+import { retryWaitMessage } from "@/lib/rate-limit";
 import {
   requestPinResetCode,
   resetPin as resetPinRequest,
@@ -21,7 +22,12 @@ type Step = "pin" | "forgot" | "code" | "reset";
 
 type ParentPinDialogProps = {
   onClose: () => void;
-  onUnlocked: () => void;
+  onUnlocked?: () => void;
+  // Start at "forgot" (settings reset, parent already unlocked) vs the default
+  // "pin" verify gate (profile selector).
+  initialStep?: Step;
+  // When set, called instead of returning to the verify step after a reset.
+  onResetSuccess?: () => void;
 };
 
 const headings: Record<Step, { title: string; subtitle: string }> = {
@@ -34,8 +40,14 @@ const headings: Record<Step, { title: string; subtitle: string }> = {
   reset: { title: "Redefinir PIN", subtitle: "Defina o novo PIN." },
 };
 
-export const ParentPinDialog = ({ onClose, onUnlocked }: ParentPinDialogProps) => {
-  const [step, setStep] = useState<Step>("pin");
+export const ParentPinDialog = ({
+  onClose,
+  onUnlocked,
+  initialStep = "pin",
+  onResetSuccess,
+}: ParentPinDialogProps) => {
+  const [step, setStep] = useState<Step>(initialStep);
+  const resetOnly = initialStep === "forgot";
 
   // Verify
   const [pin, setPin] = useState("");
@@ -72,7 +84,7 @@ export const ParentPinDialog = ({ onClose, onUnlocked }: ParentPinDialogProps) =
         setPinError("PIN incorreto.");
         return;
       }
-      onUnlocked();
+      onUnlocked?.();
     } catch (error) {
       setPin("");
       setPinError(
@@ -99,7 +111,9 @@ export const ParentPinDialog = ({ onClose, onUnlocked }: ParentPinDialogProps) =
     } catch (error) {
       // 429: a code is already active — let them enter the one they already have.
       if (error instanceof ApiError && error.status === 429) {
-        setNotice("Já enviámos um código recentemente. Verifique o seu email.");
+        setNotice(
+          `Já enviámos um código recentemente. Aguarde ${retryWaitMessage(error)} antes de pedir outro.`,
+        );
         setStep("code");
         return;
       }
@@ -151,7 +165,13 @@ export const ParentPinDialog = ({ onClose, onUnlocked }: ParentPinDialogProps) =
     setActionError("");
     try {
       await resetPinRequest({ code: code.trim(), new_pin: newPin.confirmedPin });
-      // Success: back to the PIN step so the parent signs in with the new PIN.
+      // Settings context: parent is already unlocked — hand back to the page to
+      // close + confirm, instead of returning to the PIN verify step.
+      if (onResetSuccess) {
+        onResetSuccess();
+        return;
+      }
+      // Default (unlock context): back to the PIN step to sign in with the new PIN.
       setResetDone(true);
       setPin("");
       setPinError("");
@@ -263,12 +283,12 @@ export const ParentPinDialog = ({ onClose, onUnlocked }: ParentPinDialogProps) =
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setStep("pin")}
+                onClick={resetOnly ? onClose : () => setStep("pin")}
                 disabled={isSending}
                 className="h-12 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
               >
                 <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
-                Voltar
+                {resetOnly ? "Cancelar" : "Voltar"}
               </Button>
               <Button
                 type="button"

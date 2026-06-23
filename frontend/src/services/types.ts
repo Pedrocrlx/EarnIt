@@ -39,7 +39,7 @@ export type ChildTaskResponse = {
 };
 
 export type WalletTransaction = {
-  amount: string;
+  amount_points: number;
   child_id: string;
   created_at: string;
   description: string | null;
@@ -49,8 +49,9 @@ export type WalletTransaction = {
 };
 
 export type WalletResponse = {
-  balance: string;
+  balance_points: number;
   child_id: string;
+  point_value_eur: string;
   transactions: WalletTransaction[];
 };
 

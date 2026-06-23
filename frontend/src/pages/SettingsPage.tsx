@@ -1,42 +1,37 @@
 import { KeyRound, LoaderCircle, Mail, Save, ShieldCheck, Sigma } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import DashboardShell from "@/components/NavbarMobile";
+import { ParentPinDialog } from "@/components/ParentPinDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/useAuth";
-import { DEFAULT_POINTS_PER_EURO } from "@/lib/points";
 import {
-  requestPinResetCode,
-  resetPin as resetPinRequest,
-  type PinResetCodeResponse,
-} from "@/services/authService";
-import { updateFamilyName as updateFamilyNameRequest } from "@/services/profileService";
-import { getSettings, updateSettings } from "@/services/settingsService";
+  getPointValue,
+  setPointValue,
+  updateFamilyName as updateFamilyNameRequest,
+} from "@/services/profileService";
 
-type BusyAction = "family-name" | "request-pin-code" | "reset-pin" | "points" | null;
+type BusyAction = "family-name" | "points" | null;
 
 const SettingsPage = () => {
   const { familyProfile, refreshSession } = useAuth();
   const familyName = familyProfile?.family_name?.trim() || "Família";
   const [familyNameInput, setFamilyNameInput] = useState(familyName);
-  const [resetCode, setResetCode] = useState("");
-  const [newPin, setNewPin] = useState("");
-  const [confirmPin, setConfirmPin] = useState("");
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [pinCodeExpiresAt, setPinCodeExpiresAt] = useState<string | null>(null);
-  const [pointsPerEuroInput, setPointsPerEuroInput] = useState(String(DEFAULT_POINTS_PER_EURO));
+  const [pointValueInput, setPointValueInput] = useState("");
+  const [pinDialogOpen, setPinDialogOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
-    const loadSettings = async () => {
+    const loadPointValue = async () => {
       try {
-        const settings = await getSettings();
+        const { point_value_eur } = await getPointValue();
         if (isMounted) {
-          setPointsPerEuroInput(String(settings.points_per_euro));
+          setPointValueInput(String(Number(point_value_eur)));
         }
       } catch {
         if (isMounted) {
@@ -45,7 +40,7 @@ const SettingsPage = () => {
       }
     };
 
-    void loadSettings();
+    void loadPointValue();
 
     return () => {
       isMounted = false;
@@ -83,80 +78,26 @@ const SettingsPage = () => {
     }
   };
 
-  const requestPinCode = async () => {
-    setBusyAction("request-pin-code");
+  const onPinReset = () => {
+    setPinDialogOpen(false);
     setErrorMessage("");
-    setSuccessMessage("");
-
-    try {
-      const response: PinResetCodeResponse = await requestPinResetCode();
-      setPinCodeExpiresAt(response.expires_at ?? null);
-      setSuccessMessage("Código de redefinição enviado para o email da conta.");
-    } catch (caughtError) {
-      setErrorMessage(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Não foi possível enviar o código de redefinição.",
-      );
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const resetPin = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const normalizedCode = resetCode.trim();
-    const normalizedPin = newPin.replace(/\D/g, "");
-    const normalizedConfirmPin = confirmPin.replace(/\D/g, "");
-
-    if (!normalizedCode) {
-      setErrorMessage("Introduza o código recebido por email.");
-      setSuccessMessage("");
-      return;
-    }
-
-    if (!/^\d{4}$/.test(normalizedPin)) {
-      setErrorMessage("O novo PIN deve ter 4 dígitos.");
-      setSuccessMessage("");
-      return;
-    }
-
-    if (normalizedPin !== normalizedConfirmPin) {
-      setErrorMessage("A confirmação do PIN não corresponde.");
-      setSuccessMessage("");
-      return;
-    }
-
-    setBusyAction("reset-pin");
-    setErrorMessage("");
-    setSuccessMessage("");
-
-    try {
-      await resetPinRequest({ code: normalizedCode, new_pin: normalizedPin });
-      setResetCode("");
-      setNewPin("");
-      setConfirmPin("");
-      setPinCodeExpiresAt(null);
-      await refreshSession();
-      setSuccessMessage("PIN parental redefinido.");
-    } catch (caughtError) {
-      setErrorMessage(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Não foi possível redefinir o PIN parental.",
-      );
-    } finally {
-      setBusyAction(null);
-    }
+    setSuccessMessage("PIN parental redefinido.");
   };
 
   const savePointsConversion = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const pointsPerEuro = Number(pointsPerEuroInput);
-    if (!Number.isInteger(pointsPerEuro) || pointsPerEuro < 1) {
-      setErrorMessage("A conversão deve ser um número inteiro positivo.");
+    const pointValue = Number(pointValueInput);
+    if (!Number.isFinite(pointValue) || pointValue <= 0 || pointValue > 1000) {
+      setErrorMessage("O valor de 1 ponto deve estar entre 0 e 1000 €.");
+      setSuccessMessage("");
+      return;
+    }
+
+    // The backend stores up to 4 decimal places (e.g. 0.0001 = 100 pontos por 0,01 €).
+    const decimals = (pointValueInput.split(".")[1] ?? "").length;
+    if (decimals > 4) {
+      setErrorMessage("Use no máximo 4 casas decimais (ex.: 0,0001).");
       setSuccessMessage("");
       return;
     }
@@ -166,8 +107,8 @@ const SettingsPage = () => {
     setSuccessMessage("");
 
     try {
-      const nextSettings = await updateSettings(pointsPerEuro);
-      setPointsPerEuroInput(String(nextSettings.points_per_euro));
+      const next = await setPointValue(pointValueInput.trim());
+      setPointValueInput(String(Number(next.point_value_eur)));
       setSuccessMessage("Conversão de pontos atualizada.");
     } catch (caughtError) {
       setErrorMessage(
@@ -254,26 +195,38 @@ const SettingsPage = () => {
                 <div>
                   <h2 className="text-lg font-bold text-[#003514]">Conversão de pontos</h2>
                   <p className="mt-1 text-sm leading-5 text-[#404940]">
-                    Defina quantos pontos equivalem a 1 €.
+                    Defina quanto vale 1 ponto em euros, até 4 casas decimais
+                    (ex.: 0,0001 € → 100 pontos = 0,01 €).
                   </p>
                 </div>
               </div>
+              <p className="mt-3 text-xs leading-5 text-[#59625a]">
+                Nota: a recompensa mínima de uma tarefa é sempre 1 ponto.
+              </p>
               <div className="mt-5 space-y-2">
-                <Label htmlFor="points-per-euro" className="text-[#404940]">
-                  Pontos por euro
+                <Label htmlFor="point-value" className="text-[#404940]">
+                  Atualmente: 1 ponto = {pointValueInput || "—"} €.
                 </Label>
                 <Input
-                  id="points-per-euro"
+                  id="point-value"
                   type="number"
-                  min="1"
-                  step="1"
-                  value={pointsPerEuroInput}
-                  onChange={(event) => setPointsPerEuroInput(event.target.value)}
+                  inputMode="decimal"
+                  min="0"
+                  step="any"
+                  value={pointValueInput}
+                  onChange={(event) => setPointValueInput(event.target.value)}
                   disabled={actionIsRunning}
                   className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
                 />
                 <p className="text-sm text-[#59625a]">
-                  Exemplo: {pointsPerEuroInput || DEFAULT_POINTS_PER_EURO} pontos = 1 €.
+                  Exemplo: 100 pontos ={" "}
+                  {pointValueInput
+                    ? (Number(pointValueInput) * 100).toLocaleString("pt-PT", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })
+                    : "—"}{" "}
+                  €.
                 </p>
               </div>
               <Button
@@ -328,96 +281,33 @@ const SettingsPage = () => {
                 Redefinir PIN parental
               </h2>
               <p className="mt-1 text-sm leading-5 text-[#404940]">
-                Peça um código por email e use-o para definir um novo PIN de 4 dígitos.
+                Receba um código por email e defina um novo PIN de 4 dígitos.
               </p>
 
               <Button
                 type="button"
-                onClick={requestPinCode}
+                onClick={() => {
+                  setErrorMessage("");
+                  setSuccessMessage("");
+                  setPinDialogOpen(true);
+                }}
                 disabled={actionIsRunning}
-                className="mt-5 h-11 rounded-full border border-[#e1e2e4] bg-white px-5 text-sm font-semibold text-[#003514] hover:bg-[#f3f4f6] disabled:opacity-60"
+                className="mt-5 h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
               >
-                {busyAction === "request-pin-code" ? (
-                  <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Mail className="mr-2 size-4" aria-hidden="true" />
-                )}
-                Enviar código
+                <KeyRound className="mr-2 size-4" aria-hidden="true" />
+                Redefinir PIN
               </Button>
-
-              {pinCodeExpiresAt ? (
-                <p className="mt-3 text-xs font-semibold text-[#59625a]">
-                  Código válido até {new Date(pinCodeExpiresAt).toLocaleString("pt-PT")}.
-                </p>
-              ) : null}
-
-              <form onSubmit={resetPin} className="mt-5 grid gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="pin-reset-code" className="text-[#404940]">
-                    Código de email
-                  </Label>
-                  <Input
-                    id="pin-reset-code"
-                    autoCapitalize="characters"
-                    value={resetCode}
-                    onChange={(event) => setResetCode(event.target.value.trim())}
-                    disabled={actionIsRunning}
-                    className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="new-parent-pin" className="text-[#404940]">
-                      Novo PIN
-                    </Label>
-                    <Input
-                      id="new-parent-pin"
-                      type="password"
-                      inputMode="numeric"
-                      value={newPin}
-                      onChange={(event) =>
-                        setNewPin(event.target.value.replace(/\D/g, "").slice(0, 4))
-                      }
-                      disabled={actionIsRunning}
-                      className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-parent-pin" className="text-[#404940]">
-                      Confirmar PIN
-                    </Label>
-                    <Input
-                      id="confirm-parent-pin"
-                      type="password"
-                      inputMode="numeric"
-                      value={confirmPin}
-                      onChange={(event) =>
-                        setConfirmPin(event.target.value.replace(/\D/g, "").slice(0, 4))
-                      }
-                      disabled={actionIsRunning}
-                      className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={actionIsRunning}
-                  className="h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
-                >
-                  {busyAction === "reset-pin" ? (
-                    <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <KeyRound className="mr-2 size-4" aria-hidden="true" />
-                  )}
-                  Redefinir PIN
-                </Button>
-              </form>
             </section>
           </section>
         </section>
+
+        {pinDialogOpen ? (
+          <ParentPinDialog
+            initialStep="forgot"
+            onClose={() => setPinDialogOpen(false)}
+            onResetSuccess={onPinReset}
+          />
+        ) : null}
       </main>
     </DashboardShell>
   );
