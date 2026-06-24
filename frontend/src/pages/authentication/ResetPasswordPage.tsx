@@ -8,6 +8,7 @@ import { validatePassword, validateRequired } from "@/lib/validation";
 import { resetPassword } from "@/services/authService";
 import { PasswordField } from "./AuthFields";
 import { AuthFormLayout } from "./AuthFormLayout";
+import { PasswordRequirementsHint } from "./PasswordRequirementsHint";
 
 const ResetPasswordPage = () => {
   const navigate = useNavigate();
@@ -18,6 +19,11 @@ const ResetPasswordPage = () => {
   const [newPasswordError, setNewPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [formError, setFormError] = useState("");
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [submittedOnce, setSubmittedOnce] = useState(false);
+
+  const showPasswordHint =
+    passwordFocused || newPassword.length > 0 || submittedOnce;
 
   const mutation = useMutation({
     mutationFn: resetPassword,
@@ -37,6 +43,7 @@ const ResetPasswordPage = () => {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError("");
+    setSubmittedOnce(true);
 
     const nextPasswordError = validatePassword(newPassword);
     const nextConfirmError =
@@ -58,17 +65,27 @@ const ResetPasswordPage = () => {
       <form className="space-y-6" onSubmit={handleSubmit}>
         <PasswordField
           id="new-password"
+          describedBy="new-password-requirements"
           error={newPasswordError}
           isVisible={showNewPassword}
           label="Nova palavra-passe"
+          onBlur={() => setPasswordFocused(false)}
           onChange={(value) => {
             setNewPassword(value);
             setNewPasswordError("");
+            setConfirmPasswordError("");
             setFormError("");
           }}
+          onFocus={() => setPasswordFocused(true)}
           onVisibilityChange={setShowNewPassword}
           value={newPassword}
-        />
+        >
+          <PasswordRequirementsHint
+            id="new-password-requirements"
+            password={newPassword}
+            visible={showPasswordHint}
+          />
+        </PasswordField>
         <PasswordField
           id="confirm-new-password"
           error={confirmPasswordError}

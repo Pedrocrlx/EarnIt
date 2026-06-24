@@ -3,7 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ChildCreateRequest(BaseModel):
@@ -12,6 +12,19 @@ class ChildCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     birth_date: date | None = None
     avatar_url: str | None = None
+
+
+class ChildUpdateRequest(BaseModel):
+    """Body for updating editable child-profile details."""
+
+    birth_date: date | None
+
+    @field_validator("birth_date")
+    @classmethod
+    def birth_date_cannot_be_in_the_future(cls, value: date | None) -> date | None:
+        if value is not None and value > date.today():
+            raise ValueError("Birth date cannot be in the future.")
+        return value
 
 
 class UpdateFamilyNameRequest(BaseModel):

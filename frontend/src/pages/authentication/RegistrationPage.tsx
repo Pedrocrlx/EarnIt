@@ -1,5 +1,4 @@
 import { useMutation } from "@tanstack/react-query";
-import { CheckCircle2, Circle } from "lucide-react";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -7,15 +6,14 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { apiFetch } from "@/lib/api";
-import { cn } from "@/lib/utils";
 import {
   type FieldErrors,
-  getPasswordRequirements,
   validateEmail,
   validatePassword,
 } from "@/lib/validation";
 import { EmailField, PasswordField } from "./AuthFields";
 import { AuthFormLayout } from "./AuthFormLayout";
+import { PasswordRequirementsHint } from "./PasswordRequirementsHint";
 
 type RegisterCredentials = {
   email: string;
@@ -36,7 +34,6 @@ const RegistrationPage = () => {
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [submittedOnce, setSubmittedOnce] = useState(false);
 
-  const passwordRequirements = getPasswordRequirements(password);
   const showPasswordHint = passwordFocused || password.length > 0 || submittedOnce;
 
   const validateForm = () => {
@@ -129,37 +126,11 @@ const RegistrationPage = () => {
           onVisibilityChange={setShowPassword}
           value={password}
         >
-          <div
+          <PasswordRequirementsHint
             id="password-requirements"
-            className={cn(
-              "grid overflow-hidden rounded-lg bg-[#f8f9fb] transition-all duration-300 ease-out",
-              showPasswordHint
-                ? "max-h-44 translate-y-0 opacity-100"
-                : "max-h-0 -translate-y-1 opacity-0",
-            )}
-          >
-            <ul className="grid gap-2 p-3" aria-label="Requisitos da palavra-passe">
-              {passwordRequirements.map((requirement) => (
-                <li
-                  key={requirement.id}
-                  className={cn(
-                    "flex items-center gap-2 text-sm font-semibold leading-5 transition-colors duration-200",
-                    requirement.met ? "text-[#2c5b22]" : "text-[#70796f]",
-                  )}
-                >
-                  {requirement.met ? (
-                    <CheckCircle2
-                      className="h-4 w-4 shrink-0"
-                      aria-hidden="true"
-                    />
-                  ) : (
-                    <Circle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  )}
-                  {requirement.label}
-                </li>
-              ))}
-            </ul>
-          </div>
+            password={password}
+            visible={showPasswordHint}
+          />
         </PasswordField>
         <PasswordField
           id="confirm-password"

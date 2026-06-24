@@ -1,4 +1,4 @@
-"""Child profiles & family view: create/deactivate children, view the family summary.
+"""Child profiles & family view: create/update children, view the family summary.
 
 All three routes require a full access_token session (see
 app/dependencies.py). Creating a child re-checks the onboarding trigger
@@ -8,9 +8,12 @@ true.
 """
 
 import logging
+from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+import anyio
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +23,7 @@ from src.dependencies import get_current_user
 from src.models.auth import Child, User
 from src.schemas.profiles import (
     ChildCreateRequest,
+    ChildUpdateRequest,
     PointValueResponse,
     SetPointValueRequest,
     SetPointValueResponse,
@@ -31,6 +35,38 @@ from src.services.accounts import maybe_complete_onboarding
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/profiles")
+
+_AVATAR_CONTENT_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+
+
+def _replace_avatar_file(
+    directory: Path, child_id: UUID, data: bytes, suffix: str
+) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    for existing_file in directory.glob(f"{child_id}.*"):
+        existing_file.unlink(missing_ok=True)
+
+    avatar_path = directory / f"{child_id}{suffix}"
+    avatar_path.write_bytes(data)
+    return avatar_path
+
+
+def _find_avatar_file(directory: Path, child_id: UUID) -> Path | None:
+    return next(directory.glob(f"{child_id}.*"), None)
+
+
+def _matches_image_type(data: bytes, content_type: str) -> bool:
+    if content_type == "image/jpeg":
+        return data.startswith(b"\xff\xd8\xff")
+    if content_type == "image/png":
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
+    if content_type == "image/webp":
+        return len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP"
+    return False
 
 
 @router.patch(
@@ -150,22 +186,37 @@ async def create_child(
 @router.patch(
     "/children/{child_id}",
     tags=["profiles/children"],
-    summary="Deactivate a child profile",
+    summary="Update or deactivate a child profile",
 )
-async def deactivate_child(
+async def update_child(
     child_id: UUID,
+    body: ChildUpdateRequest | None = None,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Soft-delete a child profile by setting `is_active = false`.
+    """Update child details, or deactivate the profile when no body is sent.
 
-    Tasks and submission history are preserved. No new duty slots will be generated
-    for an inactive child. Returns 404 if the child does not belong to the current
-    user, 409 if the profile is already inactive.
+    Keeping the body optional preserves the existing no-body deactivation contract.
+    Returns 404 if the child does not belong to the current user.
     """
     child = await session.get(Child, child_id)
     if child is None or child.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Child profile not found.")
+
+    if body is not None:
+        child.birth_date = body.birth_date
+        await session.commit()
+
+        logger.info(
+            "Child profile updated: user_id=%s, child_id=%s",
+            current_user.id,
+            child.id,
+        )
+        return {
+            "status": "success",
+            "id": child.id,
+            "birth_date": child.birth_date,
+        }
 
     if not child.is_active:
         raise HTTPException(
@@ -184,6 +235,95 @@ async def deactivate_child(
         "id": child.id,
         "is_active": child.is_active,
     }
+
+
+@router.post(
+    "/children/{child_id}/avatar",
+    tags=["profiles/children"],
+    summary="Upload a child's avatar",
+)
+async def upload_child_avatar(
+    child_id: UUID,
+    avatar: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Store a JPEG, PNG, or WebP avatar and associate its URL with the child."""
+    child = await session.get(Child, child_id)
+    if child is None or child.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Child profile not found.")
+
+    content_type = avatar.content_type or ""
+    suffix = _AVATAR_CONTENT_TYPES.get(content_type)
+    if suffix is None:
+        raise HTTPException(
+            status_code=415,
+            detail="Avatar must be a JPEG, PNG, or WebP image.",
+        )
+
+    avatar_data = await avatar.read(settings.AVATAR_MAX_BYTES + 1)
+    if len(avatar_data) > settings.AVATAR_MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Avatar image is too large.",
+        )
+    if not avatar_data:
+        raise HTTPException(status_code=422, detail="Avatar image is empty.")
+    if not _matches_image_type(avatar_data, content_type):
+        raise HTTPException(status_code=422, detail="Avatar image is invalid.")
+
+    avatar_directory = Path(settings.AVATAR_UPLOAD_DIR)
+    await anyio.to_thread.run_sync(
+        _replace_avatar_file,
+        avatar_directory,
+        child.id,
+        avatar_data,
+        suffix,
+    )
+
+    child.avatar_url = f"/api/v1/profiles/children/{child.id}/avatar"
+    await session.commit()
+
+    return {
+        "status": "success",
+        "id": child.id,
+        "avatar_url": child.avatar_url,
+    }
+
+
+@router.get(
+    "/children/{child_id}/avatar",
+    tags=["profiles/children"],
+    summary="Get a child's avatar",
+    response_class=FileResponse,
+)
+async def get_child_avatar(
+    child_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Return the stored avatar when the child belongs to the current parent."""
+    child = await session.get(Child, child_id)
+    if child is None or child.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Child profile not found.")
+
+    avatar_path = await anyio.to_thread.run_sync(
+        _find_avatar_file,
+        Path(settings.AVATAR_UPLOAD_DIR),
+        child.id,
+    )
+    if avatar_path is None:
+        raise HTTPException(status_code=404, detail="Avatar not found.")
+
+    media_type = next(
+        (
+            content_type
+            for content_type, suffix in _AVATAR_CONTENT_TYPES.items()
+            if suffix == avatar_path.suffix
+        ),
+        "application/octet-stream",
+    )
+    return FileResponse(avatar_path, media_type=media_type)
 
 
 @router.get("/family", tags=["profiles/family"], summary="Get family summary")

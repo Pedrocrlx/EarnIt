@@ -165,6 +165,102 @@ async def test_get_family_without_access_token_returns_401(client: AsyncClient):
 # PATCH /profiles/children/{child_id}
 
 
+async def test_update_child_birth_date_returns_200(client: AsyncClient, mock_mail):
+    access_token = await register_and_verify(client, mock_mail)
+
+    create_res = await client.post(
+        _CHILDREN_URL, json={"name": "Leo"}, cookies={"access_token": access_token}
+    )
+    child_id = create_res.json()["id"]
+
+    res = await client.patch(
+        f"{_CHILDREN_URL}/{child_id}",
+        json={"birth_date": "2017-04-12"},
+        cookies={"access_token": access_token},
+    )
+
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "success",
+        "id": child_id,
+        "birth_date": "2017-04-12",
+    }
+
+    family_res = await client.get(_FAMILY_URL, cookies={"access_token": access_token})
+    assert family_res.json()["children"][0]["birth_date"] == "2017-04-12"
+
+
+async def test_update_child_rejects_future_birth_date(client: AsyncClient, mock_mail):
+    access_token = await register_and_verify(client, mock_mail)
+
+    create_res = await client.post(
+        _CHILDREN_URL, json={"name": "Leo"}, cookies={"access_token": access_token}
+    )
+    child_id = create_res.json()["id"]
+
+    res = await client.patch(
+        f"{_CHILDREN_URL}/{child_id}",
+        json={"birth_date": "2999-01-01"},
+        cookies={"access_token": access_token},
+    )
+
+    assert res.status_code == 422
+
+
+async def test_upload_child_avatar_associates_url(
+    client: AsyncClient, mock_mail, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(settings, "AVATAR_UPLOAD_DIR", str(tmp_path))
+    access_token = await register_and_verify(client, mock_mail)
+    create_res = await client.post(
+        _CHILDREN_URL, json={"name": "Leo"}, cookies={"access_token": access_token}
+    )
+    child_id = create_res.json()["id"]
+
+    upload_res = await client.post(
+        f"{_CHILDREN_URL}/{child_id}/avatar",
+        files={
+            "avatar": (
+                "avatar.png",
+                b"\x89PNG\r\n\x1a\nfake-png-content",
+                "image/png",
+            )
+        },
+        cookies={"access_token": access_token},
+    )
+
+    assert upload_res.status_code == 200
+    avatar_url = f"{_CHILDREN_URL}/{child_id}/avatar"
+    assert upload_res.json()["avatar_url"] == avatar_url
+
+    family_res = await client.get(_FAMILY_URL, cookies={"access_token": access_token})
+    assert family_res.json()["children"][0]["avatar_url"] == avatar_url
+
+    avatar_res = await client.get(avatar_url, cookies={"access_token": access_token})
+    assert avatar_res.status_code == 200
+    assert avatar_res.headers["content-type"] == "image/png"
+    assert avatar_res.content == b"\x89PNG\r\n\x1a\nfake-png-content"
+
+
+async def test_upload_child_avatar_rejects_unsupported_type(
+    client: AsyncClient, mock_mail, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(settings, "AVATAR_UPLOAD_DIR", str(tmp_path))
+    access_token = await register_and_verify(client, mock_mail)
+    create_res = await client.post(
+        _CHILDREN_URL, json={"name": "Leo"}, cookies={"access_token": access_token}
+    )
+    child_id = create_res.json()["id"]
+
+    res = await client.post(
+        f"{_CHILDREN_URL}/{child_id}/avatar",
+        files={"avatar": ("avatar.svg", b"<svg></svg>", "image/svg+xml")},
+        cookies={"access_token": access_token},
+    )
+
+    assert res.status_code == 415
+
+
 async def test_deactivate_active_child_returns_200(client: AsyncClient, mock_mail):
     access_token = await register_and_verify(client, mock_mail)
 

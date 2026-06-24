@@ -1,7 +1,9 @@
 import {
   CalendarDays,
+  ImageUp,
   LoaderCircle,
   Plus,
+  Save,
   UserRound,
   UsersRound,
 } from "lucide-react";
@@ -11,20 +13,33 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/useAuth";
-import { createChild as createChildRequest } from "@/services/profileService";
+import { isFutureDate } from "@/lib/validation";
+import {
+  createChild as createChildRequest,
+  updateChildBirthDate,
+  uploadChildAvatar,
+} from "@/services/profileService";
 
 type MutationState = "idle" | "saving-family" | "creating-child";
 
 type CreateChildForm = {
-  avatarUrl: string;
   birthDate: string;
   name: string;
 };
 
 const initialChildForm: CreateChildForm = {
-  avatarUrl: "",
   birthDate: "",
   name: "",
+};
+
+const avatarContentTypes = ["image/jpeg", "image/png", "image/webp"];
+const avatarMaxBytes = 5 * 1024 * 1024;
+
+const getTodayInputValue = () => {
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${today.getFullYear()}-${month}-${day}`;
 };
 
 const ManageProfilesPage = () => {
@@ -32,11 +47,16 @@ const ManageProfilesPage = () => {
   const familyName = familyProfile?.family_name?.trim() || "Família";
   const children = familyProfile?.children ?? [];
   const [childForm, setChildForm] = useState<CreateChildForm>(initialChildForm);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarInputKey, setAvatarInputKey] = useState(0);
   const [mutationState, setMutationState] = useState<MutationState>("idle");
+  const [editingChildId, setEditingChildId] = useState<string | null>(null);
+  const [editingBirthDate, setEditingBirthDate] = useState("");
+  const [updatingChildId, setUpdatingChildId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  const actionIsRunning = mutationState !== "idle";
+  const actionIsRunning = mutationState !== "idle" || updatingChildId !== null;
 
   const refreshFamily = async () => {
     await refreshSession();
@@ -52,17 +72,49 @@ const ManageProfilesPage = () => {
       return;
     }
 
+    if (avatarFile && !avatarContentTypes.includes(avatarFile.type)) {
+      setErrorMessage("O avatar deve ser uma imagem JPEG, PNG ou WebP.");
+      setSuccessMessage("");
+      return;
+    }
+
+    if (avatarFile && avatarFile.size > avatarMaxBytes) {
+      setErrorMessage("O avatar não pode exceder 5 MB.");
+      setSuccessMessage("");
+      return;
+    }
+
     setMutationState("creating-child");
     setErrorMessage("");
     setSuccessMessage("");
 
     try {
-      await createChildRequest({
+      const child = await createChildRequest({
         name: childName,
         birth_date: childForm.birthDate || null,
-        avatar_url: childForm.avatarUrl.trim() || null,
+        avatar_url: null,
       });
+
+      if (avatarFile) {
+        try {
+          await uploadChildAvatar(child.id, avatarFile);
+        } catch (caughtError) {
+          setChildForm(initialChildForm);
+          setAvatarFile(null);
+          setAvatarInputKey((currentKey) => currentKey + 1);
+          await refreshFamily();
+          setErrorMessage(
+            caughtError instanceof Error
+              ? `Perfil criado, mas não foi possível guardar o avatar: ${caughtError.message}`
+              : "Perfil criado, mas não foi possível guardar o avatar.",
+          );
+          return;
+        }
+      }
+
       setChildForm(initialChildForm);
+      setAvatarFile(null);
+      setAvatarInputKey((currentKey) => currentKey + 1);
       await refreshFamily();
       setSuccessMessage("Perfil criado.");
     } catch (caughtError) {
@@ -76,7 +128,44 @@ const ManageProfilesPage = () => {
     }
   };
 
+  const startEditingBirthDate = (child: (typeof children)[number]) => {
+    setEditingChildId(child.id);
+    setEditingBirthDate(child.birth_date ?? "");
+    setErrorMessage("");
+    setSuccessMessage("");
+  };
 
+  const saveBirthDate = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingChildId) {
+      return;
+    }
+
+    if (isFutureDate(editingBirthDate)) {
+      setErrorMessage("A data de nascimento não pode ser no futuro.");
+      setSuccessMessage("");
+      return;
+    }
+
+    setUpdatingChildId(editingChildId);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      await updateChildBirthDate(editingChildId, editingBirthDate || null);
+      setEditingChildId(null);
+      await refreshFamily();
+      setSuccessMessage("Data de nascimento atualizada.");
+    } catch (caughtError) {
+      setErrorMessage(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Não foi possível atualizar a data de nascimento.",
+      );
+    } finally {
+      setUpdatingChildId(null);
+    }
+  };
 
   return (
     <DashboardShell>
@@ -165,6 +254,7 @@ const ManageProfilesPage = () => {
                   <Input
                     id="child-birth-date"
                     type="date"
+                    max={getTodayInputValue()}
                     value={childForm.birthDate}
                     onChange={(event) =>
                       setChildForm((currentForm) => ({
@@ -177,22 +267,25 @@ const ManageProfilesPage = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="child-avatar-url" className="text-[#404940]">
-                    URL do avatar
+                  <Label htmlFor="child-avatar-file" className="text-[#404940]">
+                    Avatar (opcional)
                   </Label>
                   <Input
-                    id="child-avatar-url"
-                    value={childForm.avatarUrl}
-                    onChange={(event) =>
-                      setChildForm((currentForm) => ({
-                        ...currentForm,
-                        avatarUrl: event.target.value,
-                      }))
-                    }
+                    key={avatarInputKey}
+                    id="child-avatar-file"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(event) => {
+                      setAvatarFile(event.target.files?.[0] ?? null);
+                      setErrorMessage("");
+                    }}
                     disabled={actionIsRunning}
-                    placeholder="https://..."
-                    className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] placeholder:text-[#6b7280] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
+                    className="h-12 cursor-pointer rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] file:mr-3 file:border-0 file:bg-transparent file:text-sm file:font-semibold file:text-[#003514] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
                   />
+                  <p className="flex items-center gap-1.5 text-xs text-[#59625a]">
+                    <ImageUp className="size-3.5" aria-hidden="true" />
+                    JPEG, PNG ou WebP, até 5 MB.
+                  </p>
                 </div>
               </div>
               <Button
@@ -228,7 +321,7 @@ const ManageProfilesPage = () => {
                 children.map((child) => (
                   <article
                     key={child.id}
-                    className="flex flex-col gap-4 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-4 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#003514] text-sm font-bold uppercase text-white">
@@ -252,6 +345,70 @@ const ManageProfilesPage = () => {
                         </p>
                       </div>
                     </div>
+                    {editingChildId === child.id ? (
+                      <form
+                        onSubmit={saveBirthDate}
+                        className="grid w-full max-w-xs gap-2"
+                      >
+                        <Label
+                          htmlFor={`profile-birth-date-${child.id}`}
+                          className="text-[#404940]"
+                        >
+                          Data de nascimento
+                        </Label>
+                        <Input
+                          id={`profile-birth-date-${child.id}`}
+                          type="date"
+                          max={getTodayInputValue()}
+                          value={editingBirthDate}
+                          onChange={(event) => {
+                            setEditingBirthDate(event.target.value);
+                            setErrorMessage("");
+                          }}
+                          disabled={updatingChildId === child.id}
+                          className="h-10 rounded-lg border-[#e1e2e4] bg-white"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            type="submit"
+                            disabled={updatingChildId === child.id}
+                            className="h-9 rounded-full bg-[#d4e251] px-4 text-xs font-semibold text-[#003514] hover:bg-[#cfdc42]"
+                          >
+                            {updatingChildId === child.id ? (
+                              <LoaderCircle
+                                className="mr-2 size-3.5 animate-spin"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <Save
+                                className="mr-2 size-3.5"
+                                aria-hidden="true"
+                              />
+                            )}
+                            Guardar
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setEditingChildId(null)}
+                            disabled={updatingChildId === child.id}
+                            className="h-9 rounded-full px-4 text-xs font-semibold text-[#404940]"
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
+                      </form>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => startEditingBirthDate(child)}
+                        disabled={actionIsRunning}
+                        className="h-9 rounded-full px-3 text-xs font-semibold text-[#003514] hover:bg-[#f3f4f6]"
+                      >
+                        {child.birth_date ? "Editar data" : "Definir data"}
+                      </Button>
+                    )}
                   </article>
                 ))
               ) : (

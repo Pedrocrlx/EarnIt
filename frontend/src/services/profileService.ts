@@ -6,11 +6,45 @@ export type CreateChildPayload = {
   name: string;
 };
 
+export type ChildProfileResponse = {
+  avatar_url: string | null;
+  birth_date: string | null;
+  id: string;
+  is_active: boolean;
+  name: string;
+  user_id: string;
+};
+
 export const createChild = (payload: CreateChildPayload) =>
-  apiFetch("/profiles/children", {
+  apiFetch<ChildProfileResponse>("/profiles/children", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+
+export const uploadChildAvatar = (childId: string, avatar: File) => {
+  const formData = new FormData();
+  formData.append("avatar", avatar);
+
+  return apiFetch<{ status: string; id: string; avatar_url: string }>(
+    `/profiles/children/${childId}/avatar`,
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
+};
+
+export const updateChildBirthDate = (
+  childId: string,
+  birthDate: string | null,
+) =>
+  apiFetch<{ status: string; id: string; birth_date: string | null }>(
+    `/profiles/children/${childId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ birth_date: birthDate }),
+    },
+  );
 
 export const updateFamilyName = (familyName: string) =>
   apiFetch("/profiles/family-name", {

@@ -47,6 +47,7 @@ services:
       dockerfile: ops/Dockerfile
     volumes:
       - ./backend:/app
+      - avatar_uploads:/app/uploads/avatars
     environment:
       POSTGRES_HOST: db
       MAIL_SERVER: mailpit
@@ -72,3 +73,4 @@ services:
 
 volumes:
   postgres_data:
+  avatar_uploads:

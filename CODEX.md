@@ -103,6 +103,7 @@ uv run pytest                      # Execute backend unit and integration test s
 
 * **Contract-First Development:** The interaction between the React frontend and FastAPI backend must strictly follow the schema contracts exposed by the backend at `/docs`.
 * **No Manual Typing for Contracts:** Frontend types mapping backend parameters or entity structures must never be written manually. Use `openapi-typescript` or equivalent code generation to pull definitions directly from the backend API.
+* **API Transport:** Use the native `fetch` wrapper exported as `apiFetch` from `frontend/src/lib/api.ts`. It prefixes endpoints with `/api/v1`, includes authentication cookies, parses response bodies, and throws `ApiError` for failed HTTP responses.
 * **Data Fetching vs Global UI State:**
 * **Server State:** Use **TanStack Query (React Query)** exclusively to manage remote asynchronous transactions, local caching, refetch sequences, and mutations.
 * **Global UI State:** Use **Zustand** exclusively for lightweight client-side interactions (e.g., toggling the Child Profile balance view mode, controlling sidebar expansions, tracking active dark mode states).
@@ -112,18 +113,15 @@ uv run pytest                      # Execute backend unit and integration test s
 ```typescript
 // Example Pattern: Separation of remote async logic using TanStack Query hooks
 import { useQuery } from "@tanstack/react-query";
-import { apiFetchClient } from "@/queries/client";
+import { apiFetch } from "@/lib/api";
 import { paths } from "@/types/api"; // Generated directly from FastAPI spec
 
 type AvailableTasksList = paths["/api/v1/tasks"]["get"]["responses"]["200"]["content"]["application/json"];
 
 export function useFetchAvailableTasks() {
-  return useQuery({
+  return useQuery<AvailableTasksList>({
     queryKey: ["tasks", "list"],
-    queryFn: async (): Promise<AvailableTasksList> => {
-      const response = await apiFetchClient.get("/api/v1/tasks");
-      return response.data;
-    },
+    queryFn: () => apiFetch<AvailableTasksList>("/tasks"),
   });
 }
 
