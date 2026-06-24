@@ -15,6 +15,7 @@ const OnboardingStep3Page = lazy(() => import("@/pages/onboarding/Step3Page"));
 const ProfileSelectorPage = lazy(() => import("@/pages/ProfileSelectorPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const TasksPage = lazy(() => import("@/pages/TasksPage"));
+const GoalsPage = lazy(() => import("@/pages/GoalsPage"));
 const RegistrationPage = lazy(
   () => import("@/pages/authentication/RegistrationPage"),
 );
@@ -112,6 +113,14 @@ function App() {
               element={
                 <CompletedOnboardingRoute>
                   <DashboardPage />
+                </CompletedOnboardingRoute>
+              }
+            />
+            <Route
+              path="/dashboard/goals"
+              element={
+                <CompletedOnboardingRoute>
+                  <GoalsPage />
                 </CompletedOnboardingRoute>
               }
             />

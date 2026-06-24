@@ -55,6 +55,20 @@ export type WalletResponse = {
   transactions: WalletTransaction[];
 };
 
-export type SettingsResponse = {
-  points_per_euro: number;
+export type GoalStatus = "requested" | "approved" | "rejected" | "redeemed" | string;
+
+export type Goal = {
+  id: string;
+  child_id: string;
+  name: string;
+  status: GoalStatus;
+  target_amount: number | null;
+  created_at: string;
+};
+
+export type GoalListResponse = {
+  child_id: string;
+  balance_points: number;
+  point_value_eur: string;
+  goals: Goal[];
 };

@@ -6,9 +6,9 @@ import {
   LogOut,
   Menu,
   Settings,
+  Target,
   UserRound,
   UsersRound,
-  WalletCards,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -32,7 +32,7 @@ const dashboardNavItems = [
     parentOnly: true,
   },
   { name: "Tarefas", path: "/dashboard/tasks", icon: CalendarCheck2, parentOnly: true },
-  { name: "Carteira", icon: WalletCards },
+  { name: "Objetivos", path: "/dashboard/goals", icon: Target },
   { name: "Definições", path: "/dashboard/settings", icon: Settings, parentOnly: true },
 ];
 

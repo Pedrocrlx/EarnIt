@@ -29,15 +29,3 @@ export const setPointValue = (pointValueEur: string) =>
     method: "PATCH",
     body: JSON.stringify({ point_value_eur: pointValueEur }),
   });
-
-export type ChildGoalPayload = {
-  goal_description: string | null;
-  goal_title: string | null;
-  reward_amount: string | null;
-};
-
-export const updateChildGoal = (childId: string, payload: ChildGoalPayload) =>
-  apiFetch(`/profiles/children/${childId}/goal`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
