@@ -14,10 +14,9 @@ import { Link } from "react-router-dom";
 import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/useAuth";
-import { DEFAULT_POINTS_PER_EURO, eurosToPoints, formatPoints } from "@/lib/points";
+import { formatPoints } from "@/lib/points";
 import { getSelectedProfileId } from "@/lib/profile-selection";
 import { cn } from "@/lib/utils";
-import { getSettings } from "@/services/settingsService";
 import {
   getWallet,
   listChildTasks,
@@ -94,7 +93,6 @@ const ChildDashboard = () => {
   );
   const [tasks, setTasks] = useState<ChildTaskResponse[]>([]);
   const [wallet, setWallet] = useState<WalletResponse | null>(null);
-  const [pointsPerEuro, setPointsPerEuro] = useState(DEFAULT_POINTS_PER_EURO);
   const [proofPhotos, setProofPhotos] = useState<Record<string, File | null>>({});
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -133,29 +131,6 @@ const ChildDashboard = () => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadDashboard();
   }, [loadDashboard]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadSettings = async () => {
-      try {
-        const settings = await getSettings();
-        if (isMounted) {
-          setPointsPerEuro(settings.points_per_euro);
-        }
-      } catch {
-        if (isMounted) {
-          setPointsPerEuro(DEFAULT_POINTS_PER_EURO);
-        }
-      }
-    };
-
-    void loadSettings();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   const setProofPhoto = (taskId: string, file: File | null) => {
     setProofPhotos((currentPhotos) => ({
@@ -240,7 +215,6 @@ const ChildDashboard = () => {
     const action = getTaskAction(task);
     return action.mode === "submit" || action.mode === "resubmit";
   }).length;
-  const latestTransactions = wallet?.transactions.slice(0, 3) ?? [];
   const actionIsRunning = busyAction !== null;
   const walletPoints = formatPoints(wallet?.balance_points ?? 0);
 
@@ -396,7 +370,7 @@ const ChildDashboard = () => {
                             ) : null}
                             <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[#59625a]">
                               <Coins className="size-4" aria-hidden="true" />
-                              {formatPoints(eurosToPoints(task.reward_amount, pointsPerEuro))}
+                              {formatPoints(Number(task.reward_amount))}
                               {task.expires_at ? (
                                 <>
                                   <span aria-hidden="true">·</span>
@@ -480,48 +454,17 @@ const ChildDashboard = () => {
               </section>
 
               <aside className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
-                {selectedChild.goal_title || selectedChild.reward_amount ? (
-                  <div className="mb-5 rounded-lg bg-[#eef7d1] px-4 py-3">
-                    <p className="text-sm font-bold text-[#003514]">
-                      {selectedChild.goal_title ?? "Objetivo"}
-                    </p>
-                    {selectedChild.goal_description ? (
-                      <p className="mt-1 text-xs font-semibold text-[#59625a]">
-                        {selectedChild.goal_description}
-                      </p>
-                    ) : null}
-                    {selectedChild.reward_amount ? (
-                      <p className="mt-2 text-sm font-bold text-[#5f6800]">
-                        {formatPoints(eurosToPoints(selectedChild.reward_amount, pointsPerEuro))}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-                <h2 className="text-lg font-bold text-[#003514]">Carteira</h2>
-                <p className="mt-1 text-sm text-[#404940]">
-                  Últimos movimentos aprovados.
+                <h2 className="text-lg font-bold text-[#003514]">Objetivos</h2>
+                <p className="mt-1 text-sm leading-5 text-[#404940]">
+                  Faz pedidos dos teus desejos e acompanha o progresso dos pontos
+                  até os alcançares.
                 </p>
-                <div className="mt-5 grid gap-3">
-                  {latestTransactions.length > 0 ? (
-                    latestTransactions.map((transaction) => (
-                      <article
-                        key={transaction.id}
-                        className="rounded-lg bg-[#f8f9fb] px-4 py-3"
-                      >
-                        <p className="text-sm font-semibold text-[#191c1e]">
-                          {formatPoints(transaction.amount_points)}
-                        </p>
-                        <p className="mt-1 text-xs font-semibold text-[#59625a]">
-                          {transaction.description ?? "Movimento da carteira"}
-                        </p>
-                      </article>
-                    ))
-                  ) : (
-                    <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
-                      Ainda não existem movimentos.
-                    </p>
-                  )}
-                </div>
+                <Button
+                  asChild
+                  className="mt-4 h-11 w-full rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42]"
+                >
+                  <Link to="/dashboard/goals">Ver os meus objetivos</Link>
+                </Button>
               </aside>
             </section>
           </>
