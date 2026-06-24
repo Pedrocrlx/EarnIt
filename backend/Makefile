@@ -3,6 +3,13 @@
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
+## Variables
+
+COMPOSE_BUILD := docker compose build
+COMPOSE_BUILD_API := docker compose build api
+COMPOSE_RUN := docker compose run --rm
+COMPOSE_EXEC := docker compose exec
+
 ## --- Stack ---
 
 up-ba: ## Build and start the backend stack
@@ -13,11 +20,14 @@ down: ## Stop and remove the Docker containers and volumes
 
 ## --- Database ---
 
-migrate: ## Apply Alembic migrations up to head (needs the db container)
-	uv run alembic upgrade head
+alembic-upgrade: ## Apply Alembic migrations up to head (needs the db container)
+	$(COMPOSE_RUN) api uv run alembic -c /app/alembic.ini upgrade head
 
-enter-db: ## Enter the PostgreSQL database and list tables
-	docker compose exec db psql -U earn_it_user -d earn_it_db -c "\dt"
+alembic-revision: ## Create a new Alembic revision (usage: make alembic-revision msg="your message")
+	$(COMPOSE_RUN) api uv run alembic -c /app/alembic.ini revision --autogenerate -m "$(msg)"
+
+enter-db: ## Enter the PostgreSQL database
+	$(COMPOSE_EXEC) db psql -U earn_it_user -d earn_it_db
 
 ## --- Mail (isolated, see mail/README.md) ---
 
@@ -36,18 +46,21 @@ test: ## Run the essential unit suite (critical modules)
 	uv run pytest tests --ignore=tests/api
 
 test-api: ## Run the API suite (endpoint flows)
-	uv run pytest tests/api
+	$(COMPOSE_BUILD_API)
+	$(COMPOSE_RUN) api bash -c "find . -type d -name '__pycache__' -exec rm -rf {} + && uv run pytest tests/api"
 
 test-all: ## Run every test (essential + api)
-	uv run pytest tests
-
+	$(COMPOSE_BUILD_API)
+	$(COMPOSE_RUN) api bash -c "find . -type d -name '__pycache__' -exec rm -rf {} + && uv run pytest tests"
 ## --- Code quality ---
 
 format: ## Run ruff formatting
-	uv run ruff format .
+	$(COMPOSE_BUILD_API)
+	$(COMPOSE_RUN) --no-deps api uv run ruff format src
 
 lint-fix: ## Run ruff and apply automatic fixes
-	uv run ruff check src . --fix
+	$(COMPOSE_BUILD_API)
+	$(COMPOSE_RUN) --no-deps api uv run ruff check --fix src
 
 ## --- Cleanup ---
 
@@ -57,3 +70,8 @@ clean: ## Remove Python and tool caches (keeps the virtualenv)
 
 full-clean: clean ## Full cleanup — everything in clean plus the local virtualenv
 	sudo rm -rf .venv
+
+nuke: ## Deep clean caches, destroy containers/volumes, and force a clean rebuild
+	$(MAKE) clean
+	$(MAKE) down
+	$(MAKE) up-ba
