@@ -32,7 +32,9 @@ docker compose exec api uv run alembic upgrade head  # Migrations (first run onl
 | `PATCH` | `/api/v1/profiles/point-value` | session | Set the family points→€ rate |
 | `GET` | `/api/v1/profiles/point-value` | session | Read the family points→€ rate |
 | `POST` | `/api/v1/profiles/children` | session | Add a child profile |
-| `PATCH` | `/api/v1/profiles/children/{id}` | session | Deactivate a child profile |
+| `PATCH` | `/api/v1/profiles/children/{id}` | session | Update a child's birth date, or deactivate without a body |
+| `POST` | `/api/v1/profiles/children/{id}/avatar` | session | Upload and associate a child avatar |
+| `GET` | `/api/v1/profiles/children/{id}/avatar` | session | Read a child's avatar |
 | `GET` | `/api/v1/profiles/family` | session | Parent profile + all children |
 | `POST` | `/api/v1/tasks` | session | Create a task (`duty` or `extra_task`) |
 | `GET` | `/api/v1/tasks` | session | List tasks (filter: `child_id`, `task_type`, `is_active`) |
@@ -381,7 +383,9 @@ Every flow shares one **stateless verification code** primitive (`src/services/v
 
 1. **`POST /api/v1/profiles/children`** `{ name, birth_date?, avatar_url? }` *(`access_token` required)*
    - `409 children_cap_reached` if the parent already has `MAX_CHILDREN_PER_USER` children (active + inactive). Otherwise creates the `Child` row and re-evaluates the onboarding trigger. → `201`
-2. **`PATCH /api/v1/profiles/children/{child_id}`** *(`access_token` required)*
+2. **`PATCH /api/v1/profiles/children/{child_id}`** `{ birth_date }` *(`access_token` required)*
+   - Updates the child's birth date. Send `null` to clear it. A future date returns `422`.
+   - For backward compatibility, sending no request body deactivates the child profile.
    - `404` if the child doesn't exist or belongs to another user · `409` if already inactive. On success, sets `is_active = false` (soft-delete; still counts toward the cap). → `200`
 3. **`GET /api/v1/profiles/family`** *(`access_token` required)*
    - Returns the parent's profile (`id`, `family_name`, `onboarding_completed`) plus all `children` rows, active and inactive. → `200`
