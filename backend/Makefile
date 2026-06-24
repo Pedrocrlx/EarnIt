@@ -46,11 +46,9 @@ test: ## Run the essential unit suite (critical modules)
 	uv run pytest tests --ignore=tests/api
 
 test-api: ## Run the API suite (endpoint flows)
-	$(COMPOSE_BUILD_API)
 	$(COMPOSE_RUN) api bash -c "find . -type d -name '__pycache__' -exec rm -rf {} + && uv run pytest tests/api"
 
 test-all: ## Run every test (essential + api)
-	$(COMPOSE_BUILD_API)
 	$(COMPOSE_RUN) api bash -c "find . -type d -name '__pycache__' -exec rm -rf {} + && uv run pytest tests"
 ## --- Code quality ---
 
