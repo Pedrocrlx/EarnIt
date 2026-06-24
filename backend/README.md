@@ -26,9 +26,11 @@ docker compose exec api uv run alembic upgrade head  # Migrations (first run onl
 | `POST` | `/api/v1/auth/pin` | session | Set / update parental PIN |
 | `POST` | `/api/v1/auth/verify-pin` | session | Check PIN; gates parent dashboard |
 | `POST` | `/api/v1/auth/forgot-pin` | session | Email a PIN-reset code (rate-limited, 429 while active) |
+| `POST` | `/api/v1/auth/reset-pin/verify` | session | `{ code }` → check a PIN-reset code without consuming it (410/400) |
 | `POST` | `/api/v1/auth/reset-pin` | session | `{ code, new_pin }` → reset PIN |
 | `PATCH` | `/api/v1/profiles/family-name` | session | Update family display name |
 | `PATCH` | `/api/v1/profiles/point-value` | session | Set the family points→€ rate |
+| `GET` | `/api/v1/profiles/point-value` | session | Read the family points→€ rate |
 | `POST` | `/api/v1/profiles/children` | session | Add a child profile |
 | `PATCH` | `/api/v1/profiles/children/{id}` | session | Deactivate a child profile |
 | `GET` | `/api/v1/profiles/family` | session | Parent profile + all children |
@@ -46,7 +48,7 @@ docker compose exec api uv run alembic upgrade head  # Migrations (first run onl
 | `GET` | `/api/v1/children/{child_id}/wallet` | session | Balance + transaction history |
 | `POST` | `/api/v1/children/{child_id}/goals` | session | Request a goal (child mode) |
 | `GET` | `/api/v1/children/{child_id}/goals` | session | List goals + balance (filter: `status`) |
-| `POST` | `/api/v1/children/{child_id}/goals/{goal_id}/approve` | session | Approve + set point value |
+| `POST` | `/api/v1/children/{child_id}/goals/{goal_id}/approve` | session | Approve + set target amount |
 | `POST` | `/api/v1/children/{child_id}/goals/{goal_id}/reject` | session | Reject a goal request |
 | `POST` | `/api/v1/children/{child_id}/goals/{goal_id}/redeem` | session | Redeem (spend points → debit) |
 
@@ -56,7 +58,7 @@ docker compose exec api uv run alembic upgrade head  # Migrations (first run onl
 |---|---|
 | Register | `POST /register` → email code → `POST /verify` |
 | Forgot password | `POST /forgot-password` → email code → `POST /reset-password` `{ email, code, new_password }` |
-| Forgot PIN | `POST /forgot-pin` → email code → `POST /reset-pin` `{ code, new_pin }` |
+| Forgot PIN | `POST /forgot-pin` → email code → `POST /reset-pin/verify` `{ code }` (optional pre-check) → `POST /reset-pin` `{ code, new_pin }` |
 
 All verification codes expire in **10 minutes**. Resend/request endpoints return `429 { retry_after_seconds }` while a code is still live — a new code can only be issued once the previous window closes.
 
@@ -281,7 +283,7 @@ Two tables (`src/models/auth.py`). Verification codes are **not** a table — th
 | `title` | varchar(150) | |
 | `description` | text, nullable | |
 | `task_type` | varchar(20) | `duty` \| `extra_task` |
-| `reward_amount` | numeric(10,2) | reward in **points** (whole numbers); `0` for duties, > 0 for extra_tasks. API exposes it as `reward_points` |
+| `reward_amount` | numeric(10,2) | reward the parent sets (whole numbers); `0` for duties, > 0 for extra_tasks. On approval it credits the child's wallet as points |
 | `expires_at` | timestamptz, nullable | optional deadline (both types); once past, the child can't submit/resubmit and duties stop generating slots |
 | `is_active` | bool, default `true` | soft-delete; inactive tasks stop generating slots |
 | `created_at` / `updated_at` | timestamptz | |
@@ -313,7 +315,7 @@ Unique constraint: `(task_id, scheduled_date)` — one duty slot per task per da
 | `description` | text, nullable | |
 | `created_at` | timestamptz | |
 
-> **Points, not euros:** the backend is a pure **points** ledger — `reward_amount`/`amount`/balance are point counts (the existing `numeric` columns are reused; no schema change there). Euros are a **frontend** concern: multiply points by the family's `users.point_value_eur` rate (set via `PATCH /profiles/point-value`, exposed in `GET /family` and the wallet response). Changing the rate **re-values** everything, since only points are stored. The child only ever sees points.
+> **Points only exist for children:** the parent sets plain whole-number **amounts** (`tasks.reward_amount`, `goals.target_amount`); **points** are purely the child's wallet unit — `wallet_transactions.amount` / the balance — credited 1:1 when a reward is approved and debited when a goal is redeemed. Euros are a **frontend** concern: multiply points by the family's `users.point_value_eur` rate (set via `PATCH /profiles/point-value`, read via `GET /profiles/point-value`, also in `GET /family` and the wallet response). Changing the rate **re-values** everything, since only points are stored.
 
 #### `goals` — a child's wishlist and its approval lifecycle (`src/models/goals.py`)
 
@@ -323,10 +325,10 @@ Unique constraint: `(task_id, scheduled_date)` — one duty slot per task per da
 | `child_id` | UUID (FK → `children.id`) | `ON DELETE CASCADE`. Not unique — a child may hold many goals |
 | `name` | varchar(120) | the child's request text, e.g. "Ir ao parque" |
 | `status` | varchar(20) | `requested` → `approved`/`rejected`; `approved` → `redeemed` |
-| `target_points` | int, nullable | NULL until the parent approves and sets the value |
+| `target_amount` | int, nullable | NULL until the parent approves and sets the value |
 | `created_at` | timestamptz | orders the list / "requested since" |
 
-> **Trimmed by design:** no `image_url` (a goal is just text), no `completed_at` (`status = redeemed` plus the redeem `debit`'s `created_at` already capture "done when"), no `updated_at` (nothing reads it), and no stored "reached" flag (the frontend derives it from `balance_points >= target_points`). The lifecycle is walked through in [Goals Flow](#5-goals--request-approval--redeem).
+> **Trimmed by design:** no `image_url` (a goal is just text), no `completed_at` (`status = redeemed` plus the redeem `debit`'s `created_at` already capture "done when"), no `updated_at` (nothing reads it), and no stored "reached" flag (the frontend derives it from `balance_points >= target_amount`). The lifecycle is walked through in [Goals Flow](#5-goals--request-approval--redeem).
 
 ### Auth Flows (step by step)
 
@@ -444,9 +446,9 @@ All task-management endpoints require a full `access_token` session (parent). `c
 
 #### 1. Parent — task CRUD (`/api/v1/tasks`)
 
-1. **`POST /api/v1/tasks`** `{ child_id, title, description?, task_type, reward_points?, expires_at? }` *(`access_token` required)*
+1. **`POST /api/v1/tasks`** `{ child_id, title, description?, task_type, reward_amount?, expires_at? }` *(`access_token` required)*
    - Validates `child_id` belongs to the authenticated parent.
-   - Enforces reward rules: `duty` → `reward_points` must be `0`; `extra_task` → `reward_points` must be > 0 (whole points; the parent's frontend converts a €-input to points via the family rate).
+   - Enforces reward rules: `duty` → `reward_amount` must be `0`; `extra_task` → `reward_amount` must be > 0 (whole numbers; the parent's frontend converts a €-input to an amount via the family rate).
    - Creates the `tasks` row. → `201 TaskResponse`
 2. **`GET /api/v1/tasks`** *(`access_token` required)*
    - Query params: `child_id?`, `task_type?` (`duty` | `extra_task`), `is_active?` (bool).
@@ -463,12 +465,12 @@ All task-management endpoints require a full `access_token` session (parent). `c
    - Returns all submissions for the parent's children, newest first. → `200 list[SubmissionResponse]`
 2. **`POST /api/v1/tasks/submissions/{submission_id}/approve`** *(`access_token` required)*
    - `404` if submission doesn't belong to the parent's child · `409` if already approved or not in `pending` state.
-   - Stamps `reviewed_at`, sets `status = approved`. If `reward_points > 0`, atomically inserts a `wallet_transactions (credit)` row (in points) in the same transaction. → `200 SubmissionResponse`
+   - Stamps `reviewed_at`, sets `status = approved`. If `reward_amount > 0`, atomically inserts a `wallet_transactions (credit)` row (in points) in the same transaction. → `200 SubmissionResponse`
 3. **`POST /api/v1/tasks/submissions/{submission_id}/reject`** `{ rejection_note? }` *(`access_token` required)*
    - `404` if submission doesn't belong to the parent's child · `409` if not in `pending` state.
    - Stamps `reviewed_at`, sets `status = rejected`, stores `rejection_note`. → `200 SubmissionResponse`
 4. **`POST /api/v1/tasks/submissions/approve-all`** `{ child_id? }` *(`access_token` required)*
-   - Batch-approves all `pending` submissions for the parent (optionally filtered to one child). Each approval atomically credits the wallet (in points) if `reward_points > 0`. → `200 { approved: N }`
+   - Batch-approves all `pending` submissions for the parent (optionally filtered to one child). Each approval atomically credits the wallet (in points) if `reward_amount > 0`. → `200 { approved: N }`
 
 > **Router ordering note:** `approve-all` is registered *before* `/{submission_id}/approve` in FastAPI to prevent the literal string `"approve-all"` being matched as a UUID path parameter.
 
@@ -506,12 +508,12 @@ The task reference is stored at module level in `src/services/tasks/submissions.
 A child's wishlist. Like everything else there are **no child logins**: every route is the parent session and child-scoped (`404` if the child isn't theirs); the frontend's PIN gate decides child mode (request) vs parent mode (approve/reject/redeem), exactly as task `submit` vs `approve`. The lifecycle is `requested → approved`/`rejected`, and `approved → redeemed` (terminal).
 
 1. **`POST /api/v1/children/{child_id}/goals`** `{ name }` *(child mode)*
-   - Records the child's wish as a `goals` row in `status = requested`, `target_points = null` (shown as "pending" to the child). → `201 GoalResponse`
+   - Records the child's wish as a `goals` row in `status = requested`, `target_amount = null` (shown as "pending" to the child). → `201 GoalResponse`
 2. **`GET /api/v1/children/{child_id}/goals`** *(filter: `status?`)*
-   - Returns `{ child_id, balance_points, point_value_eur, goals[] }` — the goals newest-first plus the child's current balance, so the frontend can show progress and derive each approved goal's "reached" state from `balance_points >= target_points`. The frontend hides `rejected` goals in child mode. → `200 GoalListResponse`
-3. **`POST /api/v1/children/{child_id}/goals/{goal_id}/approve`** `{ target_points }` *(parent)*
-   - Sets the point value the child must "pay" and flips `status → approved`. `target_points` must be > 0 (`422` otherwise) · `409` unless the goal is `requested` · `404` if the goal/child isn't the parent's. → `200 GoalResponse`
+   - Returns `{ child_id, balance_points, point_value_eur, goals[] }` — the goals newest-first plus the child's current balance, so the frontend can show progress and derive each approved goal's "reached" state from `balance_points >= target_amount`. The frontend hides `rejected` goals in child mode. → `200 GoalListResponse`
+3. **`POST /api/v1/children/{child_id}/goals/{goal_id}/approve`** `{ target_amount }` *(parent)*
+   - Sets the amount the child must "pay" and flips `status → approved`. `target_amount` must be > 0 (`422` otherwise) · `409` unless the goal is `requested` · `404` if the goal/child isn't the parent's. → `200 GoalResponse`
 4. **`POST /api/v1/children/{child_id}/goals/{goal_id}/reject`** *(parent)*
    - Flips `status → rejected` — the goal is **kept** (history) but hidden from the child view. `409` unless the goal is `requested`. → `200 GoalResponse`
 5. **`POST /api/v1/children/{child_id}/goals/{goal_id}/redeem`** *(parent)*
-   - Spends the points: re-reads the balance, and if `balance >= target_points` inserts a single `wallet_transactions (debit)` of `target_points` (`description = "Goal: <name>"`) and flips `status → redeemed` in one transaction. `409` unless the goal is `approved` **or** if the balance is below target · `404` if the goal/child isn't the parent's. This is the ledger's first and only `debit` writer — the balance falls out of `SUM(credits) − SUM(debits)` for free. → `200 GoalResponse`
+   - Spends the points: re-reads the balance, and if `balance >= target_amount` inserts a single `wallet_transactions (debit)` of `target_amount` (`description = "Goal: <name>"`) and flips `status → redeemed` in one transaction. `409` unless the goal is `approved` **or** if the balance is below target · `404` if the goal/child isn't the parent's. This is the ledger's first and only `debit` writer — the balance falls out of `SUM(credits) − SUM(debits)` for free. → `200 GoalResponse`

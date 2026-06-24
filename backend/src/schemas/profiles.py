@@ -40,3 +40,9 @@ class SetPointValueResponse(BaseModel):
 
     status: str
     point_value_eur: Decimal
+
+
+class PointValueResponse(BaseModel):
+    """The family's current points→€ rate — what one point is worth in euros."""
+
+    point_value_eur: Decimal

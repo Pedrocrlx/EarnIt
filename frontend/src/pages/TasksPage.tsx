@@ -24,6 +24,7 @@ import {
   rejectSubmission as rejectTaskSubmission,
   updateTask as updateTaskRequest,
 } from "@/services/taskService";
+import { getPointValue } from "@/services/profileService";
 import type { SubmissionResponse, TaskResponse, TaskType } from "@/services/types";
 
 type CreateTaskForm = {
@@ -55,7 +56,13 @@ const taskTypeLabels: Record<string, string> = {
   extra_task: "Extra",
 };
 
-const formatMoney = (amount: string) => `${Number(amount).toFixed(2)} €`;
+const formatEuros = (euros: number) =>
+  `${euros.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+
+// Reward is stored/shown to children in points; the parent enters euros, so we
+// convert with the family rate (€/point). euros -> points = euros / point_value_eur.
+const eurosToPoints = (euros: string, pointValueEur: number) =>
+  pointValueEur > 0 ? Math.round((Number(euros) || 0) / pointValueEur) : 0;
 
 const toDateTimePayload = (value: string) => (value ? new Date(value).toISOString() : null);
 
@@ -78,6 +85,21 @@ const TasksPage = () => {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [pointValueEur, setPointValueEur] = useState(0.01);
+
+  useEffect(() => {
+    let isMounted = true;
+    void getPointValue()
+      .then(({ point_value_eur }) => {
+        if (isMounted) {
+          setPointValueEur(Number(point_value_eur) || 0.01);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const childNameById = useMemo(
     () => new Map(children.map((child) => [child.id, child.name])),
@@ -140,7 +162,10 @@ const TasksPage = () => {
         title,
         description: taskForm.description.trim() || null,
         task_type: taskForm.taskType,
-        reward_amount: taskForm.taskType === "duty" ? "0.00" : taskForm.rewardAmount,
+        reward_amount:
+          taskForm.taskType === "duty"
+            ? "0"
+            : String(eurosToPoints(taskForm.rewardAmount, pointValueEur)),
         expires_at: toDateTimePayload(taskForm.expiresAt),
       });
       setTaskForm((currentForm) => ({
@@ -440,7 +465,7 @@ const TasksPage = () => {
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
                   <div className="space-y-2">
-                    <Label htmlFor="task-reward" className="text-[#404940]">Recompensa</Label>
+                    <Label htmlFor="task-reward" className="text-[#404940]">Recompensa (€)</Label>
                     <Input
                       id="task-reward"
                       type="number"
@@ -456,6 +481,11 @@ const TasksPage = () => {
                       disabled={actionIsRunning || taskForm.taskType === "duty"}
                       className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
                     />
+                    {taskForm.taskType !== "duty" && taskForm.rewardAmount ? (
+                      <p className="text-xs text-[#59625a]">
+                        = {eurosToPoints(taskForm.rewardAmount, pointValueEur).toLocaleString("pt-PT")} pontos para a criança
+                      </p>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="task-expires" className="text-[#404940]">Expira em</Label>
@@ -556,7 +586,7 @@ const TasksPage = () => {
                               ) : null}
                             </div>
                             <p className="mt-1 text-sm text-[#404940]">
-                              {childNameById.get(task.child_id) ?? "Criança"} · {formatMoney(task.reward_amount)}
+                              {childNameById.get(task.child_id) ?? "Criança"} · {formatEuros(Number(task.reward_amount) * pointValueEur)} · {Number(task.reward_amount).toLocaleString("pt-PT")} pontos
                             </p>
                             {task.description ? (
                               <p className="mt-1 text-sm text-[#59625a]">{task.description}</p>

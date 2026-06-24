@@ -1,7 +1,7 @@
 """Goal schemas — request/response models for the goals endpoints.
 
 A child requests a goal (``GoalRequestCreate``); the parent approves it with a
-point value (``GoalApproveRequest``). ``GoalResponse`` is a plain serialisation of
+target amount (``GoalApproveRequest``). ``GoalResponse`` is a plain serialisation of
 the ``Goal`` row, and ``GoalListResponse`` wraps the list with the child's current
 balance so the frontend can derive whether each approved goal is within reach.
 """
@@ -22,11 +22,11 @@ class GoalRequestCreate(BaseModel):
 
 
 class GoalApproveRequest(BaseModel):
-    """Body for approve — the point value the parent sets on the goal."""
+    """Body for approve — the target amount the parent sets on the goal."""
 
-    target_points: int = Field(gt=0)
+    target_amount: int = Field(gt=0)
 
-    model_config = {"json_schema_extra": {"example": {"target_points": 500}}}
+    model_config = {"json_schema_extra": {"example": {"target_amount": 500}}}
 
 
 class GoalResponse(BaseModel):
@@ -36,7 +36,7 @@ class GoalResponse(BaseModel):
     child_id: UUID
     name: str
     status: str  # requested | approved | rejected | redeemed
-    target_points: int | None  # null until approved
+    target_amount: int | None  # null until approved
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -46,7 +46,7 @@ class GoalListResponse(BaseModel):
     """A child's goals plus the balance needed to judge "within reach".
 
     The frontend derives each approved goal's "reached" state itself:
-    ``balance_points >= goal.target_points``. € is the frontend's concern — multiply
+    ``balance_points >= goal.target_amount``. € is the frontend's concern — multiply
     points by ``point_value_eur``.
     """
 

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/useAuth";
-import { apiFetch } from "@/lib/api";
+import { readDraft, writeDraft } from "@/lib/onboarding-draft";
 import { cn } from "@/lib/utils";
 import {
   type FieldErrors,
@@ -24,10 +24,14 @@ const invalidInputClass =
 
 const OnboardingStep1Page = () => {
   const navigate = useNavigate();
-  const { familyProfile, refreshSession } = useAuth();
-  const [familyName, setFamilyName] = useState(familyProfile?.family_name ?? "");
-  const [childCount, setChildCount] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { familyProfile } = useAuth();
+  const draft = readDraft();
+  const [familyName, setFamilyName] = useState(
+    draft.familyName ?? familyProfile?.family_name ?? "",
+  );
+  const [childCount, setChildCount] = useState(
+    draft.childCount ? String(draft.childCount) : "",
+  );
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors<Step1Field>>({});
 
@@ -71,7 +75,7 @@ const OnboardingStep1Page = () => {
     });
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
 
@@ -85,25 +89,9 @@ const OnboardingStep1Page = () => {
     }
 
     setFieldErrors({});
-    setIsSubmitting(true);
-
-    try {
-      await apiFetch("/profiles/family-name", {
-        method: "PATCH",
-        body: JSON.stringify({ family_name: trimmedFamilyName }),
-      });
-      window.sessionStorage.setItem("earnit:onboarding:child-count", childCount);
-      await refreshSession();
-      navigate("/onboarding/step2");
-    } catch (caughtError) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Não foi possível guardar a configuração da família.",
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
+    // No network here — onboarding is sent in one go on step 3's Concluir.
+    writeDraft({ familyName: trimmedFamilyName, childCount: Number(childCount) });
+    navigate("/onboarding/step2");
   };
 
   return (
@@ -222,10 +210,9 @@ const OnboardingStep1Page = () => {
           <div className="mt-10 flex justify-center">
             <Button
               type="submit"
-              disabled={isSubmitting}
               className="h-auto rounded-full bg-[#d4e251] px-10 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.08),0px_4px_6px_-4px_rgba(0,0,0,0.08)] hover:bg-[#cfdc42] disabled:opacity-60"
             >
-              {isSubmitting ? "A guardar..." : "Continuar"}
+              Continuar
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </div>

@@ -35,7 +35,7 @@ async def _extra(
             "child_id": child_id,
             "title": "Clean room",
             "task_type": "extra_task",
-            "reward_points": reward,
+            "reward_amount": reward,
         },
         cookies={"access_token": token},
     )
@@ -76,7 +76,7 @@ async def test_create_duty_returns_201(client: AsyncClient, mock_mail):
     assert res.status_code == 201
     body = res.json()
     assert body["task_type"] == "duty"
-    assert body["reward_points"] == 0
+    assert body["reward_amount"] == 0
     assert body["is_active"] is True
 
 
@@ -89,12 +89,12 @@ async def test_create_extra_task_returns_201(client: AsyncClient, mock_mail):
             "child_id": child_id,
             "title": "Clean room",
             "task_type": "extra_task",
-            "reward_points": 35,
+            "reward_amount": 35,
         },
         cookies={"access_token": token},
     )
     assert res.status_code == 201
-    assert res.json()["reward_points"] == 35
+    assert res.json()["reward_amount"] == 35
 
 
 async def test_duty_reward_must_be_zero_returns_422(client: AsyncClient, mock_mail):
@@ -106,7 +106,7 @@ async def test_duty_reward_must_be_zero_returns_422(client: AsyncClient, mock_ma
             "child_id": child_id,
             "title": "Brush teeth",
             "task_type": "duty",
-            "reward_points": 1,
+            "reward_amount": 1,
         },
         cookies={"access_token": token},
     )
@@ -124,7 +124,7 @@ async def test_extra_task_reward_must_be_positive_returns_422(
             "child_id": child_id,
             "title": "Clean room",
             "task_type": "extra_task",
-            "reward_points": 0,
+            "reward_amount": 0,
         },
         cookies={"access_token": token},
     )
@@ -410,7 +410,7 @@ async def test_batch_approve_flips_all_pending(client: AsyncClient, mock_mail):
             "child_id": child_id,
             "title": "Tidy room",
             "task_type": "extra_task",
-            "reward_points": 2,
+            "reward_amount": 2,
         },
         cookies={"access_token": token},
     )
@@ -436,7 +436,7 @@ async def test_batch_approve_skips_already_approved(client: AsyncClient, mock_ma
             "child_id": child_id,
             "title": "Tidy room",
             "task_type": "extra_task",
-            "reward_points": 1,
+            "reward_amount": 1,
         },
         cookies={"access_token": token},
     )
@@ -491,7 +491,7 @@ async def test_wallet_balance_sums_credits(client: AsyncClient, mock_mail):
             "child_id": child_id,
             "title": "Tidy room",
             "task_type": "extra_task",
-            "reward_points": 3,
+            "reward_amount": 3,
         },
         cookies={"access_token": token},
     )
@@ -522,7 +522,7 @@ async def test_wallet_history_ordered_newest_first(client: AsyncClient, mock_mai
             "child_id": child_id,
             "title": "Tidy room",
             "task_type": "extra_task",
-            "reward_points": 2,
+            "reward_amount": 2,
         },
         cookies={"access_token": token},
     )

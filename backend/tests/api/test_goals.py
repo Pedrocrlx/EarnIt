@@ -31,7 +31,7 @@ async def _approve_goal(
     return (
         await client.post(
             f"{_goals_url(child_id)}/{goal_id}/approve",
-            json={"target_points": target},
+            json={"target_amount": target},
             cookies={"access_token": token},
         )
     ).json()
@@ -48,7 +48,7 @@ async def _earn(
                 "child_id": child_id,
                 "title": title,
                 "task_type": "extra_task",
-                "reward_points": points,
+                "reward_amount": points,
             },
             cookies={"access_token": token},
         )
@@ -75,7 +75,7 @@ async def test_request_goal_returns_201_pending(client: AsyncClient, mock_mail):
     body = await _request_goal(client, token, child_id, name="Go to the park")
     assert body["name"] == "Go to the park"
     assert body["status"] == "requested"
-    assert body["target_points"] is None
+    assert body["target_amount"] is None
     assert body["child_id"] == child_id
     assert "id" in body and "created_at" in body
 
@@ -180,13 +180,13 @@ async def test_approve_goal_sets_target_and_status(client: AsyncClient, mock_mai
 
     res = await client.post(
         f"{_goals_url(child_id)}/{goal['id']}/approve",
-        json={"target_points": 500},
+        json={"target_amount": 500},
         cookies={"access_token": token},
     )
     assert res.status_code == 200
     body = res.json()
     assert body["status"] == "approved"
-    assert body["target_points"] == 500
+    assert body["target_amount"] == 500
 
 
 async def test_approve_goal_non_positive_target_returns_422(
@@ -198,7 +198,7 @@ async def test_approve_goal_non_positive_target_returns_422(
 
     res = await client.post(
         f"{_goals_url(child_id)}/{goal['id']}/approve",
-        json={"target_points": 0},
+        json={"target_amount": 0},
         cookies={"access_token": token},
     )
     assert res.status_code == 422
@@ -212,7 +212,7 @@ async def test_approve_already_approved_returns_409(client: AsyncClient, mock_ma
 
     res = await client.post(
         f"{_goals_url(child_id)}/{goal['id']}/approve",
-        json={"target_points": 200},
+        json={"target_amount": 200},
         cookies={"access_token": token},
     )
     assert res.status_code == 409
@@ -224,7 +224,7 @@ async def test_approve_goal_unknown_returns_404(client: AsyncClient, mock_mail):
 
     res = await client.post(
         f"{_goals_url(child_id)}/{uuid4()}/approve",
-        json={"target_points": 100},
+        json={"target_amount": 100},
         cookies={"access_token": token},
     )
     assert res.status_code == 404

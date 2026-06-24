@@ -2335,15 +2335,17 @@ unit. Store euros and the rate is frozen at earn time; store **points** and "€
 points × the current rate" — so when a parent changes the family rate, a child's
 existing balance re-values for free. The rate lives per-parent on
 `users.point_value_eur` (`Numeric(10,4)`, default `0.01` — 4 decimals so fine
-rates like `0.015` fit), set via `PATCH /profiles/point-value` and exposed in
-`GET /family` + the wallet response. **€ never touches the backend**: the child
-only sees points, and the parent's "enter € → preview points" form and any €
-balance are computed *frontend*-side from points × the rate. That keeps the API a
-pure points ledger. On schema: the only migration is an **additive**
-`ADD COLUMN users.point_value_eur` — the reward/balance values reuse the existing
-`tasks.reward_amount` / `wallet_transactions.amount` `Numeric` columns to hold
-whole-number points (nothing dropped or retyped), and the API just aliases them as
-`reward_points` / `amount_points`.
+rates like `0.015` fit), set via `PATCH /profiles/point-value`, read via
+`GET /profiles/point-value`, and also exposed in `GET /family` + the wallet
+response. **€ never touches the backend**: the child only sees points, and the
+parent's "enter € → preview" form and any € balance are computed *frontend*-side
+from points × the rate. That keeps the API a pure points ledger. On schema: the
+only migration is an **additive** `ADD COLUMN users.point_value_eur` — the
+reward/balance values reuse the existing `tasks.reward_amount` /
+`wallet_transactions.amount` `Numeric` columns (nothing dropped or retyped).
+**Naming reflects the split: "points" only exist for children** — the parent sets
+plain `reward_amount` / `target_amount`, and only the child's wallet view speaks
+in `balance_points` / `amount_points`.
 
 ## 24. Goals — Request, Approval & Redeem
 
@@ -2351,7 +2353,7 @@ whole-number points (nothing dropped or retyped), and the API just aliases them 
 A child profile **requests** a goal — free text of what they want ("go to the
 park") — created in **`requested`** (shown as "pending" to the child). The parent
 either **rejects** it (→ `rejected`) or **approves** it, setting a
-**`target_points`** value (→ `approved`). The child earns points from extra tasks;
+**`target_amount`** value (→ `approved`). The child earns points from extra tasks;
 once their balance reaches the target the parent **redeems** it (→ `redeemed`,
 terminal), spending the points. It deliberately mirrors the submission state
 machine — request/approve/reject is the same shape as submit/approve/reject — so
@@ -2375,8 +2377,8 @@ The wallet is a pure credit/debit ledger and balance = Σcredits − Σdebits.
 Approving a rewarded task writes a `credit`; until goals, nothing ever wrote a
 `debit` — the type existed but was unused. Redeem is its **first writer**: it
 re-reads the balance via the shared `get_balance`, refuses with 409 if
-`balance < target_points` (you can't redeem what you can't afford), then inserts a
-single `WalletTransaction(amount=target_points, transaction_type="debit",
+`balance < target_amount` (you can't redeem what you can't afford), then inserts a
+single `WalletTransaction(amount=target_amount, transaction_type="debit",
 description="Goal: <name>")` and flips the goal to `redeemed` in the same commit.
 The balance falls out of the ledger for free — no stored balance to keep in sync.
 
@@ -2387,10 +2389,10 @@ ever needed). **`completed_at`** — `status == "redeemed"` already says "done,"
 the *when* is the redeem `debit`'s `created_at`; storing it again would be
 derivable, drift-prone duplication. **`updated_at`** — nothing reads it; the status
 transitions are the audit trail. A stored **"reached"** flag — the list endpoint
-already returns `balance_points` and each goal's `target_points`, so the frontend
+already returns `balance_points` and each goal's `target_amount`, so the frontend
 derives `reached` itself; computing it server-side per goal would be redundant. What
 remains — `id`, `child_id` (FK CASCADE, **not** unique → many goals per child),
-`name`, `status`, `target_points` (NULL until approved), `created_at` (orders the
+`name`, `status`, `target_amount` (NULL until approved), `created_at` (orders the
 list) — each earns its place. Same instinct as the points feature: the table is
 purely additive (one `CREATE TABLE`), touching nothing that already exists.
 

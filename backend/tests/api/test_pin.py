@@ -8,6 +8,7 @@ _PIN_URL = "/api/v1/auth/pin"
 _VERIFY_PIN_URL = "/api/v1/auth/verify-pin"
 _FORGOT_PIN_URL = "/api/v1/auth/forgot-pin"
 _RESET_PIN_URL = "/api/v1/auth/reset-pin"
+_RESET_PIN_VERIFY_URL = "/api/v1/auth/reset-pin/verify"
 
 _PIN = "1234"
 _NEW_PIN = "5678"
@@ -311,4 +312,66 @@ async def test_reset_pin_without_access_token_returns_401(client: AsyncClient):
     res = await client.post(
         _RESET_PIN_URL, json={"code": "ABCDEFGH", "new_pin": _NEW_PIN}
     )
+    assert res.status_code == 401
+
+
+# /reset-pin/verify
+
+
+async def test_verify_pin_reset_code_correct_leaves_code_usable(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    access_token = await register_and_verify(client, mock_mail)
+    await client.post(
+        _PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token}
+    )
+    await db_session.execute(
+        text("UPDATE users SET updated_at = NOW() - INTERVAL '11 minutes'")
+    )
+    await db_session.commit()
+    await client.post(_FORGOT_PIN_URL, cookies={"access_token": access_token})
+    code = mock_mail[1].template_body["code"]
+
+    res = await client.post(
+        _RESET_PIN_VERIFY_URL,
+        json={"code": code},
+        cookies={"access_token": access_token},
+    )
+    assert res.status_code == 200
+    assert res.json()["valid"] is True
+
+    # Verifying must not consume the code — reset-pin still works with the same one.
+    reset = await client.post(
+        _RESET_PIN_URL,
+        json={"code": code, "new_pin": _NEW_PIN},
+        cookies={"access_token": access_token},
+    )
+    assert reset.status_code == 200
+
+
+async def test_verify_pin_reset_code_wrong_returns_400(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
+    access_token = await register_and_verify(client, mock_mail)
+    await client.post(
+        _PIN_URL, json={"pin": _PIN}, cookies={"access_token": access_token}
+    )
+    await db_session.execute(
+        text("UPDATE users SET updated_at = NOW() - INTERVAL '11 minutes'")
+    )
+    await db_session.commit()
+    await client.post(_FORGOT_PIN_URL, cookies={"access_token": access_token})
+
+    res = await client.post(
+        _RESET_PIN_VERIFY_URL,
+        json={"code": "WRONGCOD"},
+        cookies={"access_token": access_token},
+    )
+    assert res.status_code == 400
+
+
+async def test_verify_pin_reset_code_without_access_token_returns_401(
+    client: AsyncClient,
+):
+    res = await client.post(_RESET_PIN_VERIFY_URL, json={"code": "ABCDEFGH"})
     assert res.status_code == 401

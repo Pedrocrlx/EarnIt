@@ -18,6 +18,18 @@ export const updateFamilyName = (familyName: string) =>
     body: JSON.stringify({ family_name: familyName }),
   });
 
+// The conversion rate is euros-per-point (e.g. 0.01 = 1 point worth €0.01).
+export type PointValueResponse = { point_value_eur: string };
+
+export const getPointValue = () =>
+  apiFetch<PointValueResponse>("/profiles/point-value");
+
+export const setPointValue = (pointValueEur: string) =>
+  apiFetch<{ status: string; point_value_eur: string }>("/profiles/point-value", {
+    method: "PATCH",
+    body: JSON.stringify({ point_value_eur: pointValueEur }),
+  });
+
 export type ChildGoalPayload = {
   goal_description: string | null;
   goal_title: string | null;

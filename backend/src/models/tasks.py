@@ -39,9 +39,9 @@ class Task(SQLModel, table=True):
     title: str = Field(max_length=150, nullable=False)
     description: str | None = Field(default=None, nullable=True)
     task_type: str = Field(max_length=20, nullable=False)  # "duty" | "extra_task"
-    # Reward in **points** (duties = 0, extra_tasks > 0). Whole numbers stored in the
-    # existing Numeric column; the API exposes them as `reward_points`. Euros are the
-    # frontend's job, via the parent's `User.point_value_eur` rate.
+    # Reward amount the parent sets (duties = 0, extra_tasks > 0). Whole numbers in a
+    # Numeric column; on approval it credits the child's wallet as points. Euros are
+    # the frontend's job, via the parent's `User.point_value_eur` rate.
     reward_amount: Decimal = Field(
         default=Decimal("0.00"), sa_type=sa.Numeric(10, 2), nullable=False
     )

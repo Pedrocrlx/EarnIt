@@ -77,7 +77,7 @@ async def list_goals_endpoint(
 
     Filter by `status` (`requested`, `approved`, `rejected`, `redeemed`). The
     frontend hides `rejected` goals in child mode and derives each approved goal's
-    "reached" state from `balance_points >= target_points`. Returns 404 if the
+    "reached" state from `balance_points >= target_amount`. Returns 404 if the
     child does not belong to the authenticated parent.
     """
     goals = await list_goals(child_id, current_user, session, status=status)
@@ -149,7 +149,7 @@ async def redeem_goal_endpoint(
 ) -> GoalResponse:
     """Redeem an approved goal once the child can afford it, spending the points.
 
-    Writes a wallet `debit` of `target_points` and marks the goal `redeemed`.
+    Writes a wallet `debit` of `target_amount` and marks the goal `redeemed`.
     Returns 409 if the goal is not `approved` or the balance is below target.
     Returns 404 if the goal or child does not belong to the authenticated parent.
     """

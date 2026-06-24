@@ -242,7 +242,7 @@ const ChildDashboard = () => {
   }).length;
   const latestTransactions = wallet?.transactions.slice(0, 3) ?? [];
   const actionIsRunning = busyAction !== null;
-  const walletPoints = formatPoints(eurosToPoints(wallet?.balance ?? "0", pointsPerEuro));
+  const walletPoints = formatPoints(wallet?.balance_points ?? 0);
 
   return (
     <DashboardShell>
@@ -509,7 +509,7 @@ const ChildDashboard = () => {
                         className="rounded-lg bg-[#f8f9fb] px-4 py-3"
                       >
                         <p className="text-sm font-semibold text-[#191c1e]">
-                          {formatPoints(eurosToPoints(transaction.amount, pointsPerEuro))}
+                          {formatPoints(transaction.amount_points)}
                         </p>
                         <p className="mt-1 text-xs font-semibold text-[#59625a]">
                           {transaction.description ?? "Movimento da carteira"}

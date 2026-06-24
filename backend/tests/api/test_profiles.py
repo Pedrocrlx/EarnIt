@@ -378,3 +378,29 @@ async def test_set_point_value_too_many_decimals_returns_422(
 async def test_set_point_value_without_access_token_returns_401(client: AsyncClient):
     res = await client.patch(_POINT_VALUE_URL, json={"point_value_eur": "0.02"})
     assert res.status_code == 401
+
+
+# GET /profiles/point-value — read the conversion rate
+
+
+async def test_get_point_value_default_is_001(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    res = await client.get(_POINT_VALUE_URL, cookies={"access_token": token})
+    assert res.status_code == 200
+    assert float(res.json()["point_value_eur"]) == 0.01
+
+
+async def test_get_point_value_reflects_patch(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    await client.patch(
+        _POINT_VALUE_URL,
+        json={"point_value_eur": "0.05"},
+        cookies={"access_token": token},
+    )
+    res = await client.get(_POINT_VALUE_URL, cookies={"access_token": token})
+    assert float(res.json()["point_value_eur"]) == 0.05
+
+
+async def test_get_point_value_without_access_token_returns_401(client: AsyncClient):
+    res = await client.get(_POINT_VALUE_URL)
+    assert res.status_code == 401

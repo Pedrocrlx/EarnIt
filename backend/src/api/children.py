@@ -98,7 +98,7 @@ async def list_child_tasks(
                 title=task.title,
                 description=task.description,
                 task_type=task.task_type,
-                reward_points=int(task.reward_amount),
+                reward_amount=int(task.reward_amount),
                 expires_at=task.expires_at,
                 submission=SubmissionResponse.model_validate(sub) if sub else None,
             )

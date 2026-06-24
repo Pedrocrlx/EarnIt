@@ -18,7 +18,7 @@ class Goal(SQLModel, table=True):
     """A goal a child wishes for, moving through request → approval → redeem.
 
     ``status`` walks ``requested`` (child asked) → ``approved`` (parent set a
-    ``target_points`` value) **or** ``rejected`` (kept but hidden from the child),
+    ``target_amount`` value) **or** ``rejected`` (kept but hidden from the child),
     and from ``approved`` → ``redeemed`` (terminal; paid via a wallet ``debit``).
     A child may hold many goals — there is no uniqueness on ``child_id``.
     """
@@ -35,8 +35,8 @@ class Goal(SQLModel, table=True):
     name: str = Field(max_length=120, nullable=False)  # the child's request text
     # requested | approved | rejected | redeemed
     status: str = Field(max_length=20, default="requested", nullable=False)
-    # NULL until the parent approves and sets the point value
-    target_points: int | None = Field(default=None, sa_type=sa.Integer, nullable=True)
+    # NULL until the parent approves and sets the amount the child must "pay"
+    target_amount: int | None = Field(default=None, sa_type=sa.Integer, nullable=True)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         nullable=False,
