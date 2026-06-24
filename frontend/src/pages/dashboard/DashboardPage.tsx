@@ -4,7 +4,7 @@ import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/useAuth";
 import { selectedProfileIsParent } from "@/lib/profile-selection";
-import ChildDashboard from "@/pages/ChildDashboard";
+import ChildDashboard from "./ChildDashboard";
 
 const DashboardPage = () => {
   const { familyProfile } = useAuth();

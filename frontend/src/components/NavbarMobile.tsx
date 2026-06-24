@@ -3,8 +3,9 @@ import {
   CalendarCheck2,
   ChevronRight,
   Home,
-  LogOut,
+  Inbox,
   Menu,
+  Repeat,
   Settings,
   Target,
   UserRound,
@@ -25,14 +26,15 @@ type DashboardShellProps = {
 
 const dashboardNavItems = [
   { name: "Painel", path: "/dashboard", icon: Home },
+  { name: "Tarefas", path: "/dashboard/tasks", icon: CalendarCheck2, parentOnly: true },
+  { name: "Submissões", path: "/dashboard/submissions", icon: Inbox, parentOnly: true },
+  { name: "Objetivos", path: "/dashboard/goals", icon: Target },
   {
     name: "Perfis",
     path: "/dashboard/profiles",
     icon: UsersRound,
     parentOnly: true,
   },
-  { name: "Tarefas", path: "/dashboard/tasks", icon: CalendarCheck2, parentOnly: true },
-  { name: "Objetivos", path: "/dashboard/goals", icon: Target },
   { name: "Definições", path: "/dashboard/settings", icon: Settings, parentOnly: true },
 ];
 
@@ -40,17 +42,16 @@ const navItemStyle =
   "flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition-colors";
 
 export const DashboardShell = ({ children }: DashboardShellProps) => {
-  const { familyProfile, logout } = useAuth();
+  const { familyProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuIsOpen, setMobileMenuIsOpen] = useState(false);
   const familyName = familyProfile?.family_name?.trim() || "Família";
   const parentProfileIsSelected = selectedProfileIsParent();
 
-  const handleLogout = async () => {
+  const handleSwitchProfile = () => {
     setMobileMenuIsOpen(false);
-    await logout();
-    navigate("/");
+    navigate("/profile");
   };
 
   const sidebar = (
@@ -135,14 +136,14 @@ export const DashboardShell = ({ children }: DashboardShellProps) => {
       <div className="border-t border-[#e1e2e4] pt-4">
         <button
           type="button"
-          onClick={handleLogout}
+          onClick={handleSwitchProfile}
           className={cn(
             navItemStyle,
-            "w-full cursor-pointer text-[#404940] hover:bg-[#fff4de] hover:text-[#7a4100]",
+            "w-full cursor-pointer text-[#404940] hover:bg-[#f3f4f6] hover:text-[#003514]",
           )}
         >
-          <LogOut className="size-5" aria-hidden="true" />
-          <span>Sair</span>
+          <Repeat className="size-5" aria-hidden="true" />
+          <span>Trocar Perfil</span>
         </button>
       </div>
     </div>

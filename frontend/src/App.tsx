@@ -4,18 +4,19 @@ import Layout from "./components/Layout.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
 import { selectedProfileIsParent } from "@/lib/profile-selection";
 
-const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const DashboardPage = lazy(() => import("@/pages/dashboard/DashboardPage"));
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
-const ManageProfilesPage = lazy(() => import("@/pages/ManageProfilesPage"));
+const ManageProfilesPage = lazy(() => import("@/pages/profiles/ManageProfilesPage"));
 const LoginPage = lazy(() => import("@/pages/authentication/LoginPage"));
 const ForgotPasswordPage = lazy(() => import("@/pages/authentication/ForgotPasswordPage"));
 const OnboardingStep1Page = lazy(() => import("@/pages/onboarding/Step1Page"));
 const OnboardingStep2Page = lazy(() => import("@/pages/onboarding/Step2Page"));
 const OnboardingStep3Page = lazy(() => import("@/pages/onboarding/Step3Page"));
 const ProfileSelectorPage = lazy(() => import("@/pages/ProfileSelectorPage"));
-const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
-const TasksPage = lazy(() => import("@/pages/TasksPage"));
-const GoalsPage = lazy(() => import("@/pages/GoalsPage"));
+const SettingsPage = lazy(() => import("@/pages/settings/SettingsPage"));
+const TasksPage = lazy(() => import("@/pages/tasks/TasksPage"));
+const SubmissionsPage = lazy(() => import("@/pages/submissions/SubmissionsPage"));
+const GoalsPage = lazy(() => import("@/pages/goals/GoalsPage"));
 const RegistrationPage = lazy(
   () => import("@/pages/authentication/RegistrationPage"),
 );
@@ -137,6 +138,14 @@ function App() {
               element={
                 <ParentDashboardRoute>
                   <TasksPage />
+                </ParentDashboardRoute>
+              }
+            />
+            <Route
+              path="/dashboard/submissions"
+              element={
+                <ParentDashboardRoute>
+                  <SubmissionsPage />
                 </ParentDashboardRoute>
               }
             />
