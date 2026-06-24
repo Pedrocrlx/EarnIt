@@ -186,9 +186,7 @@ async def test_update_child_birth_date_returns_200(client: AsyncClient, mock_mai
         "birth_date": "2017-04-12",
     }
 
-    family_res = await client.get(
-        _FAMILY_URL, cookies={"access_token": access_token}
-    )
+    family_res = await client.get(_FAMILY_URL, cookies={"access_token": access_token})
     assert family_res.json()["children"][0]["birth_date"] == "2017-04-12"
 
 
@@ -235,14 +233,10 @@ async def test_upload_child_avatar_associates_url(
     avatar_url = f"{_CHILDREN_URL}/{child_id}/avatar"
     assert upload_res.json()["avatar_url"] == avatar_url
 
-    family_res = await client.get(
-        _FAMILY_URL, cookies={"access_token": access_token}
-    )
+    family_res = await client.get(_FAMILY_URL, cookies={"access_token": access_token})
     assert family_res.json()["children"][0]["avatar_url"] == avatar_url
 
-    avatar_res = await client.get(
-        avatar_url, cookies={"access_token": access_token}
-    )
+    avatar_res = await client.get(avatar_url, cookies={"access_token": access_token})
     assert avatar_res.status_code == 200
     assert avatar_res.headers["content-type"] == "image/png"
     assert avatar_res.content == b"\x89PNG\r\n\x1a\nfake-png-content"
