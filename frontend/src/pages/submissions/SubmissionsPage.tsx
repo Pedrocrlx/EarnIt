@@ -1,4 +1,4 @@
-import { BookmarkIcon, CheckCircledIcon, ClockIcon, CrossCircledIcon, PersonIcon, ReloadIcon, StarIcon, UpdateIcon } from "@radix-ui/react-icons";
+import { BookmarkIcon, CheckCircledIcon, ClockIcon, CrossCircledIcon, ImageIcon, OpenInNewWindowIcon, PersonIcon, StarIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,6 @@ import { useToast } from "@/context/useToast";
 import { formatEuros } from "@/lib/points";
 import { getPointValue } from "@/services/profileService";
 import {
-  approveAllSubmissions,
   approveSubmission as approveTaskSubmission,
   listSubmissions,
   listTasks,
@@ -178,25 +177,6 @@ const SubmissionsPage = () => {
     }
   };
 
-  const approveAll = async () => {
-    setBusyAction("approve-all");
-
-    try {
-      const response = await approveAllSubmissions();
-      await loadData();
-      showToast(`${response.approved} submissões aprovadas.`);
-    } catch (caughtError) {
-      showToast(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Não foi possível aprovar as submissões.",
-        "error",
-      );
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
   const actionIsRunning = busyAction !== null;
 
   const emptyMessage =
@@ -210,7 +190,7 @@ const SubmissionsPage = () => {
     <DashboardShell>
       <main className="flex min-h-screen w-full flex-col items-center gap-10 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
         <section className="flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10">
-          <header className="flex items-center justify-between gap-4">
+          <header>
             <div>
               <p className="text-sm font-semibold uppercase text-[#5f6800]">
                 Gestão de tarefas
@@ -219,24 +199,10 @@ const SubmissionsPage = () => {
                 Submissões
               </h1>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={loadData}
-              disabled={loading || actionIsRunning}
-              aria-label="Atualizar"
-              className="size-11 shrink-0 rounded-full border border-[#e1e2e4] text-[#003514] hover:bg-white"
-            >
-              <ReloadIcon
-                className={`size-5 ${loading ? "animate-spin" : ""}`}
-                aria-hidden="true"
-              />
-            </Button>
           </header>
 
           <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-lg font-bold text-[#003514]">Lista de submissões</h2>
                 <div className="inline-flex rounded-full border border-[#e1e2e4] bg-[#f8f9fb] p-1">
@@ -263,19 +229,6 @@ const SubmissionsPage = () => {
                   </button>
                 </div>
               </div>
-              <Button
-                type="button"
-                onClick={approveAll}
-                disabled={actionIsRunning || pendingSubmissions.length === 0}
-                className="h-10 shrink-0 rounded-full bg-[#d4e251] px-4 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
-              >
-                {busyAction === "approve-all" ? (
-                  <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <CheckCircledIcon className="mr-2 size-4" aria-hidden="true" />
-                )}
-                Aprovar pendentes
-              </Button>
             </div>
 
             <div className="mt-5 divide-y divide-[#e1e2e4]">
@@ -370,6 +323,37 @@ const SubmissionsPage = () => {
                           </div>
                         ) : null}
                       </div>
+
+                      {submission.proof_url ? (
+                        <div className="mt-4 overflow-hidden rounded-2xl border border-[#d9ddd7] bg-[#f3f4f6]">
+                          <div className="flex items-center justify-between border-b border-[#d9ddd7] bg-white px-4 py-2.5">
+                            <span className="flex items-center gap-2 text-sm font-bold text-[#003514]">
+                              <ImageIcon className="size-4" aria-hidden="true" />
+                              Fotografia comprovativa
+                            </span>
+                            <a
+                              href={submission.proof_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#5f6800] hover:text-[#003514]"
+                            >
+                              Abrir imagem
+                              <OpenInNewWindowIcon
+                                className="size-3.5"
+                                aria-hidden="true"
+                              />
+                            </a>
+                          </div>
+                          <img
+                            src={submission.proof_url}
+                            alt={`Comprovativo da tarefa ${
+                              task?.title ?? submission.task_title ?? "submetida"
+                            }`}
+                            className="max-h-[440px] w-full object-contain"
+                            loading="lazy"
+                          />
+                        </div>
+                      ) : null}
 
                       {rejectingSubmissionId === submission.id ? (
                         <form onSubmit={rejectSubmission} className="mt-3 flex flex-col gap-2 sm:flex-row">

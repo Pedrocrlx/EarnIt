@@ -104,6 +104,7 @@ class TaskSubmission(SQLModel, table=True):
         default=None, nullable=True, sa_type=DateTime(timezone=True)
     )
     rejection_note: str | None = Field(default=None, nullable=True)
+    proof_url: str | None = Field(default=None, nullable=True)
 
 
 class WalletTransaction(SQLModel, table=True):

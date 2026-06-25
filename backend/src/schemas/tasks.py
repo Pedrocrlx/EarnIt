@@ -120,6 +120,7 @@ class SubmissionResponse(BaseModel):
     status: str
     reviewed_at: datetime | None
     rejection_note: str | None
+    proof_url: str | None
 
     model_config = {"from_attributes": True}
 

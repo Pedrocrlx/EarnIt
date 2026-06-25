@@ -2,6 +2,7 @@ import { CheckCircledIcon, ClipboardIcon, ClockIcon, ResetIcon, StarIcon, Update
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import ChildShell from "@/components/ChildShell";
+import { TaskProofDialog } from "@/components/TaskProofDialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/useAuth";
 import { useToast } from "@/context/useToast";
@@ -103,6 +104,10 @@ const ChildDashboard = () => {
   const [wallet, setWallet] = useState<WalletResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [proofTask, setProofTask] = useState<{
+    task: ChildTaskResponse;
+    submissionId?: string;
+  } | null>(null);
 
   const loadDashboard = useCallback(async () => {
     if (!selectedChild) {
@@ -137,7 +142,7 @@ const ChildDashboard = () => {
     void loadDashboard();
   }, [loadDashboard]);
 
-  const submitTask = async (task: ChildTaskResponse) => {
+  const submitTask = async (task: ChildTaskResponse, proof: File) => {
     if (!selectedChild) {
       return;
     }
@@ -145,8 +150,9 @@ const ChildDashboard = () => {
     setBusyAction(`submit-${task.id}`);
 
     try {
-      await submitTaskRequest(selectedChild.id, task.id);
+      await submitTaskRequest(selectedChild.id, task.id, proof);
       await loadDashboard();
+      setProofTask(null);
       showToast("Tarefa enviada para aprovação.");
     } catch (caughtError) {
       showToast(
@@ -160,7 +166,10 @@ const ChildDashboard = () => {
     }
   };
 
-  const resubmitTask = async (submissionId: string) => {
+  const resubmitTask = async (
+    submissionId: string,
+    proof: File,
+  ) => {
     if (!selectedChild) {
       return;
     }
@@ -168,8 +177,9 @@ const ChildDashboard = () => {
     setBusyAction(`resubmit-${submissionId}`);
 
     try {
-      await resubmitTaskRequest(selectedChild.id, submissionId);
+      await resubmitTaskRequest(selectedChild.id, submissionId, proof);
       await loadDashboard();
+      setProofTask(null);
       showToast("Tarefa reenviada para aprovação.");
     } catch (caughtError) {
       showToast(
@@ -215,6 +225,21 @@ const ChildDashboard = () => {
         </section>
       ) : (
         <div className="flex flex-col gap-5">
+          {proofTask ? (
+            <TaskProofDialog
+              taskTitle={proofTask.task.title}
+              busy={busyAction !== null}
+              onClose={() => setProofTask(null)}
+              onSubmit={(proof) =>
+                proofTask.submissionId
+                  ? resubmitTask(
+                      proofTask.submissionId,
+                      proof,
+                    )
+                  : submitTask(proofTask.task, proof)
+              }
+            />
+          ) : null}
           {/* Progress hero */}
           <section className="rounded-2xl border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
             <div className="flex items-end justify-between gap-3">
@@ -320,9 +345,13 @@ const ChildDashboard = () => {
                       <Button
                         type="button"
                         onClick={() =>
-                          action.mode === "submit"
-                            ? submitTask(task)
-                            : resubmitTask(action.submissionId)
+                          setProofTask({
+                            task,
+                            submissionId:
+                              action.mode === "resubmit"
+                                ? action.submissionId
+                                : undefined,
+                          })
                         }
                         disabled={actionIsRunning}
                         className="mt-auto h-12 w-full rounded-full bg-[#d4e251] text-sm font-bold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"

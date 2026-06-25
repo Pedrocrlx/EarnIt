@@ -25,6 +25,7 @@ export type SubmissionResponse = {
   submitted_at: string | null;
   task_id: string | null;
   task_title: string | null;
+  proof_url: string | null;
 };
 
 export type ChildTaskResponse = {

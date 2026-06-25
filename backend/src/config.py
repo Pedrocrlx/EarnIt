@@ -106,6 +106,12 @@ class Settings:
         self.MAX_CHILDREN_PER_USER = _int("MAX_CHILDREN_PER_USER", 10)
         self.AVATAR_UPLOAD_DIR = _str("AVATAR_UPLOAD_DIR", "/app/uploads/avatars")
         self.AVATAR_MAX_BYTES = _int("AVATAR_MAX_BYTES", 5 * 1024 * 1024)
+        self.SUBMISSION_PROOF_UPLOAD_DIR = _str(
+            "SUBMISSION_PROOF_UPLOAD_DIR", "/app/uploads/submission-proofs"
+        )
+        self.SUBMISSION_PROOF_MAX_BYTES = _int(
+            "SUBMISSION_PROOF_MAX_BYTES", 5 * 1024 * 1024
+        )
 
         # Parental PIN
         self.PARENT_PIN_LENGTH = _int("PARENT_PIN_LENGTH", 4)

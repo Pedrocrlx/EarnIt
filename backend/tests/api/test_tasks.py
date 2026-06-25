@@ -10,6 +10,8 @@ from tests.conftest import _OTHER, _child, register_and_verify
 
 _TASKS_URL = "/api/v1/tasks"
 _SUBS_URL = "/api/v1/tasks/submissions"
+_PROOF_BYTES = b"\x89PNG\r\n\x1a\nproof-image"
+_PROOF_FILE = {"proof": ("proof.png", _PROOF_BYTES, "image/png")}
 
 # Shared helpers
 
@@ -46,6 +48,7 @@ async def _extra(
 async def _submit(client: AsyncClient, token: str, child_id: str, task_id: str) -> dict:
     res = await client.post(
         f"/api/v1/children/{child_id}/tasks/{task_id}/submit",
+        files=_PROOF_FILE,
         cookies={"access_token": token},
     )
     return res
@@ -360,6 +363,70 @@ async def test_submit_extra_task_happy_path(client: AsyncClient, mock_mail):
     res = await _submit(client, token, child_id, task["id"])
     assert res.status_code == 201
     assert res.json()["status"] == "pending"
+    assert res.json()["proof_url"].endswith("/proof")
+
+
+async def test_submit_without_proof_returns_422(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+
+    res = await client.post(
+        f"/api/v1/children/{child_id}/tasks/{task['id']}/submit",
+        cookies={"access_token": token},
+    )
+
+    assert res.status_code == 422
+
+
+async def test_submit_rejects_unsupported_proof(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+
+    res = await client.post(
+        f"/api/v1/children/{child_id}/tasks/{task['id']}/submit",
+        files={"proof": ("proof.svg", b"<svg></svg>", "image/svg+xml")},
+        cookies={"access_token": token},
+    )
+
+    assert res.status_code == 415
+
+
+async def test_parent_can_read_submission_proof(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+    submission = (await _submit(client, token, child_id, task["id"])).json()
+
+    res = await client.get(
+        submission["proof_url"],
+        cookies={"access_token": token},
+    )
+
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "image/png"
+    assert res.content == _PROOF_BYTES
+
+
+async def test_approval_deletes_submission_proof(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+    submission = (await _submit(client, token, child_id, task["id"])).json()
+
+    approved = await client.post(
+        f"{_SUBS_URL}/{submission['id']}/approve",
+        cookies={"access_token": token},
+    )
+    proof = await client.get(
+        submission["proof_url"],
+        cookies={"access_token": token},
+    )
+
+    assert approved.status_code == 200
+    assert approved.json()["proof_url"] is None
+    assert proof.status_code == 404
 
 
 async def test_duty_double_submit_returns_409(
@@ -492,6 +559,7 @@ async def test_resubmit_resets_status_to_pending(client: AsyncClient, mock_mail)
 
     res = await client.patch(
         f"/api/v1/children/{child_id}/submissions/{sub['id']}",
+        files=_PROOF_FILE,
         cookies={"access_token": token},
     )
     assert res.status_code == 200
@@ -508,6 +576,7 @@ async def test_resubmit_non_rejected_returns_409(client: AsyncClient, mock_mail)
 
     res = await client.patch(
         f"/api/v1/children/{child_id}/submissions/{sub['id']}",
+        files=_PROOF_FILE,
         cookies={"access_token": token},
     )
     assert res.status_code == 409
@@ -755,6 +824,7 @@ async def test_resubmit_blocked_after_expiry_returns_410(
 
     res = await client.patch(
         f"/api/v1/children/{child_id}/submissions/{sub['id']}",
+        files=_PROOF_FILE,
         cookies={"access_token": token},
     )
     assert res.status_code == 410
@@ -923,6 +993,7 @@ async def test_resubmit_past_day_duty_returns_410(
 
     res = await client.patch(
         f"/api/v1/children/{child_id}/submissions/{sub_id}",
+        files=_PROOF_FILE,
         cookies={"access_token": token},
     )
     assert res.status_code == 410

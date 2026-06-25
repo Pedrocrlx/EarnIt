@@ -9,7 +9,8 @@ parent session and operate only on that parent's own tasks/children.
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
@@ -24,6 +25,7 @@ from src.schemas.tasks import (
     TaskResponse,
     TaskUpdateRequest,
 )
+from src.services.submission_proofs import find_proof, proof_media_type
 from src.services.tasks import (
     approve_submission,
     batch_approve,
@@ -35,6 +37,7 @@ from src.services.tasks import (
     reject_submission,
     update_task,
 )
+from src.services.tasks._shared import get_submission_or_404
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +147,27 @@ async def delete_task_endpoint(
 
 # NOTE: approve-all MUST be registered before /{id}/approve to avoid FastAPI
 # matching the literal string "approve-all" as a UUID path parameter.
+
+
+@router.get(
+    "/submissions/{submission_id}/proof",
+    response_class=FileResponse,
+    tags=["tasks/submissions"],
+    summary="Get a submission proof image",
+)
+async def get_submission_proof(
+    submission_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Return the proof image when the submission belongs to the parent."""
+    submission = await get_submission_or_404(submission_id, current_user, session)
+    if not submission.proof_url:
+        raise HTTPException(status_code=404, detail="Proof image not found.")
+    proof_path = await find_proof(submission.id)
+    if proof_path is None:
+        raise HTTPException(status_code=404, detail="Proof image not found.")
+    return FileResponse(proof_path, media_type=proof_media_type(proof_path))
 
 
 @router.get(

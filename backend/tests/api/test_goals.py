@@ -6,6 +6,7 @@ from tests.conftest import _OTHER, _child, register_and_verify
 
 _TASKS_URL = "/api/v1/tasks"
 _SUBS_URL = "/api/v1/tasks/submissions"
+_PROOF_FILE = {"proof": ("proof.png", b"\x89PNG\r\n\x1a\nproof-image", "image/png")}
 
 
 # Shared helpers
@@ -56,6 +57,7 @@ async def _earn(
     sub = (
         await client.post(
             f"/api/v1/children/{child_id}/tasks/{task['id']}/submit",
+            files=_PROOF_FILE,
             cookies={"access_token": token},
         )
     ).json()

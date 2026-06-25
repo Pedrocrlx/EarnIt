@@ -20,6 +20,7 @@ from src.database import AsyncSessionLocal
 from src.models.auth import Child, User
 from src.models.tasks import Task, TaskSubmission, WalletTransaction
 from src.services import accounts
+from src.services.submission_proofs import delete_proof, store_proof
 from src.services.tasks._shared import get_child_or_404, get_submission_or_404
 
 _maintenance_task: asyncio.Task | None = None
@@ -28,7 +29,12 @@ logger = logging.getLogger(__name__)
 
 
 async def submit_task(
-    task_id: UUID, child_id: UUID, user: User, session: AsyncSession
+    task_id: UUID,
+    child_id: UUID,
+    proof_data: bytes,
+    proof_suffix: str,
+    user: User,
+    session: AsyncSession,
 ) -> TaskSubmission:
     """Record a child's completion of a task.
 
@@ -65,6 +71,8 @@ async def submit_task(
             )
         slot.status = "pending"
         slot.submitted_at = now
+        await store_proof(slot.id, proof_data, proof_suffix)
+        slot.proof_url = f"/api/v1/tasks/submissions/{slot.id}/proof"
         await session.commit()
         logger.info("Duty submitted: submission_id=%s", slot.id)
         return slot
@@ -86,6 +94,8 @@ async def submit_task(
             submitted_at=now,
             status="pending",
         )
+        await store_proof(submission.id, proof_data, proof_suffix)
+        submission.proof_url = f"/api/v1/tasks/submissions/{submission.id}/proof"
         session.add(submission)
         await session.commit()
         logger.info("Extra task submitted: submission_id=%s", submission.id)
@@ -93,7 +103,12 @@ async def submit_task(
 
 
 async def resubmit_task(
-    submission_id: UUID, child_id: UUID, user: User, session: AsyncSession
+    submission_id: UUID,
+    child_id: UUID,
+    proof_data: bytes,
+    proof_suffix: str,
+    user: User,
+    session: AsyncSession,
 ) -> TaskSubmission:
     """Reset a rejected submission back to pending for another review.
 
@@ -122,6 +137,8 @@ async def resubmit_task(
     submission.submitted_at = now
     submission.rejection_note = None
     submission.reviewed_at = None
+    await store_proof(submission.id, proof_data, proof_suffix)
+    submission.proof_url = f"/api/v1/tasks/submissions/{submission.id}/proof"
     await session.commit()
     logger.info("Submission resubmitted: submission_id=%s", submission.id)
     return submission
@@ -159,10 +176,14 @@ async def approve_submission(
     submission = await get_submission_or_404(submission_id, user, session)
     if submission.status != "pending":
         raise HTTPException(status_code=409, detail="Submission is not pending")
+    if not submission.proof_url:
+        raise HTTPException(status_code=409, detail="Submission has no proof image")
     # task_id is null when the task was deleted; the orphaned submission can still
     # be reviewed, but no reward is credited (_apply_approval no-ops on None).
     task = await session.get(Task, submission.task_id) if submission.task_id else None
     _apply_approval(session, submission, task, datetime.now(UTC))
+    await delete_proof(submission.id)
+    submission.proof_url = None
     await session.commit()
     logger.info("Submission approved: submission_id=%s", submission.id)
     return submission
@@ -182,6 +203,8 @@ async def reject_submission(
     submission.status = "rejected"
     submission.reviewed_at = datetime.now(UTC)
     submission.rejection_note = rejection_note
+    await delete_proof(submission.id)
+    submission.proof_url = None
     await session.commit()
     logger.info("Submission rejected: submission_id=%s", submission.id)
     return submission
@@ -210,12 +233,15 @@ async def batch_approve(
         )
     )
     submissions = result.scalars().all()
+    submissions = [sub for sub in submissions if sub.proof_url]
 
     now = datetime.now(UTC)
     count = 0
     for sub in submissions:
         task = await session.get(Task, sub.task_id) if sub.task_id else None
         _apply_approval(session, sub, task, now)
+        await delete_proof(sub.id)
+        sub.proof_url = None
         count += 1
 
     await session.commit()

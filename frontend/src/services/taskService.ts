@@ -65,12 +65,24 @@ export const listChildTasks = (childId: string) =>
 export const getWallet = (childId: string) =>
   apiFetch<WalletResponse>(`/children/${childId}/wallet`);
 
-export const submitTask = (childId: string, taskId: string) =>
+const proofFormData = (proof: File) => {
+  const formData = new FormData();
+  formData.append("proof", proof);
+  return formData;
+};
+
+export const submitTask = (childId: string, taskId: string, proof: File) =>
   apiFetch<SubmissionResponse>(`/children/${childId}/tasks/${taskId}/submit`, {
     method: "POST",
+    body: proofFormData(proof),
   });
 
-export const resubmitTask = (childId: string, submissionId: string) =>
+export const resubmitTask = (
+  childId: string,
+  submissionId: string,
+  proof: File,
+) =>
   apiFetch<SubmissionResponse>(`/children/${childId}/submissions/${submissionId}`, {
     method: "PATCH",
+    body: proofFormData(proof),
   });

@@ -1,4 +1,4 @@
-import { ArchiveIcon, CalendarIcon, CheckCircledIcon, ChevronRightIcon, CrossCircledIcon, ReloadIcon, StarIcon, TargetIcon, UpdateIcon } from "@radix-ui/react-icons";
+import { ArchiveIcon, CalendarIcon, CheckCircledIcon, ChevronRightIcon, CrossCircledIcon, ImageIcon, OpenInNewWindowIcon, StarIcon, TargetIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import DashboardShell from "@/components/NavbarMobile";
@@ -12,7 +12,6 @@ import { selectedProfileIsParent } from "@/lib/profile-selection";
 import { approveGoal, listGoals, rejectGoal } from "@/services/goalService";
 import { getPointValue } from "@/services/profileService";
 import {
-  approveAllSubmissions,
   approveSubmission as approveSubmissionRequest,
   listSubmissions,
   listTasks,
@@ -192,24 +191,6 @@ const DashboardPage = () => {
     }
   };
 
-  const approveAll = async () => {
-    setBusyAction("approve-all");
-    try {
-      const response = await approveAllSubmissions();
-      await load();
-      showToast(`${response.approved} submissões aprovadas.`);
-    } catch (caughtError) {
-      showToast(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Não foi possível aprovar as submissões.",
-        "error",
-      );
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
   const runGoalAction = async (goalId: string, action: () => Promise<unknown>) => {
     setBusyAction(`goal-${goalId}`);
     try {
@@ -241,7 +222,7 @@ const DashboardPage = () => {
     <DashboardShell>
       <main className="flex min-h-screen w-full flex-col items-center gap-10 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
         <section className="flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10">
-          <header className="flex items-start justify-between gap-4">
+          <header>
             <div>
               <p className="text-sm font-semibold uppercase text-[#5f6800]">
                 Painel parental
@@ -253,20 +234,6 @@ const DashboardPage = () => {
                 Resolva aqui o que está à espera de si.
               </p>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={load}
-              disabled={loading || actionIsRunning}
-              aria-label="Atualizar"
-              className="size-11 shrink-0 rounded-full border border-[#e1e2e4] text-[#003514] hover:bg-white"
-            >
-              <ReloadIcon
-                className={`size-5 ${loading ? "animate-spin" : ""}`}
-                aria-hidden="true"
-              />
-            </Button>
           </header>
 
           {/* Submissions to review */}
@@ -278,19 +245,6 @@ const DashboardPage = () => {
                 {countChip(pendingSubmissions.length)}
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  onClick={approveAll}
-                  disabled={actionIsRunning || pendingSubmissions.length === 0}
-                  className="h-10 rounded-full bg-[#d4e251] px-4 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
-                >
-                  {busyAction === "approve-all" ? (
-                    <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <CheckCircledIcon className="mr-2 size-4" aria-hidden="true" />
-                  )}
-                  Aprovar todas
-                </Button>
                 <Button
                   asChild
                   variant="ghost"
@@ -368,6 +322,37 @@ const DashboardPage = () => {
                           </Button>
                         </div>
                       </div>
+
+                      {submission.proof_url ? (
+                        <div className="mt-3 overflow-hidden rounded-xl border border-[#d9ddd7] bg-[#f3f4f6]">
+                          <div className="flex items-center justify-between border-b border-[#d9ddd7] bg-white px-3 py-2">
+                            <span className="flex items-center gap-1.5 text-xs font-bold text-[#003514]">
+                              <ImageIcon className="size-3.5" aria-hidden="true" />
+                              Fotografia comprovativa
+                            </span>
+                            <a
+                              href={submission.proof_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-[#5f6800]"
+                            >
+                              Abrir
+                              <OpenInNewWindowIcon
+                                className="size-3"
+                                aria-hidden="true"
+                              />
+                            </a>
+                          </div>
+                          <img
+                            src={submission.proof_url}
+                            alt={`Comprovativo da tarefa ${
+                              task?.title ?? submission.task_title ?? "submetida"
+                            }`}
+                            className="max-h-80 w-full object-contain"
+                            loading="lazy"
+                          />
+                        </div>
+                      ) : null}
 
                       {rejectingId === submission.id ? (
                         <form

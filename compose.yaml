@@ -48,6 +48,7 @@ services:
     volumes:
       - ./backend:/app
       - avatar_uploads:/app/uploads/avatars
+      - submission_proofs:/app/uploads/submission-proofs
     environment:
       POSTGRES_HOST: db
       MAIL_SERVER: mailpit
@@ -74,3 +75,4 @@ services:
 volumes:
   postgres_data:
   avatar_uploads:
+  submission_proofs:
