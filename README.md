@@ -1,129 +1,228 @@
 # EarnIt
 
-# Architecture
+EarnIt is a family allowance application that turns household responsibilities
+into points, savings, and child-defined goals. Parents manage profiles, tasks,
+rewards, and approvals, while children complete tasks and track their progress.
 
-The app is a React SPA served by Vite, talking to a FastAPI backend. FastAPI persists data in PostgreSQL. In the full stack setup, Nginx is the single public entrypoint on port 80: it routes `/` to the Vite dev server for the SPA, and `/api`, `/docs`, and `/openapi.json` to FastAPI. FastAPI then reads/writes to PostgreSQL on the internal Docker network, while the browser only ever talks to Nginx.
+## Architecture
 
-Outbound emails (verification codes, password/PIN reset) are sent to **Mailpit**, a dev SMTP sink with a web UI at `http://localhost:8025`. Mailpit's service definition is isolated in [`backend/mail/`](backend/mail/README.md) and pulled into both `compose.yaml` (root) and `backend/compose.yaml` via Docker Compose's `include:` directive, so it can be run, debugged, or restarted independently of the rest of the stack.
+The full development stack runs with Docker Compose behind Nginx:
 
-# Tech Stack
+- **Nginx** is the public entrypoint on port `80`.
+- **React + Vite** serves the single-page application.
+- **FastAPI** exposes the API and OpenAPI documentation.
+- **PostgreSQL 17** stores accounts, profiles, tasks, wallets, and goals.
+- **Mailpit** captures development emails for account verification and
+  password/PIN recovery.
+- Named Docker volumes persist PostgreSQL data and uploaded child avatars.
 
-- **Backend:** FastAPI, SQLModel, PostgreSQL (see [backend/README.md](backend/README.md))
-- **Frontend:** React, Vite, Bun, Tailwind CSS
+The browser uses only Nginx for application traffic. Nginx routes `/` to the
+frontend and `/api`, `/docs`, and `/openapi.json` to FastAPI. FastAPI connects
+to PostgreSQL and sends email through Mailpit's internal SMTP endpoint.
+Mailpit's web interface is exposed separately for developers.
 
-# Getting Started
+```mermaid
+flowchart LR
+    Browser([User browser])
+    Developer([Developer])
 
-For detailed instructions on how to run each part of the stack, refer to:
-- [Backend Documentation](backend/README.md)
-- [Frontend Documentation](frontend/README.md)
+    subgraph Stack[Docker Compose network]
+        Proxy[Nginx reverse proxy]
+        Frontend[React + Vite frontend]
+        API[FastAPI backend]
+        DB[(PostgreSQL 17)]
+        Mailpit[Mailpit SMTP sink]
+        DBVolume[(postgres_data)]
+        AvatarVolume[(avatar_uploads)]
+    end
 
-### Quick Start (Full Stack with Docker)
+    Browser -->|http://localhost:80| Proxy
+    Proxy -->|/| Frontend
+    Proxy -->|/api, /docs, /openapi.json| API
+    API -->|SQL| DB
+    API -->|SMTP port 1025| Mailpit
+    Developer -->|Web UI port 8025| Mailpit
+    DB -.->|persists data| DBVolume
+    API -.->|stores child avatars| AvatarVolume
+```
+
+## Tech Stack
+
+- **Frontend:** React 19, TypeScript, Vite, Bun, TanStack Query, Tailwind CSS
+- **Backend:** Python 3.14+, FastAPI, SQLModel, Alembic, uv
+- **Data:** PostgreSQL 17
+- **Development email:** Mailpit
+- **Gateway:** Nginx
+- **Local orchestration:** Docker Compose
+
+See the detailed [frontend documentation](frontend/README.md) and
+[backend documentation](backend/README.md).
+
+## Quick Start
+
+### Prerequisites
+
+- Docker with Docker Compose
+- `make`
+
+### 1. Configure the backend
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Replace `SECRET_KEY` in `backend/.env` with a generated value:
+
+```bash
+openssl rand -hex 32
+```
+
+### 2. Start the full stack
+
+```bash
+make up
+```
+
+The API container applies pending Alembic migrations automatically before
+starting FastAPI.
+
+### 3. Open the services
+
+| Service | URL | Purpose |
+| --- | --- | --- |
+| EarnIt | <http://localhost> | Application through Nginx |
+| API documentation | <http://localhost/docs> | FastAPI Swagger UI |
+| OpenAPI schema | <http://localhost/openapi.json> | API contract |
+| Mailpit | <http://localhost:8025> | Captured development emails |
+| PostgreSQL | `localhost:5432` | Direct local database access |
+| Mailpit SMTP | `localhost:1025` | Direct local SMTP access |
+
+To stop the stack:
+
+```bash
+make down
+```
+
+> `make down` removes containers but preserves the named data volumes.
+
+## Mailpit Email Flow
+
+Mailpit is a local development email sink. It does not deliver messages to real
+inboxes. FastAPI sends SMTP messages to the `mailpit` Compose service on port
+`1025`, and developers inspect them in the Mailpit web UI on port `8025`.
+
+EarnIt currently uses email for:
+
+- account verification codes;
+- forgotten-password reset codes;
+- parental PIN reset codes.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as React frontend
+    participant API as FastAPI
+    participant Mailpit as Mailpit SMTP + Web UI
+    actor Developer
+
+    User->>UI: Submit registration or recovery request
+    UI->>API: POST /api/v1/auth/...
+    API->>Mailpit: Send code over SMTP :1025
+    API-->>UI: Return request status
+    Developer->>Mailpit: Open http://localhost:8025
+    Mailpit-->>Developer: Display captured email and code
+```
+
+Mail configuration is controlled by the backend environment:
+
+| Variable | Development default | Description |
+| --- | --- | --- |
+| `MAIL_SERVER` | `mailpit` | SMTP hostname inside Docker Compose |
+| `MAIL_PORT` | `1025` | Mailpit SMTP port |
+| `MAIL_FROM` | `noreply@earnit.app` | Sender address |
+
+When running FastAPI directly on the host instead of in Docker, set
+`MAIL_SERVER=localhost`.
+
+## Development Modes
+
+### Full stack
+
+Use the root Compose file when testing the application end to end:
+
 ```bash
 docker compose up --build
 ```
 
-# Development Architecture Backend
-For development, you can run the full stack or run the backend and frontend separately (as shown below). Backend-only runs expose the API directly on port 8000 for `/docs`, while frontend-only runs expose the Vite dev server on port 3000.
-
 ```mermaid
-graph TD
-    %% External Client / User
-    User((User / Browser)) -->|Port 80| Proxy
-
-    %% Services Block
-    subgraph Docker_Compose [Docker Compose Network]
-        
-        %% Proxy Service
-        Proxy[nginx-proxy <br> nginx:1.25-alpine]
-        
-        %% Frontend Service
-        Frontend[frontend <br> Bun + Vite]
-        
-        %% API Service
-        API[earnIt_api <br> FastAPI]
-        
-        %% Database Service
-        DB[(earnIt_db <br> postgres:17-alpine)]
-        
-        %% Named Volumes
-        PostgresVolume[(postgres_data)]
-    end
-
-    %% Internal routing from Proxy
-    Proxy -->|Routes Traffic| Frontend
-    Proxy -->|Routes Traffic| API
-
-    %% Internal service dependencies
-    API -->|Depends on Healthy DB| DB
-    DB -.->|Persists Data| PostgresVolume
-
-    %% Styling
-    style User fill:#f9f,stroke:#333,stroke-width:2px
-    style Proxy fill:#bbf,stroke:#333,stroke-width:2px
-    style DB fill:#ffb,stroke:#333,stroke-width:2px
-    style PostgresVolume fill:#ddd,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5
+flowchart TD
+    Browser([Browser]) -->|port 80| Proxy[Nginx]
+    Proxy --> Frontend[Frontend container]
+    Proxy --> API[API container]
+    API --> DB[(PostgreSQL)]
+    API -->|SMTP| Mailpit[Mailpit]
 ```
 
-# Development Architecture Backend
-```mermaid
-graph TD
-    %% External Developer Access
-    Dev([Developer / API Client]) -->|Port 8000| API
-    Dev -->|Port 5432| DB
+### Backend only
 
-    %% Backend Environment Subgraph
-    subgraph Backend_Stack [Backend Dev Environment]
-        
-        %% API Service
-        API[earnIt_api <br> FastAPI Container]
-        
-        %% DB Service
-        DB[(earnIt_db <br> postgres:17-alpine)]
-        
-        %% Data and Init Configs
-        PostgresVolume[(postgres_data Volume)]
-    end
+The backend Compose stack starts FastAPI, PostgreSQL, and Mailpit:
 
-    %% Dependencies and Mounts
-    API -->|Depends on Healthy DB| DB
-    DB -.->|Persists Data| PostgresVolume
-
-    %% Styling
-    style Dev fill:#f9f,stroke:#333,stroke-width:2px
-    style API fill:#bbf,stroke:#333,stroke-width:2px
-    style DB fill:#ffb,stroke:#333,stroke-width:2px
-    style PostgresVolume fill:#ddd,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5
+```bash
+cd backend
+docker compose up --build
 ```
 
-# Development Architecture Frontend
+- API documentation: <http://localhost:8000/docs>
+- Mailpit: <http://localhost:8025>
+- PostgreSQL: `localhost:5432`
+
 ```mermaid
-graph TD
-    %% External Browser Access
-    Browser([User / Browser]) -->|Port 3000| Frontend
-
-    %% Frontend Environment Subgraph
-    subgraph Frontend_Stack [Frontend Dev Environment]
-        
-        %% Frontend Service
-        Frontend[frontend <br> Bun + Vite Dev Server]
-    end
-
-    %% Styling
-    style Browser fill:#f9f,stroke:#333,stroke-width:2px
-    style Frontend fill:#bbf,stroke:#333,stroke-width:2px
+flowchart LR
+    Client([API client]) -->|port 8000| API[FastAPI]
+    API --> DB[(PostgreSQL)]
+    API -->|SMTP port 1025| Mailpit[Mailpit]
+    Developer([Developer]) -->|Web UI port 8025| Mailpit
 ```
 
-# Contribution Guide
+### Frontend only
 
-See [docs/contribute_guide.md](docs/contribute_guide.md).
+```bash
+cd frontend
+docker compose up --build
+```
 
-# AI Usage section
+The containerized frontend is available at <http://localhost:3000>. For local
+development with Bun, see the [frontend README](frontend/README.md).
 
-## Phase 1
-- **Gemini** helped in all documentation (deliverables of Phase 1).
-- **Google Stich** is being used to generate the wireframes and low-fidelity prototypes of the application.
-- **Gemini** helped configure the project folder structure and create compose-yaml with the servicos defined by the Product Owner.
-- **NootbookLM** is being used for its sources to be the source of truth, for any question about the current state of the project, stack, which epic is being attacked...etc.
+## Repository Structure
 
-## Phase 2
-- **GPT-5.2-Codex** helps build the CI pipelines, documentation, and compose services to run the full stack, following my guides.
+```text
+.
+├── backend/            FastAPI application, migrations, tests, and backend Compose stack
+├── frontend/           React application and frontend Compose stack
+├── nginx-config/       Nginx routing configuration
+├── docs/               Project contribution documentation
+├── compose.yaml        Full-stack Docker Compose definition
+├── Makefile            Full-stack convenience commands
+└── CODEX.md            Project engineering guidelines
+```
+
+## Contribution Guide
+
+See the [contribution guide](docs/contribute_guide.md) and
+[project coding guidelines](CODEX.md).
+
+## AI Usage
+
+### Phase 1
+
+- **Gemini** assisted with Phase 1 documentation and the initial repository
+  structure.
+- **Google Stitch** was used to generate wireframes and low-fidelity
+  prototypes.
+- **NotebookLM** was used as a project knowledge source.
+
+### Phase 2
+
+- **GPT-5.2-Codex** assisted with CI pipelines, documentation, and Docker
+  Compose services.
