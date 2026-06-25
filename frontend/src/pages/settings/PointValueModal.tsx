@@ -4,6 +4,7 @@ import { Modal } from "@/components/Modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/context/useToast";
 import { setPointValue } from "@/services/profileService";
 
 type PointValueModalProps = {
@@ -13,9 +14,9 @@ type PointValueModalProps = {
 };
 
 const PointValueModal = ({ initialPointValue, onClose, onSaved }: PointValueModalProps) => {
+  const { showToast } = useToast();
   const [pointValueInput, setPointValueInput] = useState(initialPointValue);
   const [submitting, setSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
 
   const previewEuros = pointValueInput
     ? (Number(pointValueInput) * 100).toLocaleString("pt-PT", {
@@ -29,28 +30,28 @@ const PointValueModal = ({ initialPointValue, onClose, onSaved }: PointValueModa
 
     const pointValue = Number(pointValueInput);
     if (!Number.isFinite(pointValue) || pointValue <= 0 || pointValue > 1000) {
-      setErrorMessage("O valor de 1 ponto deve estar entre 0 e 1000 €.");
+      showToast("O valor de 1 ponto deve estar entre 0 e 1000 €.", "error");
       return;
     }
 
     // The backend stores up to 4 decimal places (e.g. 0.0001 = 100 pontos por 0,01 €).
     const decimals = (pointValueInput.split(".")[1] ?? "").length;
     if (decimals > 4) {
-      setErrorMessage("Use no máximo 4 casas decimais (ex.: 0,0001).");
+      showToast("Use no máximo 4 casas decimais (ex.: 0,0001).", "error");
       return;
     }
 
     setSubmitting(true);
-    setErrorMessage("");
 
     try {
       const next = await setPointValue(pointValueInput.trim());
       onSaved(String(Number(next.point_value_eur)), "Conversão de pontos atualizada.");
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível atualizar a conversão de pontos.",
+        "error",
       );
     } finally {
       setSubmitting(false);
@@ -66,12 +67,6 @@ const PointValueModal = ({ initialPointValue, onClose, onSaved }: PointValueModa
       <p className="mt-2 text-xs leading-5 text-[#59625a]">
         Nota: a recompensa mínima de uma tarefa é sempre 1 ponto.
       </p>
-
-      {errorMessage ? (
-        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-          {errorMessage}
-        </p>
-      ) : null}
 
       <form onSubmit={savePointsConversion} className="mt-4">
         <div className="space-y-2">

@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/context/useToast";
 import { apiFetch } from "@/lib/api";
 import {
   type FieldErrors,
@@ -24,12 +25,12 @@ type RegisterField = "email" | "password" | "confirmPassword";
 
 const RegistrationPage = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [formError, setFormError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors<RegisterField>>({});
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [submittedOnce, setSubmittedOnce] = useState(false);
@@ -76,15 +77,15 @@ const RegistrationPage = () => {
       navigate("/verification");
     },
     onError: (error: unknown) => {
-      setFormError(
+      showToast(
         error instanceof Error ? error.message : "Não foi possível criar a conta.",
+        "error",
       );
     },
   });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setFormError("");
     setSubmittedOnce(true);
     const nextErrors = validateForm();
 
@@ -106,7 +107,6 @@ const RegistrationPage = () => {
           onChange={(value) => {
             setEmail(value);
             clearFieldError("email");
-            setFormError("");
           }}
         />
         <PasswordField
@@ -120,7 +120,6 @@ const RegistrationPage = () => {
             setPassword(value);
             clearFieldError("password");
             clearFieldError("confirmPassword");
-            setFormError("");
           }}
           onFocus={() => setPasswordFocused(true)}
           onVisibilityChange={setShowPassword}
@@ -140,17 +139,10 @@ const RegistrationPage = () => {
           onChange={(value) => {
             setConfirmPassword(value);
             clearFieldError("confirmPassword");
-            setFormError("");
           }}
           onVisibilityChange={setShowConfirmPassword}
           value={confirmPassword}
         />
-
-        {formError ? (
-          <p className="rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            {formError}
-          </p>
-        ) : null}
 
         <Button
           type="submit"

@@ -32,7 +32,6 @@ const OnboardingStep1Page = () => {
   const [childCount, setChildCount] = useState(
     draft.childCount ? String(draft.childCount) : "",
   );
-  const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors<Step1Field>>({});
 
   const validateForm = () => {
@@ -77,7 +76,6 @@ const OnboardingStep1Page = () => {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setError("");
 
     const trimmedFamilyName = familyName.trim();
 
@@ -147,7 +145,6 @@ const OnboardingStep1Page = () => {
                   onChange={(event) => {
                     setFamilyName(event.target.value);
                     clearFieldError("familyName");
-                    setError("");
                   }}
                   placeholder="ex.: Os Silvas"
                   aria-invalid={Boolean(fieldErrors.familyName)}
@@ -177,7 +174,6 @@ const OnboardingStep1Page = () => {
                   onChange={(event) => {
                     setChildCount(event.target.value);
                     clearFieldError("childCount");
-                    setError("");
                   }}
                   aria-invalid={Boolean(fieldErrors.childCount)}
                   aria-describedby={
@@ -199,12 +195,6 @@ const OnboardingStep1Page = () => {
               </div>
               <FieldError id="children-count-error" message={fieldErrors.childCount} />
             </div>
-
-            {error && (
-              <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-                {error}
-              </p>
-            )}
           </div>
 
           <div className="mt-10 flex justify-center">

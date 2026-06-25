@@ -4,6 +4,7 @@ import { Modal } from "@/components/Modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/context/useToast";
 import { updateFamilyName as updateFamilyNameRequest } from "@/services/profileService";
 
 type FamilyNameModalProps = {
@@ -13,30 +14,30 @@ type FamilyNameModalProps = {
 };
 
 const FamilyNameModal = ({ initialName, onClose, onSaved }: FamilyNameModalProps) => {
+  const { showToast } = useToast();
   const [nameInput, setNameInput] = useState(initialName);
   const [submitting, setSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const nextName = nameInput.trim();
     if (!nextName) {
-      setErrorMessage("Indique o nome da família.");
+      showToast("Indique o nome da família.", "error");
       return;
     }
 
     setSubmitting(true);
-    setErrorMessage("");
 
     try {
       await updateFamilyNameRequest(nextName);
       onSaved(nextName, "Nome da família atualizado.");
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível atualizar o nome da família.",
+        "error",
       );
     } finally {
       setSubmitting(false);
@@ -45,12 +46,6 @@ const FamilyNameModal = ({ initialName, onClose, onSaved }: FamilyNameModalProps
 
   return (
     <Modal title="Alterar nome" onClose={onClose} closeDisabled={submitting}>
-      {errorMessage ? (
-        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-          {errorMessage}
-        </p>
-      ) : null}
-
       <form onSubmit={save} className="mt-4">
         <div className="space-y-2">
           <Label htmlFor="family-name-input" className="text-[#404940]">

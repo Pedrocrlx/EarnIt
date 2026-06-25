@@ -5,16 +5,16 @@ import DashboardShell from "@/components/NavbarMobile";
 import { ParentPinDialog } from "@/components/ParentPinDialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/useAuth";
+import { useToast } from "@/context/useToast";
 import { getPointValue } from "@/services/profileService";
 import FamilyNameModal from "./FamilyNameModal";
 import PointValueModal from "./PointValueModal";
 
 const SettingsPage = () => {
   const { familyProfile, refreshSession, logout } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const familyName = familyProfile?.family_name?.trim() || "Família";
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const [pointValueInput, setPointValueInput] = useState("");
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [pointModalOpen, setPointModalOpen] = useState(false);
@@ -31,7 +31,7 @@ const SettingsPage = () => {
         }
       } catch {
         if (isMounted) {
-          setErrorMessage("Não foi possível carregar a conversão de pontos.");
+          showToast("Não foi possível carregar a conversão de pontos.", "error");
         }
       }
     };
@@ -41,12 +41,11 @@ const SettingsPage = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [showToast]);
 
   const onPinReset = () => {
     setPinDialogOpen(false);
-    setErrorMessage("");
-    setSuccessMessage("PIN parental redefinido.");
+    showToast("PIN parental redefinido.");
   };
 
   const logoutAndExit = async () => {
@@ -55,21 +54,17 @@ const SettingsPage = () => {
   };
 
   const openModal = (open: (value: boolean) => void) => {
-    setErrorMessage("");
-    setSuccessMessage("");
     open(true);
   };
 
   const onPointValueSaved = (pointValueEur: string, message: string) => {
     setPointValueInput(pointValueEur);
-    setErrorMessage("");
-    setSuccessMessage(message);
+    showToast(message);
     setPointModalOpen(false);
   };
 
   const onFamilyNameSaved = (_name: string, message: string) => {
-    setErrorMessage("");
-    setSuccessMessage(message);
+    showToast(message);
     setFamilyModalOpen(false);
     void refreshSession();
   };
@@ -93,18 +88,6 @@ const SettingsPage = () => {
               Definições
             </h1>
           </header>
-
-          {errorMessage ? (
-            <p className="w-full max-w-[946px] rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-              {errorMessage}
-            </p>
-          ) : null}
-
-          {successMessage ? (
-            <p className="w-full max-w-[946px] rounded-lg bg-[#eef7d1] px-4 py-3 text-sm font-semibold text-[#5f6800]">
-              {successMessage}
-            </p>
-          ) : null}
 
           <section className="grid w-full max-w-[946px] gap-6 lg:grid-cols-2">
             <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)] sm:p-6">

@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/useAuth";
+import { useToast } from "@/context/useToast";
 import { isFutureDate } from "@/lib/validation";
 import {
   createChild as createChildRequest,
@@ -44,6 +45,7 @@ const getTodayInputValue = () => {
 
 const ManageProfilesPage = () => {
   const { familyProfile, refreshSession } = useAuth();
+  const { showToast } = useToast();
   const familyName = familyProfile?.family_name?.trim() || "Família";
   const children = familyProfile?.children ?? [];
   const [childForm, setChildForm] = useState<CreateChildForm>(initialChildForm);
@@ -53,8 +55,6 @@ const ManageProfilesPage = () => {
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [editingBirthDate, setEditingBirthDate] = useState("");
   const [updatingChildId, setUpdatingChildId] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
 
   const actionIsRunning = mutationState !== "idle" || updatingChildId !== null;
 
@@ -67,26 +67,21 @@ const ManageProfilesPage = () => {
 
     const childName = childForm.name.trim();
     if (!childName) {
-      setErrorMessage("Indique o nome da criança.");
-      setSuccessMessage("");
+      showToast("Indique o nome da criança.", "error");
       return;
     }
 
     if (avatarFile && !avatarContentTypes.includes(avatarFile.type)) {
-      setErrorMessage("O avatar deve ser uma imagem JPEG, PNG ou WebP.");
-      setSuccessMessage("");
+      showToast("O avatar deve ser uma imagem JPEG, PNG ou WebP.", "error");
       return;
     }
 
     if (avatarFile && avatarFile.size > avatarMaxBytes) {
-      setErrorMessage("O avatar não pode exceder 5 MB.");
-      setSuccessMessage("");
+      showToast("O avatar não pode exceder 5 MB.", "error");
       return;
     }
 
     setMutationState("creating-child");
-    setErrorMessage("");
-    setSuccessMessage("");
 
     try {
       const child = await createChildRequest({
@@ -103,10 +98,11 @@ const ManageProfilesPage = () => {
           setAvatarFile(null);
           setAvatarInputKey((currentKey) => currentKey + 1);
           await refreshFamily();
-          setErrorMessage(
+          showToast(
             caughtError instanceof Error
               ? `Perfil criado, mas não foi possível guardar o avatar: ${caughtError.message}`
               : "Perfil criado, mas não foi possível guardar o avatar.",
+            "error",
           );
           return;
         }
@@ -116,12 +112,13 @@ const ManageProfilesPage = () => {
       setAvatarFile(null);
       setAvatarInputKey((currentKey) => currentKey + 1);
       await refreshFamily();
-      setSuccessMessage("Perfil criado.");
+      showToast("Perfil criado.");
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível criar o perfil.",
+        "error",
       );
     } finally {
       setMutationState("idle");
@@ -131,8 +128,6 @@ const ManageProfilesPage = () => {
   const startEditingBirthDate = (child: (typeof children)[number]) => {
     setEditingChildId(child.id);
     setEditingBirthDate(child.birth_date ?? "");
-    setErrorMessage("");
-    setSuccessMessage("");
   };
 
   const saveBirthDate = async (event: FormEvent<HTMLFormElement>) => {
@@ -142,25 +137,23 @@ const ManageProfilesPage = () => {
     }
 
     if (isFutureDate(editingBirthDate)) {
-      setErrorMessage("A data de nascimento não pode ser no futuro.");
-      setSuccessMessage("");
+      showToast("A data de nascimento não pode ser no futuro.", "error");
       return;
     }
 
     setUpdatingChildId(editingChildId);
-    setErrorMessage("");
-    setSuccessMessage("");
 
     try {
       await updateChildBirthDate(editingChildId, editingBirthDate || null);
       setEditingChildId(null);
       await refreshFamily();
-      setSuccessMessage("Data de nascimento atualizada.");
+      showToast("Data de nascimento atualizada.");
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível atualizar a data de nascimento.",
+        "error",
       );
     } finally {
       setUpdatingChildId(null);
@@ -208,18 +201,6 @@ const ManageProfilesPage = () => {
               </div>
             </div>
           </section>
-
-          {errorMessage ? (
-            <p className="w-full max-w-[946px] rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-              {errorMessage}
-            </p>
-          ) : null}
-
-          {successMessage ? (
-            <p className="w-full max-w-[946px] rounded-lg bg-[#eef7d1] px-4 py-3 text-sm font-semibold text-[#5f6800]">
-              {successMessage}
-            </p>
-          ) : null}
 
           <section className="grid w-full max-w-[946px] gap-6 lg:grid-cols-2">
             <form
@@ -277,7 +258,6 @@ const ManageProfilesPage = () => {
                     accept="image/jpeg,image/png,image/webp"
                     onChange={(event) => {
                       setAvatarFile(event.target.files?.[0] ?? null);
-                      setErrorMessage("");
                     }}
                     disabled={actionIsRunning}
                     className="h-12 cursor-pointer rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] file:mr-3 file:border-0 file:bg-transparent file:text-sm file:font-semibold file:text-[#003514] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
@@ -363,7 +343,6 @@ const ManageProfilesPage = () => {
                           value={editingBirthDate}
                           onChange={(event) => {
                             setEditingBirthDate(event.target.value);
-                            setErrorMessage("");
                           }}
                           disabled={updatingChildId === child.id}
                           className="h-10 rounded-lg border-[#e1e2e4] bg-white"

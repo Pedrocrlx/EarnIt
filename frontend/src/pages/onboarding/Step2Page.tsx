@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/context/useToast";
 import { readDraft, writeDraft } from "@/lib/onboarding-draft";
 import { cn } from "@/lib/utils";
 import {
@@ -49,9 +50,9 @@ const getInitialChildren = (): ChildProfile[] => {
 
 const OnboardingStep2Page = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [children, setChildren] = useState<ChildProfile[]>(getInitialChildren);
   const [nextChildId, setNextChildId] = useState(children.length + 1);
-  const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const getFieldKey = (
@@ -105,10 +106,8 @@ const OnboardingStep2Page = () => {
   };
 
   const addChild = () => {
-    setError("");
-
     if (children.length >= MAX_CHILDREN_PER_USER) {
-      setError(`Pode adicionar até ${MAX_CHILDREN_PER_USER} crianças.`);
+      showToast(`Pode adicionar até ${MAX_CHILDREN_PER_USER} crianças.`, "error");
       return;
     }
 
@@ -140,7 +139,6 @@ const OnboardingStep2Page = () => {
     field: keyof Omit<ChildProfile, "id">,
     value: string,
   ) => {
-    setError("");
     clearChildError(id, field);
     setChildren((currentChildren) =>
       currentChildren.map((child) =>
@@ -150,8 +148,6 @@ const OnboardingStep2Page = () => {
   };
 
   const saveChildren = () => {
-    setError("");
-
     const nextErrors = validateChildren();
 
     if (Object.keys(nextErrors).length > 0) {
@@ -326,12 +322,6 @@ const OnboardingStep2Page = () => {
             </span>
             Adicionar outra criança
           </button>
-
-          {error && (
-            <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-              {error}
-            </p>
-          )}
         </form>
 
         <div className="grid w-full gap-4 sm:grid-cols-2">

@@ -11,6 +11,7 @@ import { Modal } from "@/components/Modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/context/useToast";
 import { eurosToPoints } from "@/lib/points";
 import { createTask as createTaskRequest } from "@/services/taskService";
 import type { TaskType } from "@/services/types";
@@ -69,11 +70,11 @@ const CreateTaskModal = ({
   onClose,
   onCreated,
 }: CreateTaskModalProps) => {
+  const { showToast } = useToast();
   const [taskForm, setTaskForm] = useState<CreateTaskForm>(initialTaskForm);
   const [descriptionVisible, setDescriptionVisible] = useState(false);
   const [expiresVisible, setExpiresVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
 
   const selectedChildIds = taskForm.childIds;
   const allChildrenSelected =
@@ -123,12 +124,11 @@ const CreateTaskModal = ({
     const title = taskForm.title.trim();
     const childIds = taskForm.childIds;
     if (!title || childIds.length === 0) {
-      setErrorMessage("Escolha pelo menos uma criança e indique o título da tarefa.");
+      showToast("Escolha pelo menos uma criança e indique o título da tarefa.", "error");
       return;
     }
 
     setSubmitting(true);
-    setErrorMessage("");
 
     const rewardAmount =
       taskForm.taskType === "duty"
@@ -153,8 +153,9 @@ const CreateTaskModal = ({
       );
       onCreated(childIds.length > 1 ? "Tarefas criadas." : "Tarefa criada.");
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error ? caughtError.message : "Não foi possível criar a tarefa.",
+        "error",
       );
     } finally {
       setSubmitting(false);
@@ -163,12 +164,6 @@ const CreateTaskModal = ({
 
   return (
     <Modal title="Nova tarefa" onClose={onClose} closeDisabled={submitting}>
-      {errorMessage ? (
-        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-          {errorMessage}
-        </p>
-      ) : null}
-
       <form onSubmit={createTask} className="mt-4">
           <div className="grid gap-4">
             <div className="space-y-2">

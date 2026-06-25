@@ -11,6 +11,7 @@ import { Modal } from "@/components/Modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/context/useToast";
 import { eurosToPoints } from "@/lib/points";
 import { updateTask as updateTaskRequest } from "@/services/taskService";
 import type { TaskResponse } from "@/services/types";
@@ -57,6 +58,7 @@ const EditTaskModal = ({
   onClose,
   onSaved,
 }: EditTaskModalProps) => {
+  const { showToast } = useToast();
   const isExtra = task.task_type === "extra_task";
   const initialExpiry = splitExpiry(task.expires_at);
 
@@ -72,7 +74,6 @@ const EditTaskModal = ({
   const [expiresTime, setExpiresTime] = useState(initialExpiry.time);
   const [expiresVisible, setExpiresVisible] = useState(Boolean(task.expires_at));
   const [submitting, setSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
 
   // Collapsing only hides the field and keeps any typed value; collapsed fields
   // are excluded (cleared) at save time — same rules as the create modal.
@@ -92,18 +93,17 @@ const EditTaskModal = ({
     event.preventDefault();
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
-      setErrorMessage("Indique o título da tarefa.");
+      showToast("Indique o título da tarefa.", "error");
       return;
     }
 
     const rewardPoints = eurosToPoints(rewardAmount, pointValueEur);
     if (isExtra && rewardPoints <= 0) {
-      setErrorMessage("A recompensa de uma tarefa extra deve ser maior que 0.");
+      showToast("A recompensa de uma tarefa extra deve ser maior que 0.", "error");
       return;
     }
 
     setSubmitting(true);
-    setErrorMessage("");
 
     try {
       await updateTaskRequest(task.id, {
@@ -114,10 +114,11 @@ const EditTaskModal = ({
       });
       onSaved("Tarefa atualizada.");
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível atualizar a tarefa.",
+        "error",
       );
     } finally {
       setSubmitting(false);
@@ -131,12 +132,6 @@ const EditTaskModal = ({
       onClose={onClose}
       closeDisabled={submitting}
     >
-      {errorMessage ? (
-        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-          {errorMessage}
-        </p>
-      ) : null}
-
       <form onSubmit={save} className="mt-4">
         <div className="grid gap-4">
           <div className="space-y-2">

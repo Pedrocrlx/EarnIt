@@ -21,6 +21,7 @@ import {
 } from "@/services/taskService";
 import type { TaskResponse } from "@/services/types";
 import { useAuth } from "@/context/useAuth";
+import { useToast } from "@/context/useToast";
 import CreateTaskModal from "./CreateTaskModal";
 import EditTaskModal from "./EditTaskModal";
 
@@ -46,6 +47,7 @@ const metaItemClass = "flex items-center gap-1.5 text-sm text-[#404940]";
 
 const TasksPage = () => {
   const { familyProfile } = useAuth();
+  const { showToast } = useToast();
   const children = useMemo(
     () => familyProfile?.children.filter((child) => child.is_active) ?? [],
     [familyProfile?.children],
@@ -54,8 +56,6 @@ const TasksPage = () => {
   const [editingTask, setEditingTask] = useState<TaskResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const [pointValueEur, setPointValueEur] = useState(0.01);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [taskView, setTaskView] = useState<"active" | "inactive">("active");
@@ -85,20 +85,20 @@ const TasksPage = () => {
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
-    setErrorMessage("");
 
     try {
       setTasks(await listTasks());
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível carregar as tarefas.",
+        "error",
       );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     // Synchronizes async server state with this page's local task list.
@@ -107,39 +107,34 @@ const TasksPage = () => {
   }, [loadTasks]);
 
   const handleCreated = (message: string) => {
-    setSuccessMessage(message);
-    setErrorMessage("");
+    showToast(message);
     setCreateModalOpen(false);
     void loadTasks();
   };
 
   const startEditTask = (task: TaskResponse) => {
-    setErrorMessage("");
-    setSuccessMessage("");
     setEditingTask(task);
   };
 
   const handleEdited = (message: string) => {
-    setSuccessMessage(message);
-    setErrorMessage("");
+    showToast(message);
     setEditingTask(null);
     void loadTasks();
   };
 
   const deleteTask = async (taskId: string) => {
     setBusyAction(`delete-${taskId}`);
-    setErrorMessage("");
-    setSuccessMessage("");
 
     try {
       await deleteTaskRequest(taskId);
       await loadTasks();
-      setSuccessMessage("Tarefa desativada.");
+      showToast("Tarefa desativada.");
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível desativar a tarefa.",
+        "error",
       );
     } finally {
       setBusyAction(null);
@@ -148,18 +143,17 @@ const TasksPage = () => {
 
   const reactivate = async (taskId: string) => {
     setBusyAction(`reactivate-${taskId}`);
-    setErrorMessage("");
-    setSuccessMessage("");
 
     try {
       await reactivateTaskRequest(taskId);
       await loadTasks();
-      setSuccessMessage("Tarefa reativada.");
+      showToast("Tarefa reativada.");
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível reativar a tarefa.",
+        "error",
       );
     } finally {
       setBusyAction(null);
@@ -196,18 +190,6 @@ const TasksPage = () => {
               />
             </Button>
           </header>
-
-          {errorMessage ? (
-            <p className="rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-              {errorMessage}
-            </p>
-          ) : null}
-
-          {successMessage ? (
-            <p className="rounded-lg bg-[#eef7d1] px-4 py-3 text-sm font-semibold text-[#5f6800]">
-              {successMessage}
-            </p>
-          ) : null}
 
           {createModalOpen ? (
             <CreateTaskModal

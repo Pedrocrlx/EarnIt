@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { PinPad } from "@/components/PinPad";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/useAuth";
+import { useToast } from "@/context/useToast";
 import { useSetPin } from "@/hooks/useSetPin";
 import { apiFetch } from "@/lib/api";
 import { clearDraft, readDraft } from "@/lib/onboarding-draft";
@@ -24,10 +25,10 @@ type PinResponse = {
 const OnboardingStep3Page = () => {
   const navigate = useNavigate();
   const { refreshSession } = useAuth();
+  const { showToast } = useToast();
   const { entry, phase, isConfirmed, confirmedPin, error, onChange, reset } =
     useSetPin();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
 
   // The draft holds the family name + children from steps 1-2; without them there
   // is nothing to submit, so send the user back to the start.
@@ -39,7 +40,6 @@ const OnboardingStep3Page = () => {
   }, [navigate]);
 
   const handlePinChange = (value: string) => {
-    setSubmitError("");
     onChange(value);
   };
 
@@ -59,7 +59,6 @@ const OnboardingStep3Page = () => {
     }
 
     setIsSubmitting(true);
-    setSubmitError("");
 
     try {
       await apiFetch("/profiles/family-name", {
@@ -94,10 +93,11 @@ const OnboardingStep3Page = () => {
         replace: true,
       });
     } catch (caughtError) {
-      setSubmitError(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível concluir a configuração. Tente novamente.",
+        "error",
       );
     } finally {
       setIsSubmitting(false);
@@ -189,9 +189,9 @@ const OnboardingStep3Page = () => {
               />
             </div>
 
-            {error || submitError ? (
+            {error ? (
               <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-center text-sm font-semibold text-red-700">
-                {error || submitError}
+                {error}
               </p>
             ) : null}
 

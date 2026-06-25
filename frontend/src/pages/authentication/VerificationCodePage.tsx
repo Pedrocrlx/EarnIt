@@ -10,6 +10,7 @@ import {
   VERIFICATION_CODE_LENGTH,
 } from "@/lib/validation";
 import { useAuth } from "@/context/useAuth";
+import { useToast } from "@/context/useToast";
 
 type VerifyCodeRequest = {
   code: string;
@@ -27,11 +28,10 @@ const OTP_LENGTH = VERIFICATION_CODE_LENGTH;
 
 export const VerificationCode = () => {
   const [code, setCode] = useState<string[]>(Array(OTP_LENGTH).fill(""));
-  const [message, setMessage] = useState("");
-  const [messageTone, setMessageTone] = useState<"neutral" | "error">("neutral");
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { showToast } = useToast();
 
   const isComplete = useMemo(() => code.every((digit) => digit !== ""), [code]);
 
@@ -45,7 +45,6 @@ export const VerificationCode = () => {
     const nextCode = [...code];
     nextCode[index] = sanitizedValue;
     setCode(nextCode);
-    setMessage("");
 
     if (sanitizedValue && index < OTP_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
@@ -75,7 +74,6 @@ export const VerificationCode = () => {
       nextCode[index + offset] = digit;
     });
     setCode(nextCode);
-    setMessage("");
 
     const nextFocusIndex = Math.min(
       index + pastedDigits.length,
@@ -94,7 +92,6 @@ export const VerificationCode = () => {
         const nextCode = [...code];
         nextCode[index] = "";
         setCode(nextCode);
-        setMessage("");
         return;
       }
 
@@ -102,7 +99,6 @@ export const VerificationCode = () => {
         const nextCode = [...code];
         nextCode[index - 1] = "";
         setCode(nextCode);
-        setMessage("");
         inputRefs.current[index - 1]?.focus();
         inputRefs.current[index - 1]?.select();
       }
@@ -144,8 +140,7 @@ export const VerificationCode = () => {
       });
     },
     onError: (error: unknown) => {
-      setMessageTone("error");
-      setMessage(getErrorMessage(error, "A verificação falhou"));
+      showToast(getErrorMessage(error, "A verificação falhou"), "error");
     },
   });
 
@@ -154,19 +149,17 @@ export const VerificationCode = () => {
       method: "POST",
     }),
     onSuccess: () => {
-      setMessageTone("neutral");
-      setMessage("Foi enviado um novo código de verificação.");
+      showToast("Foi enviado um novo código de verificação.");
     },
     onError: (error: unknown) => {
       if (error instanceof ApiError && error.status === 429) {
-        setMessageTone("neutral");
-        setMessage(
+        showToast(
           `Já enviámos um código há pouco. Aguarde ${retryWaitMessage(error)} antes de pedir outro.`,
+          "error",
         );
         return;
       }
-      setMessageTone("error");
-      setMessage(getErrorMessage(error, "Não foi possível reenviar o código"));
+      showToast(getErrorMessage(error, "Não foi possível reenviar o código"), "error");
     },
   });
 
@@ -176,12 +169,10 @@ export const VerificationCode = () => {
     const validationError = validateVerificationCode(joinedCode);
 
     if (validationError) {
-      setMessageTone("error");
-      setMessage(validationError);
+      showToast(validationError, "error");
       return;
     }
 
-    setMessage("");
     verifyMutation.mutate({ code: joinedCode });
   };
 
@@ -214,11 +205,7 @@ export const VerificationCode = () => {
             </div>
 
             <form className="w-full space-y-8" onSubmit={handleSubmit}>
-              <fieldset
-                className="flex justify-center gap-2"
-                aria-invalid={messageTone === "error"}
-                aria-describedby={message ? "verification-message" : undefined}
-              >
+              <fieldset className="flex justify-center gap-2">
                 <legend className="sr-only">
                   Introduza o código de verificação de {OTP_LENGTH} caracteres
                 </legend>
@@ -256,19 +243,6 @@ export const VerificationCode = () => {
                   );
                 })}
               </fieldset>
-
-              {message && (
-                <p
-                  id="verification-message"
-                  className={`rounded-lg px-4 py-3 text-center text-sm font-semibold ${
-                    messageTone === "error"
-                      ? "bg-red-50 text-red-700"
-                      : "bg-[#f3f4f6] text-[#003514]"
-                  }`}
-                >
-                  {message}
-                </p>
-              )}
 
               <Button
                 type="submit"

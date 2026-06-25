@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/useAuth";
+import { useToast } from "@/context/useToast";
 import { formatPoints } from "@/lib/points";
 import {
   getSelectedProfileId,
@@ -78,6 +79,7 @@ const pageMain = (children: React.ReactNode) => (
 
 const ChildGoals = () => {
   const { familyProfile } = useAuth();
+  const { showToast } = useToast();
   const selectedProfileId = getSelectedProfileId();
   const child = useMemo(
     () =>
@@ -91,13 +93,11 @@ const ChildGoals = () => {
   const [wallet, setWallet] = useState<WalletResponse | null>(null);
   const [wish, setWish] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     if (!child) {
       return;
     }
-    setError("");
     try {
       const [goals, walletData] = await Promise.all([
         listGoals(child.id),
@@ -106,13 +106,14 @@ const ChildGoals = () => {
       setData(goals);
       setWallet(walletData);
     } catch (caughtError) {
-      setError(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível carregar os objetivos.",
+        "error",
       );
     }
-  }, [child]);
+  }, [child, showToast]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -125,16 +126,16 @@ const ChildGoals = () => {
       return;
     }
     setBusy(true);
-    setError("");
     try {
       await requestGoal(child.id, name);
       setWish("");
       await load();
     } catch (caughtError) {
-      setError(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível enviar o pedido.",
+        "error",
       );
     } finally {
       setBusy(false);
@@ -182,11 +183,6 @@ const ChildGoals = () => {
             Fazer pedido
           </Button>
         </div>
-        {error ? (
-          <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            {error}
-          </p>
-        ) : null}
       </section>
 
       <section className="grid gap-3">
@@ -256,6 +252,7 @@ type GoalWithChild = Goal & { childName: string; balance: number };
 
 const ParentGoals = () => {
   const { familyProfile } = useAuth();
+  const { showToast } = useToast();
   const children = useMemo(
     () => familyProfile?.children.filter((item) => item.is_active) ?? [],
     [familyProfile?.children],
@@ -267,7 +264,6 @@ const ParentGoals = () => {
   const [pointValueEur, setPointValueEur] = useState(0.01);
   const [targets, setTargets] = useState<Record<string, string>>({});
   const [busyGoalId, setBusyGoalId] = useState<string | null>(null);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     void getPointValue()
@@ -280,7 +276,6 @@ const ParentGoals = () => {
       setEntries([]);
       return;
     }
-    setError("");
     try {
       const results = await Promise.all(
         children.map(async (child) => {
@@ -294,13 +289,14 @@ const ParentGoals = () => {
       );
       setEntries(results);
     } catch (caughtError) {
-      setError(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível carregar os objetivos.",
+        "error",
       );
     }
-  }, [children]);
+  }, [children, showToast]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -309,15 +305,15 @@ const ParentGoals = () => {
 
   const runGoalAction = async (goalId: string, action: () => Promise<unknown>) => {
     setBusyGoalId(goalId);
-    setError("");
     try {
       await action();
       await load();
     } catch (caughtError) {
-      setError(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível atualizar o objetivo.",
+        "error",
       );
     } finally {
       setBusyGoalId(null);
@@ -328,7 +324,7 @@ const ParentGoals = () => {
     const euros = Number(targets[goal.id]);
     const points = pointValueEur > 0 ? Math.round((euros || 0) / pointValueEur) : 0;
     if (!points || points <= 0) {
-      setError("Indique um valor de objetivo maior que zero.");
+      showToast("Indique um valor de objetivo maior que zero.", "error");
       return;
     }
     void runGoalAction(goal.id, () => approveGoal(goal.child_id, goal.id, points));
@@ -362,11 +358,6 @@ const ParentGoals = () => {
         </p>
       ) : (
         <>
-          {error ? (
-            <p className="rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-              {error}
-            </p>
-          ) : null}
 
           <section className="rounded-2xl border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
             <h2 className="flex items-center gap-2 text-lg font-bold text-[#003514]">

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/context/useToast";
 import { validateEmail, validateRequired } from "@/lib/validation";
 import { verifyPasswordResetCode } from "@/services/authService";
 import { EmailField } from "./AuthFields";
@@ -20,11 +21,11 @@ const VerifyResetCodePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as LocationState | null;
+  const { showToast } = useToast();
   const [email, setEmail] = useState(locationState?.email ?? "");
   const [code, setCode] = useState("");
   const [emailError, setEmailError] = useState("");
   const [codeError, setCodeError] = useState("");
-  const [formError, setFormError] = useState("");
 
   const mutation = useMutation({
     mutationFn: verifyPasswordResetCode,
@@ -32,13 +33,15 @@ const VerifyResetCodePage = () => {
       navigate("/reset-password", { replace: true });
     },
     onError: (error: unknown) => {
-      setFormError(error instanceof Error ? error.message : "Não foi possível validar o código.");
+      showToast(
+        error instanceof Error ? error.message : "Não foi possível validar o código.",
+        "error",
+      );
     },
   });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setFormError("");
 
     const nextEmailError = validateEmail(email);
     const nextCodeError = validateRequired(code, "Introduza o código recebido por email.");
@@ -61,7 +64,6 @@ const VerifyResetCodePage = () => {
           onChange={(value) => {
             setEmail(value);
             setEmailError("");
-            setFormError("");
           }}
         />
 
@@ -75,7 +77,6 @@ const VerifyResetCodePage = () => {
             onChange={(event) => {
               setCode(event.target.value.trim());
               setCodeError("");
-              setFormError("");
             }}
             aria-invalid={Boolean(codeError)}
             aria-describedby={codeError ? "reset-code-error" : undefined}
@@ -83,12 +84,6 @@ const VerifyResetCodePage = () => {
           />
           <FieldError id="reset-code-error" message={codeError} />
         </div>
-
-        {formError ? (
-          <p className="rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            {formError}
-          </p>
-        ) : null}
 
         <Button
           type="submit"

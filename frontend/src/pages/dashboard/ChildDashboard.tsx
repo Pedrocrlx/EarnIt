@@ -14,6 +14,7 @@ import { Link } from "react-router-dom";
 import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/useAuth";
+import { useToast } from "@/context/useToast";
 import { formatPoints } from "@/lib/points";
 import { getSelectedProfileId } from "@/lib/profile-selection";
 import { cn } from "@/lib/utils";
@@ -83,6 +84,7 @@ const getTaskAction = (task: ChildTaskResponse): TaskAction => {
 
 const ChildDashboard = () => {
   const { familyProfile } = useAuth();
+  const { showToast } = useToast();
   const selectedProfileId = getSelectedProfileId();
   const selectedChild = useMemo(
     () =>
@@ -95,8 +97,6 @@ const ChildDashboard = () => {
   const [wallet, setWallet] = useState<WalletResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
 
   const loadDashboard = useCallback(async () => {
     if (!selectedChild) {
@@ -105,7 +105,6 @@ const ChildDashboard = () => {
     }
 
     setLoading(true);
-    setErrorMessage("");
 
     try {
       const [nextTasks, nextWallet] = await Promise.all([
@@ -115,15 +114,16 @@ const ChildDashboard = () => {
       setTasks(nextTasks);
       setWallet(nextWallet);
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível carregar o painel.",
+        "error",
       );
     } finally {
       setLoading(false);
     }
-  }, [selectedChild]);
+  }, [selectedChild, showToast]);
 
   useEffect(() => {
     // Synchronizes async server state with the selected child dashboard.
@@ -137,18 +137,17 @@ const ChildDashboard = () => {
     }
 
     setBusyAction(`submit-${task.id}`);
-    setErrorMessage("");
-    setSuccessMessage("");
 
     try {
       await submitTaskRequest(selectedChild.id, task.id);
       await loadDashboard();
-      setSuccessMessage("Tarefa enviada para aprovação.");
+      showToast("Tarefa enviada para aprovação.");
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível enviar a tarefa.",
+        "error",
       );
     } finally {
       setBusyAction(null);
@@ -161,18 +160,17 @@ const ChildDashboard = () => {
     }
 
     setBusyAction(`resubmit-${submissionId}`);
-    setErrorMessage("");
-    setSuccessMessage("");
 
     try {
       await resubmitTaskRequest(selectedChild.id, submissionId);
       await loadDashboard();
-      setSuccessMessage("Tarefa reenviada para aprovação.");
+      showToast("Tarefa reenviada para aprovação.");
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível reenviar a tarefa.",
+        "error",
       );
     } finally {
       setBusyAction(null);
@@ -272,18 +270,6 @@ const ChildDashboard = () => {
                 </p>
               </article>
             </section>
-
-            {errorMessage ? (
-              <p className="w-full rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-                {errorMessage}
-              </p>
-            ) : null}
-
-            {successMessage ? (
-              <p className="w-full rounded-lg bg-[#eef7d1] px-4 py-3 text-sm font-semibold text-[#5f6800]">
-                {successMessage}
-              </p>
-            ) : null}
 
             <section className="grid w-full gap-6 xl:grid-cols-[1fr_320px]">
               <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">

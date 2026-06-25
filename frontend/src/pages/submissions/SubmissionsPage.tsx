@@ -13,6 +13,7 @@ import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/useAuth";
+import { useToast } from "@/context/useToast";
 import { formatEuros } from "@/lib/points";
 import { getPointValue } from "@/services/profileService";
 import {
@@ -52,6 +53,7 @@ const metaItemClass = "flex items-center gap-1.5 text-sm text-[#404940]";
 
 const SubmissionsPage = () => {
   const { familyProfile } = useAuth();
+  const { showToast } = useToast();
   const children = useMemo(
     () => familyProfile?.children.filter((child) => child.is_active) ?? [],
     [familyProfile?.children],
@@ -62,8 +64,6 @@ const SubmissionsPage = () => {
   const [rejectionNote, setRejectionNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const [pointValueEur, setPointValueEur] = useState(0.01);
   const [submissionView, setSubmissionView] = useState<
     "pending" | "approved" | "rejected"
@@ -116,7 +116,6 @@ const SubmissionsPage = () => {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    setErrorMessage("");
 
     try {
       const [nextTasks, nextSubmissions] = await Promise.all([
@@ -126,15 +125,16 @@ const SubmissionsPage = () => {
       setTasks(nextTasks);
       setSubmissions(nextSubmissions);
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível carregar as submissões.",
+        "error",
       );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     // Synchronizes async server state with this page's local submission review UI.
@@ -144,18 +144,17 @@ const SubmissionsPage = () => {
 
   const approveSubmission = async (submissionId: string) => {
     setBusyAction(`approve-${submissionId}`);
-    setErrorMessage("");
-    setSuccessMessage("");
 
     try {
       await approveTaskSubmission(submissionId);
       await loadData();
-      setSuccessMessage("Submissão aprovada.");
+      showToast("Submissão aprovada.");
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível aprovar a submissão.",
+        "error",
       );
     } finally {
       setBusyAction(null);
@@ -169,20 +168,19 @@ const SubmissionsPage = () => {
     }
 
     setBusyAction(`reject-${rejectingSubmissionId}`);
-    setErrorMessage("");
-    setSuccessMessage("");
 
     try {
       await rejectTaskSubmission(rejectingSubmissionId, rejectionNote.trim() || null);
       setRejectingSubmissionId(null);
       setRejectionNote("");
       await loadData();
-      setSuccessMessage("Submissão rejeitada.");
+      showToast("Submissão rejeitada.");
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível rejeitar a submissão.",
+        "error",
       );
     } finally {
       setBusyAction(null);
@@ -191,18 +189,17 @@ const SubmissionsPage = () => {
 
   const approveAll = async () => {
     setBusyAction("approve-all");
-    setErrorMessage("");
-    setSuccessMessage("");
 
     try {
       const response = await approveAllSubmissions();
       await loadData();
-      setSuccessMessage(`${response.approved} submissões aprovadas.`);
+      showToast(`${response.approved} submissões aprovadas.`);
     } catch (caughtError) {
-      setErrorMessage(
+      showToast(
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível aprovar as submissões.",
+        "error",
       );
     } finally {
       setBusyAction(null);
@@ -246,18 +243,6 @@ const SubmissionsPage = () => {
               />
             </Button>
           </header>
-
-          {errorMessage ? (
-            <p className="rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-              {errorMessage}
-            </p>
-          ) : null}
-
-          {successMessage ? (
-            <p className="rounded-lg bg-[#eef7d1] px-4 py-3 text-sm font-semibold text-[#5f6800]">
-              {successMessage}
-            </p>
-          ) : null}
 
           <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
