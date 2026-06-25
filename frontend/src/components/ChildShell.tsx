@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ListChecks, Repeat, Sparkles, Target } from "lucide-react";
+import { ListBulletIcon, LoopIcon, MagicWandIcon, TargetIcon } from "@radix-ui/react-icons";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/useAuth";
@@ -14,8 +14,8 @@ type ChildShellProps = {
 };
 
 const tabs = [
-  { name: "Tarefas", path: "/dashboard", icon: ListChecks },
-  { name: "Objetivos", path: "/dashboard/goals", icon: Target },
+  { name: "Tarefas", path: "/dashboard", icon: ListBulletIcon },
+  { name: "Objetivos", path: "/dashboard/goals", icon: TargetIcon },
 ];
 
 export const ChildShell = ({ points, loading = false, children }: ChildShellProps) => {
@@ -61,7 +61,7 @@ export const ChildShell = ({ points, loading = false, children }: ChildShellProp
 
           <div className="flex shrink-0 items-center gap-2">
             <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-sm font-bold">
-              <Sparkles className="size-4 text-[#d4e251]" aria-hidden="true" />
+              <MagicWandIcon className="size-4 text-[#d4e251]" aria-hidden="true" />
               {loading ? "–" : formatPoints(points)}
             </span>
             <Button
@@ -72,7 +72,7 @@ export const ChildShell = ({ points, loading = false, children }: ChildShellProp
               aria-label="Trocar perfil"
               className="size-10 rounded-full text-white hover:bg-white/10 hover:text-white"
             >
-              <Repeat className="size-5" aria-hidden="true" />
+              <LoopIcon className="size-5" aria-hidden="true" />
             </Button>
           </div>
         </div>

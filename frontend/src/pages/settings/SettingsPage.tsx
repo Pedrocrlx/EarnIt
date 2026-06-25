@@ -1,4 +1,4 @@
-import { KeyRound, LogOut, Pencil, Sigma } from "lucide-react";
+import { ExitIcon, LockClosedIcon, Pencil1Icon, ValueIcon } from "@radix-ui/react-icons";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardShell from "@/components/NavbarMobile";
@@ -93,7 +93,7 @@ const SettingsPage = () => {
             <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)] sm:p-6">
               <div className="flex items-center gap-3">
                 <span className="flex size-10 items-center justify-center rounded-full bg-[#eef7d1] text-[#5f6800]">
-                  <Sigma className="size-5" aria-hidden="true" />
+                  <ValueIcon className="size-5" aria-hidden="true" />
                 </span>
                 <div>
                   <h2 className="text-lg font-bold text-[#003514]">Conversão de pontos</h2>
@@ -117,7 +117,7 @@ const SettingsPage = () => {
                 disabled={!pointValueInput}
                 className="mt-5 h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
               >
-                <Sigma className="mr-2 size-4" aria-hidden="true" />
+                <ValueIcon className="mr-2 size-4" aria-hidden="true" />
                 Alterar conversão
               </Button>
             </section>
@@ -133,7 +133,7 @@ const SettingsPage = () => {
                 onClick={() => openModal(setFamilyModalOpen)}
                 className="mt-5 h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
               >
-                <Pencil className="mr-2 size-4" aria-hidden="true" />
+                <Pencil1Icon className="mr-2 size-4" aria-hidden="true" />
                 Alterar nome
               </Button>
             </section>
@@ -150,7 +150,7 @@ const SettingsPage = () => {
                 onClick={() => openModal(setPinDialogOpen)}
                 className="mt-5 h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
               >
-                <KeyRound className="mr-2 size-4" aria-hidden="true" />
+                <LockClosedIcon className="mr-2 size-4" aria-hidden="true" />
                 Redefinir PIN
               </Button>
             </section>
@@ -167,7 +167,7 @@ const SettingsPage = () => {
               onClick={logoutAndExit}
               className="mt-5 h-11 rounded-full bg-[#fff4de] px-5 text-sm font-semibold text-[#7a4100] hover:bg-[#ffe9c2] hover:text-[#7a4100] disabled:opacity-60"
             >
-              <LogOut className="mr-2 size-4" aria-hidden="true" />
+              <ExitIcon className="mr-2 size-4" aria-hidden="true" />
               Terminar sessão
             </Button>
           </section>

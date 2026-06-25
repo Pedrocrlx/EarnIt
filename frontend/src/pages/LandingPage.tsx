@@ -1,4 +1,4 @@
-import { ClipboardList, Gift, ShieldCheck } from "lucide-react";
+import { BoxIcon, ClipboardIcon, LockClosedIcon } from "@radix-ui/react-icons";
 import { useNavigate } from "react-router-dom";
 
 import Logo from "@/components/Logo";
@@ -9,21 +9,21 @@ const howItWorksSteps = [
   {
     title: "Atribuir tarefas",
     description: "Os pais definem tarefas, pontos e prazos em segundos.",
-    icon: ClipboardList,
+    icon: ClipboardIcon,
     iconColor: "text-white",
     iconBg: "bg-[#034e22]",
   },
   {
     title: "As crianças ganham",
     description: "As crianças concluem tarefas, ganham pontos e sobem de nível.",
-    icon: ShieldCheck,
+    icon: LockClosedIcon,
     iconColor: "text-[#1a1d00]",
     iconBg: "bg-[#deec5a]",
   },
   {
     title: "Trocar recompensas",
     description: "Os pontos transformam-se em prémios, tempo de ecrã ou semanada.",
-    icon: Gift,
+    icon: BoxIcon,
     iconColor: "text-white",
     iconBg: "bg-[#034e22]",
   },

@@ -1,14 +1,4 @@
-import {
-  CalendarCheck2,
-  CheckCircle2,
-  ChevronRight,
-  Coins,
-  Inbox,
-  LoaderCircle,
-  RefreshCw,
-  Target,
-  XCircle,
-} from "lucide-react";
+import { ArchiveIcon, CalendarIcon, CheckCircledIcon, ChevronRightIcon, CrossCircledIcon, ReloadIcon, StarIcon, TargetIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import DashboardShell from "@/components/NavbarMobile";
@@ -272,7 +262,7 @@ const DashboardPage = () => {
               aria-label="Atualizar"
               className="size-11 shrink-0 rounded-full border border-[#e1e2e4] text-[#003514] hover:bg-white"
             >
-              <RefreshCw
+              <ReloadIcon
                 className={`size-5 ${loading ? "animate-spin" : ""}`}
                 aria-hidden="true"
               />
@@ -283,7 +273,7 @@ const DashboardPage = () => {
           <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
-                <Inbox className="size-5 text-[#003514]" aria-hidden="true" />
+                <ArchiveIcon className="size-5 text-[#003514]" aria-hidden="true" />
                 <h2 className="text-lg font-bold text-[#003514]">Submissões por rever</h2>
                 {countChip(pendingSubmissions.length)}
               </div>
@@ -295,9 +285,9 @@ const DashboardPage = () => {
                   className="h-10 rounded-full bg-[#d4e251] px-4 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
                 >
                   {busyAction === "approve-all" ? (
-                    <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                    <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />
                   ) : (
-                    <CheckCircle2 className="mr-2 size-4" aria-hidden="true" />
+                    <CheckCircledIcon className="mr-2 size-4" aria-hidden="true" />
                   )}
                   Aprovar todas
                 </Button>
@@ -308,7 +298,7 @@ const DashboardPage = () => {
                 >
                   <Link to="/dashboard/submissions">
                     Ver todas
-                    <ChevronRight className="ml-1 size-3.5" aria-hidden="true" />
+                    <ChevronRightIcon className="ml-1 size-3.5" aria-hidden="true" />
                   </Link>
                 </Button>
               </div>
@@ -333,7 +323,7 @@ const DashboardPage = () => {
                             </h3>
                             {isExtra && task ? (
                               <span className="flex items-center gap-1.5 rounded-full bg-[#eef7d1] px-2.5 py-1 text-xs font-semibold text-[#5f6800]">
-                                <Coins className="size-3.5" aria-hidden="true" />
+                                <StarIcon className="size-3.5" aria-hidden="true" />
                                 {formatEuros(Number(task.reward_amount) * pointValueEur)}
                               </span>
                             ) : null}
@@ -353,9 +343,9 @@ const DashboardPage = () => {
                             className="h-9 rounded-full bg-[#d4e251] px-3 text-xs font-semibold text-[#003514] hover:bg-[#cfdc42]"
                           >
                             {busyAction === `approve-${submission.id}` ? (
-                              <LoaderCircle className="mr-2 size-3.5 animate-spin" aria-hidden="true" />
+                              <UpdateIcon className="mr-2 size-3.5 animate-spin" aria-hidden="true" />
                             ) : (
-                              <CheckCircle2 className="mr-2 size-3.5" aria-hidden="true" />
+                              <CheckCircledIcon className="mr-2 size-3.5" aria-hidden="true" />
                             )}
                             Aprovar
                           </Button>
@@ -366,7 +356,7 @@ const DashboardPage = () => {
                             disabled={actionIsRunning}
                             className="h-9 rounded-full px-3 text-xs font-semibold text-[#7a4100] hover:bg-[#fff4de] hover:text-[#7a4100]"
                           >
-                            <XCircle className="mr-2 size-3.5" aria-hidden="true" />
+                            <CrossCircledIcon className="mr-2 size-3.5" aria-hidden="true" />
                             Rejeitar
                           </Button>
                         </div>
@@ -408,7 +398,7 @@ const DashboardPage = () => {
           <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
-                <Target className="size-5 text-[#003514]" aria-hidden="true" />
+                <TargetIcon className="size-5 text-[#003514]" aria-hidden="true" />
                 <h2 className="text-lg font-bold text-[#003514]">Pedidos de objetivos</h2>
                 {countChip(requestedGoals.length)}
               </div>
@@ -419,7 +409,7 @@ const DashboardPage = () => {
               >
                 <Link to="/dashboard/goals">
                   Ver objetivos
-                  <ChevronRight className="ml-1 size-3.5" aria-hidden="true" />
+                  <ChevronRightIcon className="ml-1 size-3.5" aria-hidden="true" />
                 </Link>
               </Button>
             </div>
@@ -476,7 +466,7 @@ const DashboardPage = () => {
                             className="h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
                           >
                             {busyAction === `goal-${goal.id}` ? (
-                              <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                              <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />
                             ) : null}
                             Aprovar
                           </Button>
@@ -508,7 +498,7 @@ const DashboardPage = () => {
           <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                <CalendarCheck2 className="size-5 text-[#003514]" aria-hidden="true" />
+                <CalendarIcon className="size-5 text-[#003514]" aria-hidden="true" />
                 <h2 className="text-lg font-bold text-[#003514]">Tarefas extra</h2>
                 {countChip(activeExtraTasks.length)}
               </div>
@@ -519,7 +509,7 @@ const DashboardPage = () => {
               >
                 <Link to="/dashboard/tasks">
                   Ver todas
-                  <ChevronRight className="ml-1 size-3.5" aria-hidden="true" />
+                  <ChevronRightIcon className="ml-1 size-3.5" aria-hidden="true" />
                 </Link>
               </Button>
             </div>
@@ -544,7 +534,7 @@ const DashboardPage = () => {
                       </p>
                     </div>
                     <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#eef7d1] px-2.5 py-1 text-xs font-semibold text-[#5f6800]">
-                      <Coins className="size-3.5" aria-hidden="true" />
+                      <StarIcon className="size-3.5" aria-hidden="true" />
                       {formatEuros(Number(task.reward_amount) * pointValueEur)}
                     </span>
                   </article>

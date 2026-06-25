@@ -1,4 +1,4 @@
-import { Check, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
+import { CheckIcon, MagicWandIcon, ReloadIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ChildShell from "@/components/ChildShell";
 import DashboardShell from "@/components/NavbarMobile";
@@ -126,7 +126,7 @@ const ChildGoals = () => {
 
       <section className="rounded-2xl border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
         <h2 className="flex items-center gap-2 text-lg font-bold text-[#003514]">
-          <Sparkles className="size-5" aria-hidden="true" /> Fazer um pedido
+          <MagicWandIcon className="size-5" aria-hidden="true" /> Fazer um pedido
         </h2>
         <div className="mt-4 flex flex-col gap-3 sm:flex-row">
           <Input
@@ -144,7 +144,7 @@ const ChildGoals = () => {
             className="h-12 rounded-full bg-[#d4e251] px-6 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
           >
             {busy ? (
-              <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
+              <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />
             ) : null}
             Fazer pedido
           </Button>
@@ -409,7 +409,7 @@ const ParentGoals = () => {
             className="h-10 shrink-0 rounded-full bg-[#003514] px-5 text-sm font-semibold text-[#d4e251] hover:bg-[#024d22] disabled:opacity-40"
           >
             {busyGoalId === goal.id ? (
-              <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
+              <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />
             ) : null}
             Resgatar
           </Button>
@@ -448,7 +448,7 @@ const ParentGoals = () => {
       >
         {goal.status === "redeemed" ? (
           <>
-            <Check className="size-3.5" aria-hidden="true" /> Resgatado
+            <CheckIcon className="size-3.5" aria-hidden="true" /> Resgatado
           </>
         ) : (
           "Recusado"
@@ -486,7 +486,7 @@ const ParentGoals = () => {
               aria-label="Atualizar"
               className="size-11 shrink-0 rounded-full border border-[#e1e2e4] text-[#003514] hover:bg-white"
             >
-              <RefreshCw
+              <ReloadIcon
                 className={`size-5 ${loading ? "animate-spin" : ""}`}
                 aria-hidden="true"
               />

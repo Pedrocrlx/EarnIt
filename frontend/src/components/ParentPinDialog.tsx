@@ -1,4 +1,4 @@
-import { ArrowLeft, LoaderCircle } from "lucide-react";
+import { ArrowLeftIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { Modal } from "@/components/Modal";
 import { PinPad } from "@/components/PinPad";
@@ -166,7 +166,7 @@ export const ParentPinDialog = ({
     setActionError("");
     try {
       await resetPinRequest({ code: code.trim(), new_pin: newPin.confirmedPin });
-      // Settings context: parent is already unlocked — hand back to the page to
+      // GearIcon context: parent is already unlocked — hand back to the page to
       // close + confirm, instead of returning to the PIN verify step.
       if (onResetSuccess) {
         onResetSuccess();
@@ -225,7 +225,7 @@ export const ParentPinDialog = ({
 
             {isVerifying ? (
               <p className="mt-5 flex items-center justify-center gap-2 text-sm font-semibold text-[#003514]">
-                <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                <UpdateIcon className="size-4 animate-spin" aria-hidden="true" />
                 A verificar...
               </p>
             ) : pinError ? (
@@ -267,7 +267,7 @@ export const ParentPinDialog = ({
                 disabled={isSending}
                 className="h-12 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
               >
-                <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+                <ArrowLeftIcon className="mr-2 size-4" aria-hidden="true" />
                 {resetOnly ? "Cancelar" : "Voltar"}
               </Button>
               <Button
@@ -277,7 +277,7 @@ export const ParentPinDialog = ({
                 className="h-12 rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
               >
                 {isSending ? (
-                  <LoaderCircle className="mr-2 size-4 animate-spin" />
+                  <UpdateIcon className="mr-2 size-4 animate-spin" />
                 ) : null}
                 Enviar código
               </Button>
@@ -340,7 +340,7 @@ export const ParentPinDialog = ({
                 disabled={busy}
                 className="h-12 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
               >
-                <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+                <ArrowLeftIcon className="mr-2 size-4" aria-hidden="true" />
                 Voltar
               </Button>
               <Button
@@ -350,7 +350,7 @@ export const ParentPinDialog = ({
                 className="h-12 rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
               >
                 {isCheckingCode ? (
-                  <LoaderCircle className="mr-2 size-4 animate-spin" />
+                  <UpdateIcon className="mr-2 size-4 animate-spin" />
                 ) : null}
                 Continuar
               </Button>
@@ -407,7 +407,7 @@ export const ParentPinDialog = ({
                 disabled={isResetting}
                 className="h-12 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
               >
-                <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+                <ArrowLeftIcon className="mr-2 size-4" aria-hidden="true" />
                 Voltar
               </Button>
               <Button
@@ -417,7 +417,7 @@ export const ParentPinDialog = ({
                 className="h-12 rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
               >
                 {isResetting ? (
-                  <LoaderCircle className="mr-2 size-4 animate-spin" />
+                  <UpdateIcon className="mr-2 size-4 animate-spin" />
                 ) : null}
                 Redefinir PIN
               </Button>

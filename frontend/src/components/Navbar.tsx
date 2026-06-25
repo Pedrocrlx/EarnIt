@@ -1,4 +1,4 @@
-import { Menu, X } from "lucide-react";
+import { Cross2Icon, HamburgerMenuIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -104,9 +104,9 @@ export const Navbar = () => {
           aria-expanded={menuIsOpen}
         >
           {menuIsOpen ? (
-            <X className="size-5" aria-hidden="true" />
+            <Cross2Icon className="size-5" aria-hidden="true" />
           ) : (
-            <Menu className="size-5" aria-hidden="true" />
+            <HamburgerMenuIcon className="size-5" aria-hidden="true" />
           )}
         </button>
       </div>

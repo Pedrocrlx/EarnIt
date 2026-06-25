@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { Cross2Icon } from "@radix-ui/react-icons";
 import { type ReactNode, useId } from "react";
 
 type ModalProps = {
@@ -50,7 +50,7 @@ export const Modal = ({
             aria-label="Fechar"
             className="flex size-9 shrink-0 items-center justify-center rounded-full text-[#404940] transition-colors hover:bg-[#f3f4f6] disabled:opacity-60"
           >
-            <X className="size-5" aria-hidden="true" />
+            <Cross2Icon className="size-5" aria-hidden="true" />
           </button>
         </div>
         {children}

@@ -1,14 +1,4 @@
-import {
-  Clock,
-  Coins,
-  LoaderCircle,
-  Plus,
-  RefreshCw,
-  RotateCcw,
-  Tag,
-  Trash2,
-  UserRound,
-} from "lucide-react";
+import { BookmarkIcon, ClockIcon, PersonIcon, PlusIcon, ReloadIcon, ResetIcon, StarIcon, TrashIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
@@ -184,7 +174,7 @@ const TasksPage = () => {
               aria-label="Atualizar"
               className="size-11 shrink-0 rounded-full border border-[#e1e2e4] text-[#003514] hover:bg-white"
             >
-              <RefreshCw
+              <ReloadIcon
                 className={`size-5 ${loading ? "animate-spin" : ""}`}
                 aria-hidden="true"
               />
@@ -236,7 +226,7 @@ const TasksPage = () => {
                 disabled={children.length === 0}
                 className="h-10 shrink-0 rounded-full bg-[#d4e251] px-4 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
               >
-                <Plus className="mr-2 size-4" aria-hidden="true" />
+                <PlusIcon className="mr-2 size-4" aria-hidden="true" />
                 Nova tarefa
               </Button>
             </div>
@@ -255,7 +245,7 @@ const TasksPage = () => {
                             <h3 className="font-semibold text-[#191c1e]">{task.title}</h3>
                             {task.task_type === "extra_task" ? (
                               <span className="flex items-center gap-1.5 rounded-full bg-[#eef7d1] px-2.5 py-1 text-xs font-semibold text-[#5f6800]">
-                                <Coins className="size-3.5" aria-hidden="true" />
+                                <StarIcon className="size-3.5" aria-hidden="true" />
                                 {formatEuros(Number(task.reward_amount) * pointValueEur)} (
                                 {Number(task.reward_amount).toLocaleString("pt-PT")} pts)
                               </span>
@@ -268,11 +258,11 @@ const TasksPage = () => {
                           )}
                           <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
                             <span className={metaItemClass}>
-                              <Tag className="size-4 text-[#7a8278]" aria-hidden="true" />
+                              <BookmarkIcon className="size-4 text-[#7a8278]" aria-hidden="true" />
                               {taskTypeLabels[task.task_type] ?? task.task_type}
                             </span>
                             <span className={metaItemClass}>
-                              <UserRound className="size-4 text-[#7a8278]" aria-hidden="true" />
+                              <PersonIcon className="size-4 text-[#7a8278]" aria-hidden="true" />
                               {childNameById.get(task.child_id) ?? "Criança"}
                             </span>
                             {task.expires_at ? (
@@ -285,7 +275,7 @@ const TasksPage = () => {
                                       expired ? "font-semibold text-[#7a4100]" : "text-[#404940]"
                                     }`}
                                   >
-                                    <Clock
+                                    <ClockIcon
                                       className={`size-4 ${expired ? "text-[#7a4100]" : "text-[#7a8278]"}`}
                                       aria-hidden="true"
                                     />
@@ -296,7 +286,7 @@ const TasksPage = () => {
                               })()
                             ) : (
                               <span className={metaItemClass}>
-                                <Clock className="size-4 text-[#7a8278]" aria-hidden="true" />
+                                <ClockIcon className="size-4 text-[#7a8278]" aria-hidden="true" />
                                 sem prazo
                               </span>
                             )}
@@ -309,13 +299,13 @@ const TasksPage = () => {
                                 Editar
                               </Button>
                               <Button type="button" variant="ghost" onClick={() => deleteTask(task.id)} disabled={actionIsRunning} className="h-9 rounded-full px-3 text-xs font-semibold text-[#7a4100] hover:bg-[#fff4de] hover:text-[#7a4100] disabled:opacity-50">
-                                {busyAction === `delete-${task.id}` ? <LoaderCircle className="mr-2 size-3.5 animate-spin" aria-hidden="true" /> : <Trash2 className="mr-2 size-3.5" aria-hidden="true" />}
+                                {busyAction === `delete-${task.id}` ? <UpdateIcon className="mr-2 size-3.5 animate-spin" aria-hidden="true" /> : <TrashIcon className="mr-2 size-3.5" aria-hidden="true" />}
                                 Desativar
                               </Button>
                             </>
                           ) : (
                             <Button type="button" onClick={() => reactivate(task.id)} disabled={actionIsRunning} className="h-9 rounded-full bg-[#d4e251] px-3 text-xs font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60">
-                              {busyAction === `reactivate-${task.id}` ? <LoaderCircle className="mr-2 size-3.5 animate-spin" aria-hidden="true" /> : <RotateCcw className="mr-2 size-3.5" aria-hidden="true" />}
+                              {busyAction === `reactivate-${task.id}` ? <UpdateIcon className="mr-2 size-3.5 animate-spin" aria-hidden="true" /> : <ResetIcon className="mr-2 size-3.5" aria-hidden="true" />}
                               Reativar
                             </Button>
                           )}

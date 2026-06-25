@@ -4,6 +4,10 @@
 
 const DRAFT_KEY = "earnit:onboarding:draft";
 
+// Onboarding tops out at 5 children (the picker's "5+"); a parent can add any
+// extra ones afterwards in Perfis, up to the backend's per-account limit.
+export const ONBOARDING_MAX_CHILDREN = 5;
+
 export type DraftChild = { firstName: string; birthDate: string };
 
 export type OnboardingDraft = {

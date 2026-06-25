@@ -1,4 +1,4 @@
-import { LockKeyhole, UserRound } from "lucide-react";
+import { LockClosedIcon, PersonIcon } from "@radix-ui/react-icons";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Logo from "@/components/Logo";
@@ -103,7 +103,7 @@ export const ProfileSelectorPage = () => {
                 <span className="relative">
                   {isParent ? (
                     <span className="flex size-20 items-center justify-center rounded-full bg-[#d4e251] text-[#003514] ring-4 ring-[#eef7d1] sm:size-24">
-                      <UserRound className="size-9 sm:size-10" aria-hidden="true" />
+                      <PersonIcon className="size-9 sm:size-10" aria-hidden="true" />
                     </span>
                   ) : (
                     <span className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-[#003514] text-2xl font-bold uppercase text-white ring-4 ring-[#eef7d1] sm:size-24 sm:text-3xl">
@@ -120,7 +120,7 @@ export const ProfileSelectorPage = () => {
                   )}
                   {profile.protected ? (
                     <span className="absolute -bottom-1 -right-1 flex size-8 items-center justify-center rounded-full bg-[#003514] text-white ring-2 ring-white">
-                      <LockKeyhole className="size-4" aria-hidden="true" />
+                      <LockClosedIcon className="size-4" aria-hidden="true" />
                     </span>
                   ) : null}
                 </span>

@@ -1,11 +1,4 @@
-import {
-  ArrowLeftRight,
-  ChevronDown,
-  ChevronUp,
-  LoaderCircle,
-  Plus,
-  Save,
-} from "lucide-react";
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, UpdateIcon, WidthIcon } from "@radix-ui/react-icons";
 import { type FormEvent, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/ui/button";
@@ -174,7 +167,7 @@ const EditTaskModal = ({
               disabled={submitting}
               className={disclosureButtonClass}
             >
-              <Plus className="size-4" aria-hidden="true" />
+              <PlusIcon className="size-4" aria-hidden="true" />
               Adicionar descrição
             </button>
           )}
@@ -205,15 +198,15 @@ const EditTaskModal = ({
                   </span>
                   <div className="absolute right-1 top-1/2 flex -translate-y-1/2 flex-col">
                     <button type="button" onClick={() => adjustReward(1)} disabled={submitting} aria-label="Aumentar recompensa em euros" className="flex h-5 w-6 items-center justify-center rounded text-[#404940] hover:bg-[#f3f4f6] disabled:opacity-60">
-                      <ChevronUp className="size-4" aria-hidden="true" />
+                      <ChevronUpIcon className="size-4" aria-hidden="true" />
                     </button>
                     <button type="button" onClick={() => adjustReward(-1)} disabled={submitting} aria-label="Diminuir recompensa em euros" className="flex h-5 w-6 items-center justify-center rounded text-[#404940] hover:bg-[#f3f4f6] disabled:opacity-60">
-                      <ChevronDown className="size-4" aria-hidden="true" />
+                      <ChevronDownIcon className="size-4" aria-hidden="true" />
                     </button>
                   </div>
                 </div>
 
-                <ArrowLeftRight className="size-5 shrink-0 text-[#404940]" aria-hidden="true" />
+                <WidthIcon className="size-5 shrink-0 text-[#404940]" aria-hidden="true" />
 
                 <div className="relative flex-1">
                   <Input
@@ -239,10 +232,10 @@ const EditTaskModal = ({
                   </span>
                   <div className="absolute right-1 top-1/2 flex -translate-y-1/2 flex-col">
                     <button type="button" onClick={() => adjustRewardPoints(1)} disabled={submitting} aria-label="Aumentar recompensa em pontos" className="flex h-5 w-6 items-center justify-center rounded text-[#404940] hover:bg-[#f3f4f6] disabled:opacity-60">
-                      <ChevronUp className="size-4" aria-hidden="true" />
+                      <ChevronUpIcon className="size-4" aria-hidden="true" />
                     </button>
                     <button type="button" onClick={() => adjustRewardPoints(-1)} disabled={submitting} aria-label="Diminuir recompensa em pontos" className="flex h-5 w-6 items-center justify-center rounded text-[#404940] hover:bg-[#f3f4f6] disabled:opacity-60">
-                      <ChevronDown className="size-4" aria-hidden="true" />
+                      <ChevronDownIcon className="size-4" aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -290,7 +283,7 @@ const EditTaskModal = ({
               disabled={submitting}
               className={disclosureButtonClass}
             >
-              <Plus className="size-4" aria-hidden="true" />
+              <PlusIcon className="size-4" aria-hidden="true" />
               Adicionar prazo
             </button>
           )}
@@ -312,9 +305,9 @@ const EditTaskModal = ({
             className="h-11 flex-1 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
           >
             {submitting ? (
-              <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
+              <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />
             ) : (
-              <Save className="mr-2 size-4" aria-hidden="true" />
+              <CheckIcon className="mr-2 size-4" aria-hidden="true" />
             )}
             Guardar
           </Button>

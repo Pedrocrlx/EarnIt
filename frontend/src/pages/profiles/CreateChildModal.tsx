@@ -1,4 +1,4 @@
-import { ImageUp, LoaderCircle, Plus } from "lucide-react";
+import { ImageIcon, PlusIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { type FormEvent, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/ui/button";
@@ -131,7 +131,7 @@ const CreateChildModal = ({ onClose, onCreated }: CreateChildModalProps) => {
               className="h-12 cursor-pointer rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] file:mr-3 file:border-0 file:bg-transparent file:text-sm file:font-semibold file:text-[#003514] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
             />
             <p className="flex items-center gap-1.5 text-xs text-[#59625a]">
-              <ImageUp className="size-3.5" aria-hidden="true" />
+              <ImageIcon className="size-3.5" aria-hidden="true" />
               JPEG, PNG ou WebP, até 5 MB.
             </p>
           </div>
@@ -153,9 +153,9 @@ const CreateChildModal = ({ onClose, onCreated }: CreateChildModalProps) => {
             className="h-11 flex-1 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
           >
             {submitting ? (
-              <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
+              <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />
             ) : (
-              <Plus className="mr-2 size-4" aria-hidden="true" />
+              <PlusIcon className="mr-2 size-4" aria-hidden="true" />
             )}
             Criar perfil
           </Button>

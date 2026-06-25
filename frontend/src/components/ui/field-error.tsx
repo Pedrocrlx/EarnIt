@@ -1,4 +1,4 @@
-import { AlertCircle } from "lucide-react";
+import { ExclamationTriangleIcon } from "@radix-ui/react-icons";
 
 import { cn } from "@/lib/utils";
 
@@ -21,7 +21,7 @@ const FieldError = ({ id, message, className }: FieldErrorProps) => {
         className,
       )}
     >
-      <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <ExclamationTriangleIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
       {message}
     </p>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Mail, ArrowRight, ArrowLeft } from "lucide-react";
+import { ArrowLeftIcon, ArrowRightIcon, EnvelopeClosedIcon } from "@radix-ui/react-icons";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useMutation } from "@tanstack/react-query";
@@ -105,14 +105,14 @@ export const VerificationCode = () => {
       return;
     }
 
-    if (event.key === "ArrowLeft" && index > 0) {
+    if (event.key === "ArrowLeftIcon" && index > 0) {
       event.preventDefault();
       inputRefs.current[index - 1]?.focus();
       inputRefs.current[index - 1]?.select();
       return;
     }
 
-    if (event.key === "ArrowRight" && index < OTP_LENGTH - 1) {
+    if (event.key === "ArrowRightIcon" && index < OTP_LENGTH - 1) {
       event.preventDefault();
       inputRefs.current[index + 1]?.focus();
       inputRefs.current[index + 1]?.select();
@@ -189,7 +189,7 @@ export const VerificationCode = () => {
           
           <div className="flex flex-col items-center gap-6 relative z-10">
             <div className="flex w-16 h-16 items-center justify-center bg-[#edeef0] rounded-full shadow-[0px_1px_2px_#0000000d]">
-              <Mail className="w-7 h-6 text-[#003514]" />
+              <EnvelopeClosedIcon className="w-7 h-6 text-[#003514]" />
             </div>
             
             <div className="text-center space-y-2">
@@ -252,7 +252,7 @@ export const VerificationCode = () => {
                 }`}
               >
                 {verifyMutation.isPending ? "A verificar..." : "Verificar"}
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRightIcon className="w-4 h-4" />
               </Button>
             </form>
 
@@ -278,7 +278,7 @@ export const VerificationCode = () => {
             onClick={() => navigate("/login")}
             className="flex cursor-pointer items-center gap-2 px-4 py-2 text-[#404940] font-semibold text-sm hover:text-[#003514] transition-colors rounded-lg"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeftIcon className="w-4 h-4" />
             Voltar ao login
           </button>
         </div>

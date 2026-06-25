@@ -1,13 +1,4 @@
-import {
-  CheckCircle2,
-  Clock,
-  Coins,
-  LoaderCircle,
-  RefreshCw,
-  Tag,
-  UserRound,
-  XCircle,
-} from "lucide-react";
+import { BookmarkIcon, CheckCircledIcon, ClockIcon, CrossCircledIcon, PersonIcon, ReloadIcon, StarIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
@@ -237,7 +228,7 @@ const SubmissionsPage = () => {
               aria-label="Atualizar"
               className="size-11 shrink-0 rounded-full border border-[#e1e2e4] text-[#003514] hover:bg-white"
             >
-              <RefreshCw
+              <ReloadIcon
                 className={`size-5 ${loading ? "animate-spin" : ""}`}
                 aria-hidden="true"
               />
@@ -279,9 +270,9 @@ const SubmissionsPage = () => {
                 className="h-10 shrink-0 rounded-full bg-[#d4e251] px-4 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
               >
                 {busyAction === "approve-all" ? (
-                  <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                  <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  <CheckCircle2 className="mr-2 size-4" aria-hidden="true" />
+                  <CheckCircledIcon className="mr-2 size-4" aria-hidden="true" />
                 )}
                 Aprovar pendentes
               </Button>
@@ -313,7 +304,7 @@ const SubmissionsPage = () => {
                             </span>
                             {task && task.task_type === "extra_task" ? (
                               <span className="flex items-center gap-1.5 rounded-full bg-[#eef7d1] px-2.5 py-1 text-xs font-semibold text-[#5f6800]">
-                                <Coins className="size-3.5" aria-hidden="true" />
+                                <StarIcon className="size-3.5" aria-hidden="true" />
                                 {formatEuros(Number(task.reward_amount) * pointValueEur)} (
                                 {Number(task.reward_amount).toLocaleString("pt-PT")} pts)
                               </span>
@@ -326,17 +317,17 @@ const SubmissionsPage = () => {
                           ) : null}
                           <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
                             <span className={metaItemClass}>
-                              <UserRound className="size-4 text-[#7a8278]" aria-hidden="true" />
+                              <PersonIcon className="size-4 text-[#7a8278]" aria-hidden="true" />
                               {childNameById.get(submission.child_id) ?? "Criança"}
                             </span>
                             {task ? (
                               <span className={metaItemClass}>
-                                <Tag className="size-4 text-[#7a8278]" aria-hidden="true" />
+                                <BookmarkIcon className="size-4 text-[#7a8278]" aria-hidden="true" />
                                 {taskTypeLabels[task.task_type] ?? task.task_type}
                               </span>
                             ) : null}
                             <span className={metaItemClass}>
-                              <Clock className="size-4 text-[#7a8278]" aria-hidden="true" />
+                              <ClockIcon className="size-4 text-[#7a8278]" aria-hidden="true" />
                               {reviewedOrSubmitted
                                 ? formatDate(reviewedOrSubmitted)
                                 : "ainda sem envio"}
@@ -353,9 +344,9 @@ const SubmissionsPage = () => {
                               className="h-9 rounded-full bg-[#d4e251] px-3 text-xs font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
                             >
                               {busyAction === `approve-${submission.id}` ? (
-                                <LoaderCircle className="mr-2 size-3.5 animate-spin" aria-hidden="true" />
+                                <UpdateIcon className="mr-2 size-3.5 animate-spin" aria-hidden="true" />
                               ) : (
-                                <CheckCircle2 className="mr-2 size-3.5" aria-hidden="true" />
+                                <CheckCircledIcon className="mr-2 size-3.5" aria-hidden="true" />
                               )}
                               Aprovar
                             </Button>
@@ -366,7 +357,7 @@ const SubmissionsPage = () => {
                               disabled={actionIsRunning}
                               className="h-9 rounded-full px-3 text-xs font-semibold text-[#7a4100] hover:bg-[#fff4de] hover:text-[#7a4100] disabled:opacity-50"
                             >
-                              <XCircle className="mr-2 size-3.5" aria-hidden="true" />
+                              <CrossCircledIcon className="mr-2 size-3.5" aria-hidden="true" />
                               Rejeitar
                             </Button>
                           </div>

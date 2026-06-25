@@ -1,10 +1,4 @@
-import {
-  CalendarDays,
-  LoaderCircle,
-  Plus,
-  RefreshCw,
-  Save,
-} from "lucide-react";
+import { CalendarIcon, CheckIcon, PlusIcon, ReloadIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { type FormEvent, useState } from "react";
 import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
@@ -110,7 +104,7 @@ const ManageProfilesPage = () => {
               aria-label="Atualizar"
               className="size-11 shrink-0 rounded-full border border-[#e1e2e4] text-[#003514] hover:bg-white"
             >
-              <RefreshCw
+              <ReloadIcon
                 className={`size-5 ${refreshing ? "animate-spin" : ""}`}
                 aria-hidden="true"
               />
@@ -140,7 +134,7 @@ const ManageProfilesPage = () => {
                 disabled={actionIsRunning}
                 className="h-10 shrink-0 rounded-full bg-[#d4e251] px-4 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
               >
-                <Plus className="mr-2 size-4" aria-hidden="true" />
+                <PlusIcon className="mr-2 size-4" aria-hidden="true" />
                 Novo perfil
               </Button>
             </div>
@@ -169,7 +163,7 @@ const ManageProfilesPage = () => {
                           {child.name}
                         </p>
                         <p className={`mt-0.5 ${metaItemClass}`}>
-                          <CalendarDays
+                          <CalendarIcon
                             className="size-4 text-[#7a8278]"
                             aria-hidden="true"
                           />
@@ -206,12 +200,12 @@ const ManageProfilesPage = () => {
                             className="h-9 rounded-full bg-[#d4e251] px-4 text-xs font-semibold text-[#003514] hover:bg-[#cfdc42]"
                           >
                             {updatingChildId === child.id ? (
-                              <LoaderCircle
+                              <UpdateIcon
                                 className="mr-2 size-3.5 animate-spin"
                                 aria-hidden="true"
                               />
                             ) : (
-                              <Save className="mr-2 size-3.5" aria-hidden="true" />
+                              <CheckIcon className="mr-2 size-3.5" aria-hidden="true" />
                             )}
                             Guardar
                           </Button>

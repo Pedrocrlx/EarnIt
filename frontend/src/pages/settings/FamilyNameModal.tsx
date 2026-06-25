@@ -1,4 +1,4 @@
-import { LoaderCircle, Save } from "lucide-react";
+import { CheckIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { type FormEvent, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/ui/button";
@@ -76,9 +76,9 @@ const FamilyNameModal = ({ initialName, onClose, onSaved }: FamilyNameModalProps
             className="h-11 flex-1 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
           >
             {submitting ? (
-              <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
+              <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />
             ) : (
-              <Save className="mr-2 size-4" aria-hidden="true" />
+              <CheckIcon className="mr-2 size-4" aria-hidden="true" />
             )}
             Guardar
           </Button>

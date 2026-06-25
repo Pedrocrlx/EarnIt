@@ -1,11 +1,4 @@
-import {
-  CheckCircle2,
-  ClipboardCheck,
-  Clock3,
-  Coins,
-  LoaderCircle,
-  RotateCcw,
-} from "lucide-react";
+import { CheckCircledIcon, ClipboardIcon, ClockIcon, ResetIcon, StarIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import ChildShell from "@/components/ChildShell";
@@ -282,13 +275,13 @@ const ChildDashboard = () => {
                       </span>
                       {reward > 0 ? (
                         <span className="flex items-center gap-1.5 rounded-full bg-[#eef7d1] px-2.5 py-1 text-xs font-bold text-[#5f6800]">
-                          <Coins className="size-3.5" aria-hidden="true" />
+                          <StarIcon className="size-3.5" aria-hidden="true" />
                           {formatPoints(reward)} pts
                         </span>
                       ) : null}
                       {task.expires_at ? (
                         <span className="flex items-center gap-1.5">
-                          <Clock3 className="size-4" aria-hidden="true" />
+                          <ClockIcon className="size-4" aria-hidden="true" />
                           {new Date(task.expires_at).toLocaleDateString("pt-PT")}
                         </span>
                       ) : null}
@@ -318,18 +311,18 @@ const ChildDashboard = () => {
                         className="mt-auto h-12 w-full rounded-full bg-[#d4e251] text-sm font-bold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
                       >
                         {isBusy ? (
-                          <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                          <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />
                         ) : action.mode === "submit" ? (
-                          <ClipboardCheck className="mr-2 size-4" aria-hidden="true" />
+                          <ClipboardIcon className="mr-2 size-4" aria-hidden="true" />
                         ) : (
-                          <RotateCcw className="mr-2 size-4" aria-hidden="true" />
+                          <ResetIcon className="mr-2 size-4" aria-hidden="true" />
                         )}
                         {action.label}
                       </Button>
                     ) : (
                       <div className="mt-auto flex flex-col gap-1">
                         <span className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[#f3f4f6] text-sm font-bold text-[#404940]">
-                          <CheckCircle2 className="mr-2 size-4" aria-hidden="true" />
+                          <CheckCircledIcon className="mr-2 size-4" aria-hidden="true" />
                           {action.label}
                         </span>
                         {action.reason ? (

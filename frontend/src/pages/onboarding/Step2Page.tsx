@@ -1,15 +1,19 @@
-import { ArrowLeft, ArrowRight, HandCoins, Plus } from "lucide-react";
+import { ArrowLeftIcon, ArrowRightIcon, PersonIcon, PlusIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/context/useToast";
-import { readDraft, writeDraft } from "@/lib/onboarding-draft";
+import {
+  ONBOARDING_MAX_CHILDREN,
+  readDraft,
+  writeDraft,
+} from "@/lib/onboarding-draft";
 import { cn } from "@/lib/utils";
+import OnboardingLayout from "./OnboardingLayout";
 import {
   MAX_CHILD_NAME_LENGTH,
-  MAX_CHILDREN_PER_USER,
   isFutureDate,
   validateMaxLength,
   validateRequired,
@@ -42,7 +46,7 @@ const getInitialChildren = (): ChildProfile[] => {
   }
 
   const count = draft.childCount
-    ? Math.min(Math.max(draft.childCount, 1), 10)
+    ? Math.min(Math.max(draft.childCount, 1), ONBOARDING_MAX_CHILDREN)
     : 1;
 
   return Array.from({ length: count }, (_, index) => createChild(index + 1));
@@ -106,8 +110,11 @@ const OnboardingStep2Page = () => {
   };
 
   const addChild = () => {
-    if (children.length >= MAX_CHILDREN_PER_USER) {
-      showToast(`Pode adicionar até ${MAX_CHILDREN_PER_USER} crianças.`, "error");
+    if (children.length >= ONBOARDING_MAX_CHILDREN) {
+      showToast(
+        `Pode adicionar até ${ONBOARDING_MAX_CHILDREN} crianças aqui. Pode adicionar mais tarde em Perfis.`,
+        "error",
+      );
       return;
     }
 
@@ -167,30 +174,8 @@ const OnboardingStep2Page = () => {
   };
 
   return (
-    <main className="min-h-screen bg-[#f8f9fb] px-4 py-10 sm:px-6 sm:py-14 lg:py-20">
-      <section className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-[640px] flex-col items-center justify-center gap-10">
-        <header className="flex w-full flex-col items-center gap-8">
-          <img
-            src="/earnit_logo_black.webp"
-            alt="EarnIt"
-            className="h-16 w-auto object-contain"
-          />
-
-          <div className="w-full max-w-[640px] space-y-2">
-            <div className="flex items-center justify-between text-[14px] font-semibold text-[#003514]/60">
-              <span className="uppercase tracking-[0.05em]">Passo 2 de 3</span>
-              <span className="text-[#003514]">Configuração da família</span>
-            </div>
-            <div
-              className="h-2 overflow-hidden rounded-full bg-[#edeef0]"
-              aria-hidden="true"
-            >
-              <div className="h-full w-2/3 rounded-full bg-[#d4e251]" />
-            </div>
-          </div>
-        </header>
-
-        <div className="max-w-[600px] space-y-2 text-center">
+    <OnboardingLayout step={2}>
+      <div className="max-w-[600px] space-y-2 text-center">
           <h1 className="font-montserrat text-[32px] font-bold leading-10 text-[#003514]">
             Quem vai juntar-se à equipa?
           </h1>
@@ -210,7 +195,7 @@ const OnboardingStep2Page = () => {
               >
                 <div className="flex items-start justify-between sm:block">
                   <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#2c5b22] text-[#d4e251]">
-                    <HandCoins className="h-7 w-7" />
+                    <PersonIcon className="h-7 w-7" />
                   </div>
                   <button
                     type="button"
@@ -314,11 +299,11 @@ const OnboardingStep2Page = () => {
           <button
             type="button"
             onClick={addChild}
-            disabled={children.length >= MAX_CHILDREN_PER_USER}
+            disabled={children.length >= ONBOARDING_MAX_CHILDREN}
             className="flex min-h-20 w-full cursor-pointer items-center justify-center gap-3 rounded-[28px] border-2 border-dashed border-[#c8d0c1] text-[18px] font-semibold text-[#404940] transition-colors hover:border-[#003514] hover:text-[#003514] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#edeef0]">
-              <Plus className="h-5 w-5" />
+              <PlusIcon className="h-5 w-5" />
             </span>
             Adicionar outra criança
           </button>
@@ -331,7 +316,7 @@ const OnboardingStep2Page = () => {
             onClick={() => navigate("/onboarding/step1")}
             className="h-auto rounded-full bg-white px-10 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.06),0px_4px_6px_-4px_rgba(0,0,0,0.06)] hover:bg-white hover:text-[#003514]"
           >
-            <ArrowLeft className="mr-2 h-4 w-4" />
+            <ArrowLeftIcon className="mr-2 h-4 w-4" />
             Voltar
           </Button>
           <Button
@@ -340,11 +325,10 @@ const OnboardingStep2Page = () => {
             className="h-auto rounded-full bg-[#d4e251] px-10 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.08),0px_4px_6px_-4px_rgba(0,0,0,0.08)] hover:bg-[#cfdc42] disabled:opacity-60"
           >
             Continuar
-            <ArrowRight className="ml-2 h-4 w-4" />
+            <ArrowRightIcon className="ml-2 h-4 w-4" />
           </Button>
         </div>
-      </section>
-    </main>
+    </OnboardingLayout>
   );
 };
 
