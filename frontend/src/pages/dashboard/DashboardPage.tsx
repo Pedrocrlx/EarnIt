@@ -119,7 +119,7 @@ const DashboardPage = () => {
   // Only extra tasks surface here — they're one-off and temporary, unlike
   // recurring duties which live in their own page.
   const activeExtraTasks = useMemo(
-    () => tasks.filter((task) => task.is_active && task.task_type === "extra_task"),
+    () => tasks.filter((task) => task.task_type === "extra_task"),
     [tasks],
   );
   const pendingSubmissions = useMemo(
@@ -311,7 +311,9 @@ const DashboardPage = () => {
                 </p>
               ) : pendingSubmissions.length > 0 ? (
                 pendingSubmissions.map((submission) => {
-                  const task = taskById.get(submission.task_id);
+                  const task = submission.task_id
+                    ? taskById.get(submission.task_id)
+                    : undefined;
                   const isExtra = task?.task_type === "extra_task";
                   return (
                     <article key={submission.id} className="py-4 first:pt-0 last:pb-0">
@@ -319,8 +321,13 @@ const DashboardPage = () => {
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="font-semibold text-[#191c1e]">
-                              {task?.title ?? "Tarefa"}
+                              {task?.title ?? submission.task_title ?? "Tarefa"}
                             </h3>
+                            {!task ? (
+                              <span className="rounded-full bg-[#fff4de] px-2.5 py-1 text-xs font-semibold text-[#7a4100]">
+                                Tarefa removida
+                              </span>
+                            ) : null}
                             {isExtra && task ? (
                               <span className="flex items-center gap-1.5 rounded-full bg-[#eef7d1] px-2.5 py-1 text-xs font-semibold text-[#5f6800]">
                                 <StarIcon className="size-3.5" aria-hidden="true" />

@@ -285,7 +285,9 @@ const SubmissionsPage = () => {
                 </p>
               ) : visibleSubmissions.length > 0 ? (
                 visibleSubmissions.map((submission) => {
-                  const task = taskById.get(submission.task_id);
+                  const task = submission.task_id
+                    ? taskById.get(submission.task_id)
+                    : undefined;
                   const canReview =
                     submission.status === "pending" && submission.submitted_at;
                   const reviewedOrSubmitted =
@@ -297,11 +299,16 @@ const SubmissionsPage = () => {
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="font-semibold text-[#191c1e]">
-                              {task?.title ?? "Tarefa"}
+                              {task?.title ?? submission.task_title ?? "Tarefa"}
                             </h3>
                             <span className="rounded-full bg-[#f3f4f6] px-2.5 py-1 text-xs font-semibold text-[#404940]">
                               {statusLabels[submission.status] ?? submission.status}
                             </span>
+                            {!task ? (
+                              <span className="rounded-full bg-[#fff4de] px-2.5 py-1 text-xs font-semibold text-[#7a4100]">
+                                Tarefa removida
+                              </span>
+                            ) : null}
                             {task && task.task_type === "extra_task" ? (
                               <span className="flex items-center gap-1.5 rounded-full bg-[#eef7d1] px-2.5 py-1 text-xs font-semibold text-[#5f6800]">
                                 <StarIcon className="size-3.5" aria-hidden="true" />

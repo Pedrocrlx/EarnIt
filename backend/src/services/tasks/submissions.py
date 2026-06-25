@@ -159,7 +159,11 @@ async def approve_submission(
     submission = await get_submission_or_404(submission_id, user, session)
     if submission.status != "pending":
         raise HTTPException(status_code=409, detail="Submission is not pending")
-    task = await session.get(Task, submission.task_id)
+    # task_id is null when the task was deleted; the orphaned submission can still
+    # be reviewed, but no reward is credited (_apply_approval no-ops on None).
+    task = (
+        await session.get(Task, submission.task_id) if submission.task_id else None
+    )
     _apply_approval(session, submission, task, datetime.now(UTC))
     await session.commit()
     logger.info("Submission approved: submission_id=%s", submission.id)
@@ -212,7 +216,7 @@ async def batch_approve(
     now = datetime.now(UTC)
     count = 0
     for sub in submissions:
-        task = await session.get(Task, sub.task_id)
+        task = await session.get(Task, sub.task_id) if sub.task_id else None
         _apply_approval(session, sub, task, now)
         count += 1
 
@@ -263,7 +267,6 @@ async def generate_daily_duty_slots(session: AsyncSession) -> int:
             await session.execute(
                 select(Task).where(
                     Task.task_type == "duty",
-                    Task.is_active.is_(True),
                     or_(Task.expires_at.is_(None), Task.expires_at > now),
                 )
             )

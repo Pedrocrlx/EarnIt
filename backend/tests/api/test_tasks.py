@@ -77,7 +77,6 @@ async def test_create_duty_returns_201(client: AsyncClient, mock_mail):
     body = res.json()
     assert body["task_type"] == "duty"
     assert body["reward_amount"] == 0
-    assert body["is_active"] is True
 
 
 async def test_create_extra_task_returns_201(client: AsyncClient, mock_mail):
@@ -183,7 +182,7 @@ async def test_update_task_title(client: AsyncClient, mock_mail):
     assert res.json()["title"] == "New title"
 
 
-async def test_soft_delete_sets_is_active_false(client: AsyncClient, mock_mail):
+async def test_delete_task_hard_removes_it(client: AsyncClient, mock_mail):
     token = await register_and_verify(client, mock_mail)
     child_id = await _child(client, token)
     task = await _duty(client, token, child_id)
@@ -191,8 +190,36 @@ async def test_soft_delete_sets_is_active_false(client: AsyncClient, mock_mail):
     res = await client.delete(
         f"{_TASKS_URL}/{task['id']}", cookies={"access_token": token}
     )
-    assert res.status_code == 200
-    assert res.json()["is_active"] is False
+    assert res.status_code == 204
+
+    # The task is gone from the list and a second delete 404s.
+    listing = await client.get(_TASKS_URL, cookies={"access_token": token})
+    assert all(t["id"] != task["id"] for t in listing.json())
+    again = await client.delete(
+        f"{_TASKS_URL}/{task['id']}", cookies={"access_token": token}
+    )
+    assert again.status_code == 404
+
+
+async def test_delete_task_keeps_submissions_with_title_snapshot(
+    client: AsyncClient, mock_mail
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+    sub = (await _submit(client, token, child_id, task["id"])).json()
+
+    res = await client.delete(
+        f"{_TASKS_URL}/{task['id']}", cookies={"access_token": token}
+    )
+    assert res.status_code == 204
+
+    # The submission survives the task deletion, with task_id nulled and the
+    # task's title snapshotted so it still reads as a now-removed task.
+    subs = await client.get(_SUBS_URL, cookies={"access_token": token})
+    orphan = next(s for s in subs.json() if s["id"] == sub["id"])
+    assert orphan["task_id"] is None
+    assert orphan["task_title"] == task["title"]
 
 
 async def test_task_of_other_user_returns_404(client: AsyncClient, mock_mail):
@@ -687,7 +714,7 @@ async def test_generate_duty_slots_is_idempotent(
     assert second == 0  # slot already exists — nothing inserted
 
 
-async def test_inactive_duty_gets_no_slot(
+async def test_deleted_duty_gets_no_slot(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
     token = await register_and_verify(client, mock_mail)

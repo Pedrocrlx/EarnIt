@@ -1,8 +1,9 @@
-"""Task CRUD service — create, fetch, list, update, and soft-delete tasks.
+"""Task CRUD service — create, fetch, list, update, and delete tasks.
 
 The write paths re-check child/task ownership (via ``_shared`` and
-``get_task_or_404``) so a parent can only act on their own records. Deletes are
-soft (``is_active = False``) to keep submission history intact.
+``get_task_or_404``) so a parent can only act on their own records. Deleting a
+task is a hard delete that first snapshots the task's title onto its submissions
+so their completion history survives (their ``task_id`` is then nulled).
 """
 
 import logging
@@ -10,11 +11,11 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.auth import User
-from src.models.tasks import Task
+from src.models.tasks import Task, TaskSubmission
 from src.schemas.tasks import TaskCreateRequest, TaskUpdateRequest
 from src.services.tasks._shared import get_child_or_404
 
@@ -56,9 +57,8 @@ async def list_tasks(
     session: AsyncSession,
     child_id: UUID | None = None,
     task_type: str | None = None,
-    is_active: bool | None = None,
 ) -> list[Task]:
-    """List the parent's tasks, optionally filtered by child/type/active.
+    """List the parent's tasks, optionally filtered by child/type.
 
     Each provided filter narrows the result; omitted filters match all values.
     """
@@ -67,8 +67,6 @@ async def list_tasks(
         query = query.where(Task.child_id == child_id)
     if task_type is not None:
         query = query.where(Task.task_type == task_type)
-    if is_active is not None:
-        query = query.where(Task.is_active == is_active)
     result = await session.execute(query)
     return list(result.scalars().all())
 
@@ -103,8 +101,6 @@ async def update_task(
         task.description = data["description"]
     if "expires_at" in data:
         task.expires_at = data["expires_at"]
-    if "is_active" in data and data["is_active"] is not None:
-        task.is_active = data["is_active"]
 
     task.updated_at = datetime.now(UTC)
     await session.commit()
@@ -112,10 +108,20 @@ async def update_task(
     return task
 
 
-async def soft_delete_task(task: Task, session: AsyncSession) -> Task:
-    """Deactivate a task (``is_active = False``); history is preserved."""
-    task.is_active = False
-    task.updated_at = datetime.now(UTC)
+async def delete_task(task: Task, session: AsyncSession) -> None:
+    """Hard-delete a task, preserving its submissions as orphaned history.
+
+    First snapshot the task's title onto its submissions and null their
+    ``task_id`` (done explicitly so it holds regardless of DB-level FK
+    enforcement; the ``ON DELETE SET NULL`` FK is the backstop). The task row is
+    then deleted with nothing referencing it, so the completion history survives
+    and still shows which (now-removed) task it belonged to.
+    """
+    await session.execute(
+        update(TaskSubmission)
+        .where(TaskSubmission.task_id == task.id)
+        .values(task_title=task.title, task_id=None)
+    )
+    await session.delete(task)
     await session.commit()
-    logger.info("Task soft-deleted: task_id=%s", task.id)
-    return task
+    logger.info("Task deleted: task_id=%s", task.id)

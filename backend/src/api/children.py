@@ -50,7 +50,7 @@ async def list_child_tasks(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[ChildTaskResponse]:
-    """Return all active tasks assigned to the specified child.
+    """Return all tasks assigned to the specified child.
 
     Duties include today's submission slot (status `pending`, `approved`, or
     `rejected`) or `null` if the daily slot has not been generated yet. Extra tasks
@@ -65,7 +65,7 @@ async def list_child_tasks(
         (
             await session.execute(
                 select(Task)
-                .where(Task.child_id == child_id, Task.is_active.is_(True))
+                .where(Task.child_id == child_id)
                 .order_by(Task.task_type)
             )
         )

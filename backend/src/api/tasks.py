@@ -28,11 +28,11 @@ from src.services.tasks import (
     approve_submission,
     batch_approve,
     create_task,
+    delete_task,
     get_task_or_404,
     list_submissions,
     list_tasks,
     reject_submission,
-    soft_delete_task,
     update_task,
 )
 
@@ -78,21 +78,19 @@ async def create_task_endpoint(
 async def list_tasks_endpoint(
     child_id: UUID | None = None,
     task_type: str | None = None,
-    is_active: bool | None = None,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[TaskResponse]:
     """Return all tasks owned by the authenticated parent.
 
-    Filter by `child_id`, `task_type` (`duty` or `extra_task`), or `is_active`.
-    Omitting a filter returns all values for that field.
+    Filter by `child_id` or `task_type` (`duty` or `extra_task`). Omitting a filter
+    returns all values for that field.
     """
     tasks = await list_tasks(
         current_user,
         session,
         child_id=child_id,
         task_type=task_type,
-        is_active=is_active,
     )
     return [TaskResponse.model_validate(t) for t in tasks]
 
@@ -124,23 +122,24 @@ async def update_task_endpoint(
 
 @router.delete(
     "/{task_id}",
-    response_model=TaskResponse,
+    status_code=204,
     tags=["tasks/management"],
-    summary="Deactivate a task",
+    summary="Delete a task",
 )
 async def delete_task_endpoint(
     task_id: UUID,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> TaskResponse:
-    """Soft-delete a task by setting `is_active = false`.
+) -> None:
+    """Permanently delete a task.
 
-    Existing submissions are preserved and visible in submission history. No new duty
-    slots will be generated for an inactive task. Returns the updated task object.
+    Its submissions are preserved as history: the task's title is snapshotted onto
+    them and their `task_id` is nulled, so a completed submission still shows which
+    (now-removed) task it belonged to. No new duty slots are generated for a deleted
+    task. Returns 404 if the task is not found or not owned by the parent.
     """
     task = await get_task_or_404(task_id, current_user, session)
-    task = await soft_delete_task(task, session)
-    return TaskResponse.model_validate(task)
+    await delete_task(task, session)
 
 
 # NOTE: approve-all MUST be registered before /{id}/approve to avoid FastAPI

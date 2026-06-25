@@ -1,4 +1,4 @@
-import { BookmarkIcon, ClockIcon, PersonIcon, PlusIcon, ReloadIcon, ResetIcon, StarIcon, TrashIcon, UpdateIcon } from "@radix-ui/react-icons";
+import { ClockIcon, PersonIcon, PlusIcon, ReloadIcon, StarIcon, TrashIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
@@ -7,18 +7,12 @@ import { getPointValue } from "@/services/profileService";
 import {
   deleteTask as deleteTaskRequest,
   listTasks,
-  reactivateTask as reactivateTaskRequest,
 } from "@/services/taskService";
 import type { TaskResponse } from "@/services/types";
 import { useAuth } from "@/context/useAuth";
 import { useToast } from "@/context/useToast";
 import CreateTaskModal from "./CreateTaskModal";
 import EditTaskModal from "./EditTaskModal";
-
-const taskTypeLabels: Record<string, string> = {
-  duty: "Rotina",
-  extra_task: "Extra",
-};
 
 const formatExpiry = (value: string) =>
   new Date(value).toLocaleString("pt-PT", {
@@ -48,7 +42,7 @@ const TasksPage = () => {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [pointValueEur, setPointValueEur] = useState(0.01);
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [taskView, setTaskView] = useState<"active" | "inactive">("active");
+  const [taskView, setTaskView] = useState<"duty" | "extra_task">("duty");
 
   useEffect(() => {
     let isMounted = true;
@@ -69,9 +63,15 @@ const TasksPage = () => {
     [children],
   );
 
-  const activeTasks = useMemo(() => tasks.filter((task) => task.is_active), [tasks]);
-  const inactiveTasks = useMemo(() => tasks.filter((task) => !task.is_active), [tasks]);
-  const visibleTasks = taskView === "active" ? activeTasks : inactiveTasks;
+  const dutyTasks = useMemo(
+    () => tasks.filter((task) => task.task_type === "duty"),
+    [tasks],
+  );
+  const extraTasks = useMemo(
+    () => tasks.filter((task) => task.task_type === "extra_task"),
+    [tasks],
+  );
+  const visibleTasks = taskView === "duty" ? dutyTasks : extraTasks;
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -118,31 +118,12 @@ const TasksPage = () => {
     try {
       await deleteTaskRequest(taskId);
       await loadTasks();
-      showToast("Tarefa desativada.");
+      showToast("Tarefa eliminada.");
     } catch (caughtError) {
       showToast(
         caughtError instanceof Error
           ? caughtError.message
-          : "Não foi possível desativar a tarefa.",
-        "error",
-      );
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const reactivate = async (taskId: string) => {
-    setBusyAction(`reactivate-${taskId}`);
-
-    try {
-      await reactivateTaskRequest(taskId);
-      await loadTasks();
-      showToast("Tarefa reativada.");
-    } catch (caughtError) {
-      showToast(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Não foi possível reativar a tarefa.",
+          : "Não foi possível eliminar a tarefa.",
         "error",
       );
     } finally {
@@ -206,17 +187,17 @@ const TasksPage = () => {
                 <div className="inline-flex rounded-full border border-[#e1e2e4] bg-[#f8f9fb] p-1">
                   <button
                     type="button"
-                    onClick={() => setTaskView("active")}
-                    className={segmentClass(taskView === "active")}
+                    onClick={() => setTaskView("duty")}
+                    className={segmentClass(taskView === "duty")}
                   >
-                    Ativas ({activeTasks.length})
+                    Rotinas ({dutyTasks.length})
                   </button>
                   <button
                     type="button"
-                    onClick={() => setTaskView("inactive")}
-                    className={segmentClass(taskView === "inactive")}
+                    onClick={() => setTaskView("extra_task")}
+                    className={segmentClass(taskView === "extra_task")}
                   >
-                    Desativadas ({inactiveTasks.length})
+                    Extra ({extraTasks.length})
                   </button>
                 </div>
               </div>
@@ -258,17 +239,12 @@ const TasksPage = () => {
                           )}
                           <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
                             <span className={metaItemClass}>
-                              <BookmarkIcon className="size-4 text-[#7a8278]" aria-hidden="true" />
-                              {taskTypeLabels[task.task_type] ?? task.task_type}
-                            </span>
-                            <span className={metaItemClass}>
                               <PersonIcon className="size-4 text-[#7a8278]" aria-hidden="true" />
                               {childNameById.get(task.child_id) ?? "Criança"}
                             </span>
                             {task.expires_at ? (
                               (() => {
-                                const expired =
-                                  task.is_active && new Date(task.expires_at) < new Date();
+                                const expired = new Date(task.expires_at) < new Date();
                                 return (
                                   <span
                                     className={`flex items-center gap-1.5 text-sm ${
@@ -293,31 +269,20 @@ const TasksPage = () => {
                           </div>
                         </div>
                         <div className="flex shrink-0 gap-2">
-                          {task.is_active ? (
-                            <>
-                              <Button type="button" variant="ghost" onClick={() => startEditTask(task)} disabled={actionIsRunning} className="h-9 rounded-full px-3 text-xs font-semibold text-[#003514] hover:bg-[#f3f4f6]">
-                                Editar
-                              </Button>
-                              <Button type="button" variant="ghost" onClick={() => deleteTask(task.id)} disabled={actionIsRunning} className="h-9 rounded-full px-3 text-xs font-semibold text-[#7a4100] hover:bg-[#fff4de] hover:text-[#7a4100] disabled:opacity-50">
-                                {busyAction === `delete-${task.id}` ? <UpdateIcon className="mr-2 size-3.5 animate-spin" aria-hidden="true" /> : <TrashIcon className="mr-2 size-3.5" aria-hidden="true" />}
-                                Desativar
-                              </Button>
-                            </>
-                          ) : (
-                            <Button type="button" onClick={() => reactivate(task.id)} disabled={actionIsRunning} className="h-9 rounded-full bg-[#d4e251] px-3 text-xs font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60">
-                              {busyAction === `reactivate-${task.id}` ? <UpdateIcon className="mr-2 size-3.5 animate-spin" aria-hidden="true" /> : <ResetIcon className="mr-2 size-3.5" aria-hidden="true" />}
-                              Reativar
-                            </Button>
-                          )}
+                          <Button type="button" variant="ghost" onClick={() => startEditTask(task)} disabled={actionIsRunning} className="h-9 rounded-full px-3 text-xs font-semibold text-[#003514] hover:bg-[#f3f4f6]">
+                            Editar
+                          </Button>
+                          <Button type="button" variant="ghost" onClick={() => deleteTask(task.id)} disabled={actionIsRunning} className="h-9 rounded-full px-3 text-xs font-semibold text-[#7a4100] hover:bg-[#fff4de] hover:text-[#7a4100] disabled:opacity-50">
+                            {busyAction === `delete-${task.id}` ? <UpdateIcon className="mr-2 size-3.5 animate-spin" aria-hidden="true" /> : <TrashIcon className="mr-2 size-3.5" aria-hidden="true" />}
+                            Eliminar
+                          </Button>
                         </div>
                       </div>
                   </article>
                 ))
               ) : (
                 <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
-                  {taskView === "active"
-                    ? "Ainda não existem tarefas."
-                    : "Sem tarefas desativadas."}
+                  {taskView === "duty" ? "Sem rotinas." : "Sem tarefas extra."}
                 </p>
               )}
             </div>

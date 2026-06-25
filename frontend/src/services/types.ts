@@ -8,7 +8,6 @@ export type TaskResponse = {
   description: string | null;
   expires_at: string | null;
   id: string;
-  is_active: boolean;
   reward_amount: string;
   task_type: TaskType | string;
   title: string;
@@ -24,7 +23,8 @@ export type SubmissionResponse = {
   scheduled_date: string | null;
   status: SubmissionStatus;
   submitted_at: string | null;
-  task_id: string;
+  task_id: string | null;
+  task_title: string | null;
 };
 
 export type ChildTaskResponse = {

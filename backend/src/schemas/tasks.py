@@ -59,7 +59,6 @@ class TaskUpdateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=150)
     description: str | None = None
     expires_at: datetime | None = None
-    is_active: bool | None = None
     reward_amount: int | None = Field(default=None, ge=0)
 
     model_config = {
@@ -68,7 +67,6 @@ class TaskUpdateRequest(BaseModel):
                 "title": "Arrumar o quarto",
                 "description": "Arrumar antes do almoço",
                 "reward_amount": 150,
-                "is_active": True,
             }
         }
     }
@@ -85,7 +83,6 @@ class TaskResponse(BaseModel):
     task_type: str
     reward_amount: int  # whole-number amount stored in the `reward_amount` column
     expires_at: datetime | None
-    is_active: bool
     created_at: datetime
     updated_at: datetime
 
@@ -108,10 +105,15 @@ class RejectRequest(BaseModel):
 
 
 class SubmissionResponse(BaseModel):
-    """Serialised ``TaskSubmission`` returned by the submission endpoints."""
+    """Serialised ``TaskSubmission`` returned by the submission endpoints.
+
+    ``task_id`` is null once the task is deleted; ``task_title`` then holds the
+    snapshotted name so the completion still shows which task it belonged to.
+    """
 
     id: UUID
-    task_id: UUID
+    task_id: UUID | None
+    task_title: str | None
     child_id: UUID
     scheduled_date: date | None
     submitted_at: datetime | None

@@ -21,8 +21,9 @@ class Task(SQLModel, table=True):
 
     ``task_type`` is either ``"duty"`` (recurring daily chore, zero reward, a
     slot generated each midnight) or ``"extra_task"`` (one-off with a positive
-    point reward). Deactivation is a soft delete via
-    ``is_active`` so existing submissions stay intact.
+    point reward). A task is either present or hard-deleted; deleting one snapshots
+    its title onto its submissions (``TaskSubmission.task_title``) and nulls their
+    ``task_id`` so the completion history survives.
     """
 
     __tablename__: str = "tasks"
@@ -48,7 +49,6 @@ class Task(SQLModel, table=True):
     expires_at: datetime | None = Field(
         default=None, nullable=True, sa_type=DateTime(timezone=True)
     )
-    is_active: bool = Field(default=True, nullable=False)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         nullable=False,
@@ -67,7 +67,9 @@ class TaskSubmission(SQLModel, table=True):
     For duties, one row per ``(task_id, scheduled_date)`` is created daily — the
     unique constraint enforces one slot per day. Extra tasks create a row on
     submission. ``status`` walks pending → approved/rejected; a rejected one can
-    be reset back to pending (resubmit).
+    be reset back to pending (resubmit). When the parent's task is deleted,
+    ``task_id`` is nulled and ``task_title`` keeps the task's name so this
+    completion still reads as belonging to a now-removed task.
     """
 
     __tablename__: str = "task_submissions"
@@ -80,9 +82,16 @@ class TaskSubmission(SQLModel, table=True):
     id: UUID = Field(
         default_factory=uuid4, primary_key=True, index=True, nullable=False
     )
-    task_id: UUID = Field(
-        foreign_key="tasks.id", index=True, nullable=False, ondelete="CASCADE"
+    task_id: UUID | None = Field(
+        default=None,
+        foreign_key="tasks.id",
+        index=True,
+        nullable=True,
+        ondelete="SET NULL",
     )
+    # Snapshot of the task's title, written when the task is deleted so an orphaned
+    # submission (task_id now null) still shows which task it belonged to.
+    task_title: str | None = Field(default=None, max_length=150, nullable=True)
     child_id: UUID = Field(
         foreign_key="children.id", index=True, nullable=False, ondelete="CASCADE"
     )

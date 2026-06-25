@@ -40,13 +40,7 @@ export const updateTask = (taskId: string, payload: UpdateTaskPayload) =>
   });
 
 export const deleteTask = (taskId: string) =>
-  apiFetch<TaskResponse>(`/tasks/${taskId}`, { method: "DELETE" });
-
-export const reactivateTask = (taskId: string) =>
-  apiFetch<TaskResponse>(`/tasks/${taskId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ is_active: true }),
-  });
+  apiFetch<void>(`/tasks/${taskId}`, { method: "DELETE" });
 
 export const approveSubmission = (submissionId: string) =>
   apiFetch<SubmissionResponse>(`/tasks/submissions/${submissionId}/approve`, {
