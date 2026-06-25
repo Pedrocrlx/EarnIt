@@ -93,7 +93,6 @@ const ChildDashboard = () => {
   );
   const [tasks, setTasks] = useState<ChildTaskResponse[]>([]);
   const [wallet, setWallet] = useState<WalletResponse | null>(null);
-  const [proofPhotos, setProofPhotos] = useState<Record<string, File | null>>({});
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -132,24 +131,8 @@ const ChildDashboard = () => {
     void loadDashboard();
   }, [loadDashboard]);
 
-  const setProofPhoto = (taskId: string, file: File | null) => {
-    setProofPhotos((currentPhotos) => ({
-      ...currentPhotos,
-      [taskId]: file,
-    }));
-  };
-
-  const getProofPhoto = (taskId: string) => proofPhotos[taskId] ?? null;
-
   const submitTask = async (task: ChildTaskResponse) => {
     if (!selectedChild) {
-      return;
-    }
-
-    const photo = getProofPhoto(task.id);
-    if (!photo) {
-      setErrorMessage("Anexa uma fotografia de prova antes de enviar.");
-      setSuccessMessage("");
       return;
     }
 
@@ -158,8 +141,7 @@ const ChildDashboard = () => {
     setSuccessMessage("");
 
     try {
-      await submitTaskRequest(selectedChild.id, task.id, photo);
-      setProofPhoto(task.id, null);
+      await submitTaskRequest(selectedChild.id, task.id);
       await loadDashboard();
       setSuccessMessage("Tarefa enviada para aprovação.");
     } catch (caughtError) {
@@ -173,15 +155,8 @@ const ChildDashboard = () => {
     }
   };
 
-  const resubmitTask = async (taskId: string, submissionId: string) => {
+  const resubmitTask = async (submissionId: string) => {
     if (!selectedChild) {
-      return;
-    }
-
-    const photo = getProofPhoto(taskId);
-    if (!photo) {
-      setErrorMessage("Anexa uma nova fotografia de prova antes de reenviar.");
-      setSuccessMessage("");
       return;
     }
 
@@ -190,8 +165,7 @@ const ChildDashboard = () => {
     setSuccessMessage("");
 
     try {
-      await resubmitTaskRequest(selectedChild.id, submissionId, photo);
-      setProofPhoto(taskId, null);
+      await resubmitTaskRequest(selectedChild.id, submissionId);
       await loadDashboard();
       setSuccessMessage("Tarefa reenviada para aprovação.");
     } catch (caughtError) {
@@ -392,50 +366,31 @@ const ChildDashboard = () => {
                           </div>
 
                           {action.mode === "submit" || action.mode === "resubmit" ? (
-                            <div className="flex shrink-0 flex-col gap-2">
-                              <label className="text-xs font-semibold text-[#404940]">
-                                Fotografia de prova
-                                <input
-                                  type="file"
-                                  accept="image/jpeg,image/png,image/webp"
-                                  disabled={actionIsRunning}
-                                  onChange={(event) =>
-                                    setProofPhoto(task.id, event.target.files?.[0] ?? null)
-                                  }
-                                  className="mt-1 block w-full max-w-[220px] text-xs text-[#404940] file:mr-3 file:rounded-full file:border-0 file:bg-[#f3f4f6] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#003514]"
+                            <Button
+                              type="button"
+                              onClick={() =>
+                                action.mode === "submit"
+                                  ? submitTask(task)
+                                  : resubmitTask(action.submissionId)
+                              }
+                              disabled={actionIsRunning}
+                              className="h-11 shrink-0 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+                            >
+                              {isBusy ? (
+                                <LoaderCircle
+                                  className="mr-2 size-4 animate-spin"
+                                  aria-hidden="true"
                                 />
-                              </label>
-                              {getProofPhoto(task.id) ? (
-                                <p className="max-w-[220px] truncate text-xs font-semibold text-[#59625a]">
-                                  {getProofPhoto(task.id)?.name}
-                                </p>
-                              ) : null}
-                              <Button
-                                type="button"
-                                onClick={() =>
-                                  action.mode === "submit"
-                                    ? submitTask(task)
-                                    : resubmitTask(task.id, action.submissionId)
-                                }
-                                disabled={actionIsRunning}
-                                className="h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
-                              >
-                                {isBusy ? (
-                                  <LoaderCircle
-                                    className="mr-2 size-4 animate-spin"
-                                    aria-hidden="true"
-                                  />
-                                ) : action.mode === "submit" ? (
-                                  <ClipboardCheck
-                                    className="mr-2 size-4"
-                                    aria-hidden="true"
-                                  />
-                                ) : (
-                                  <RotateCcw className="mr-2 size-4" aria-hidden="true" />
-                                )}
-                                {action.label}
-                              </Button>
-                            </div>
+                              ) : action.mode === "submit" ? (
+                                <ClipboardCheck
+                                  className="mr-2 size-4"
+                                  aria-hidden="true"
+                                />
+                              ) : (
+                                <RotateCcw className="mr-2 size-4" aria-hidden="true" />
+                              )}
+                              {action.label}
+                            </Button>
                           ) : (
                             <span className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-[#f3f4f6] px-5 text-sm font-semibold text-[#404940]">
                               <CheckCircle2 className="mr-2 size-4" aria-hidden="true" />

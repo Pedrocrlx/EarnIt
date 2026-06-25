@@ -18,7 +18,6 @@ export type TaskResponse = {
 
 export type SubmissionResponse = {
   child_id: string;
-  has_photo: boolean;
   id: string;
   rejection_note: string | null;
   reviewed_at: string | null;

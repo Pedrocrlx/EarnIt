@@ -1,4 +1,4 @@
-import { API_BASE, apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import type {
   ChildTaskResponse,
   SubmissionResponse,
@@ -71,23 +71,12 @@ export const listChildTasks = (childId: string) =>
 export const getWallet = (childId: string) =>
   apiFetch<WalletResponse>(`/children/${childId}/wallet`);
 
-const buildPhotoFormData = (photo: File) => {
-  const formData = new FormData();
-  formData.append("photo", photo);
-  return formData;
-};
-
-export const submitTask = (childId: string, taskId: string, photo: File) =>
+export const submitTask = (childId: string, taskId: string) =>
   apiFetch<SubmissionResponse>(`/children/${childId}/tasks/${taskId}/submit`, {
     method: "POST",
-    body: buildPhotoFormData(photo),
   });
 
-export const resubmitTask = (childId: string, submissionId: string, photo: File) =>
+export const resubmitTask = (childId: string, submissionId: string) =>
   apiFetch<SubmissionResponse>(`/children/${childId}/submissions/${submissionId}`, {
     method: "PATCH",
-    body: buildPhotoFormData(photo),
   });
-
-export const getSubmissionPhotoUrl = (submissionId: string) =>
-  `${API_BASE}/tasks/submissions/${submissionId}/photo`;

@@ -1,13 +1,23 @@
-import { CheckCircle2, LoaderCircle, RefreshCw, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  Coins,
+  LoaderCircle,
+  RefreshCw,
+  Tag,
+  UserRound,
+  XCircle,
+} from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/useAuth";
+import { formatEuros } from "@/lib/points";
+import { getPointValue } from "@/services/profileService";
 import {
   approveAllSubmissions,
   approveSubmission as approveTaskSubmission,
-  getSubmissionPhotoUrl,
   listSubmissions,
   listTasks,
   rejectSubmission as rejectTaskSubmission,
@@ -19,6 +29,26 @@ const statusLabels: Record<string, string> = {
   pending: "Pendente",
   rejected: "Rejeitada",
 };
+
+const taskTypeLabels: Record<string, string> = {
+  duty: "Rotina",
+  extra_task: "Extra",
+};
+
+const formatDate = (value: string) =>
+  new Date(value).toLocaleString("pt-PT", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+const segmentClass = (active: boolean) =>
+  `rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+    active ? "bg-[#003514] text-white" : "text-[#404940] hover:text-[#003514]"
+  }`;
+
+const metaItemClass = "flex items-center gap-1.5 text-sm text-[#404940]";
 
 const SubmissionsPage = () => {
   const { familyProfile } = useAuth();
@@ -34,6 +64,24 @@ const SubmissionsPage = () => {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [pointValueEur, setPointValueEur] = useState(0.01);
+  const [submissionView, setSubmissionView] = useState<
+    "pending" | "approved" | "rejected"
+  >("pending");
+
+  useEffect(() => {
+    let isMounted = true;
+    void getPointValue()
+      .then(({ point_value_eur }) => {
+        if (isMounted) {
+          setPointValueEur(Number(point_value_eur) || 0.01);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const childNameById = useMemo(
     () => new Map(children.map((child) => [child.id, child.name])),
@@ -43,9 +91,28 @@ const SubmissionsPage = () => {
     () => new Map(tasks.map((task) => [task.id, task])),
     [tasks],
   );
-  const pendingSubmissions = submissions.filter(
-    (submission) => submission.status === "pending" && submission.submitted_at,
+
+  const pendingSubmissions = useMemo(
+    () =>
+      submissions.filter(
+        (submission) => submission.status === "pending" && submission.submitted_at,
+      ),
+    [submissions],
   );
+  const approvedSubmissions = useMemo(
+    () => submissions.filter((submission) => submission.status === "approved"),
+    [submissions],
+  );
+  const rejectedSubmissions = useMemo(
+    () => submissions.filter((submission) => submission.status === "rejected"),
+    [submissions],
+  );
+  const visibleSubmissions =
+    submissionView === "pending"
+      ? pendingSubmissions
+      : submissionView === "approved"
+        ? approvedSubmissions
+        : rejectedSubmissions;
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -144,6 +211,13 @@ const SubmissionsPage = () => {
 
   const actionIsRunning = busyAction !== null;
 
+  const emptyMessage =
+    submissionView === "pending"
+      ? "Sem submissões pendentes."
+      : submissionView === "approved"
+        ? "Sem submissões aprovadas."
+        : "Sem submissões rejeitadas.";
+
   return (
     <DashboardShell>
       <main className="flex min-h-screen w-full flex-col items-center gap-10 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
@@ -186,13 +260,44 @@ const SubmissionsPage = () => {
           ) : null}
 
           <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-[#003514]">Submissões</h2>
-                <p className="mt-1 text-sm text-[#404940]">Aprovar ou rejeitar tarefas enviadas.</p>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="text-lg font-bold text-[#003514]">Lista de submissões</h2>
+                <div className="inline-flex rounded-full border border-[#e1e2e4] bg-[#f8f9fb] p-1">
+                  <button
+                    type="button"
+                    onClick={() => setSubmissionView("pending")}
+                    className={segmentClass(submissionView === "pending")}
+                  >
+                    Pendentes ({pendingSubmissions.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSubmissionView("approved")}
+                    className={segmentClass(submissionView === "approved")}
+                  >
+                    Aprovadas ({approvedSubmissions.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSubmissionView("rejected")}
+                    className={segmentClass(submissionView === "rejected")}
+                  >
+                    Rejeitadas ({rejectedSubmissions.length})
+                  </button>
+                </div>
               </div>
-              <Button type="button" onClick={approveAll} disabled={actionIsRunning || pendingSubmissions.length === 0} className="h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60">
-                {busyAction === "approve-all" ? <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="mr-2 size-4" aria-hidden="true" />}
+              <Button
+                type="button"
+                onClick={approveAll}
+                disabled={actionIsRunning || pendingSubmissions.length === 0}
+                className="h-10 shrink-0 rounded-full bg-[#d4e251] px-4 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+              >
+                {busyAction === "approve-all" ? (
+                  <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <CheckCircle2 className="mr-2 size-4" aria-hidden="true" />
+                )}
                 Aprovar pendentes
               </Button>
             </div>
@@ -202,46 +307,80 @@ const SubmissionsPage = () => {
                 <p className="py-8 text-center text-sm font-semibold text-[#404940]">
                   A carregar submissões...
                 </p>
-              ) : submissions.length > 0 ? (
-                submissions.map((submission) => {
+              ) : visibleSubmissions.length > 0 ? (
+                visibleSubmissions.map((submission) => {
                   const task = taskById.get(submission.task_id);
-                  const canReview = submission.status === "pending" && submission.submitted_at;
+                  const canReview =
+                    submission.status === "pending" && submission.submitted_at;
+                  const reviewedOrSubmitted =
+                    submission.reviewed_at ?? submission.submitted_at;
 
                   return (
                     <article key={submission.id} className="py-4 first:pt-0 last:pb-0">
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                        <div>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold text-[#191c1e]">{task?.title ?? "Tarefa"}</h3>
+                            <h3 className="font-semibold text-[#191c1e]">
+                              {task?.title ?? "Tarefa"}
+                            </h3>
                             <span className="rounded-full bg-[#f3f4f6] px-2.5 py-1 text-xs font-semibold text-[#404940]">
                               {statusLabels[submission.status] ?? submission.status}
                             </span>
+                            {task && task.task_type === "extra_task" ? (
+                              <span className="flex items-center gap-1.5 rounded-full bg-[#eef7d1] px-2.5 py-1 text-xs font-semibold text-[#5f6800]">
+                                <Coins className="size-3.5" aria-hidden="true" />
+                                {formatEuros(Number(task.reward_amount) * pointValueEur)} (
+                                {Number(task.reward_amount).toLocaleString("pt-PT")} pts)
+                              </span>
+                            ) : null}
                           </div>
-                          <p className="mt-1 text-sm text-[#404940]">
-                            {childNameById.get(submission.child_id) ?? "Criança"}
-                            {submission.submitted_at ? ` · Enviada ${new Date(submission.submitted_at).toLocaleDateString("pt-PT")}` : " · Ainda sem envio"}
-                          </p>
                           {submission.rejection_note ? (
-                            <p className="mt-1 text-sm text-[#7a4100]">{submission.rejection_note}</p>
+                            <p className="mt-1.5 text-sm text-[#7a4100]">
+                              {submission.rejection_note}
+                            </p>
                           ) : null}
-                          {submission.has_photo ? (
-                            <img
-                              src={getSubmissionPhotoUrl(submission.id)}
-                              alt={`Prova da tarefa ${task?.title ?? "submetida"}`}
-                              className="mt-3 h-36 w-full max-w-xs rounded-lg border border-[#e1e2e4] object-cover"
-                            />
-                          ) : (
-                            <p className="mt-2 text-sm text-[#59625a]">Sem fotografia de prova anexada.</p>
-                          )}
+                          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                            <span className={metaItemClass}>
+                              <UserRound className="size-4 text-[#7a8278]" aria-hidden="true" />
+                              {childNameById.get(submission.child_id) ?? "Criança"}
+                            </span>
+                            {task ? (
+                              <span className={metaItemClass}>
+                                <Tag className="size-4 text-[#7a8278]" aria-hidden="true" />
+                                {taskTypeLabels[task.task_type] ?? task.task_type}
+                              </span>
+                            ) : null}
+                            <span className={metaItemClass}>
+                              <Clock className="size-4 text-[#7a8278]" aria-hidden="true" />
+                              {reviewedOrSubmitted
+                                ? formatDate(reviewedOrSubmitted)
+                                : "ainda sem envio"}
+                            </span>
+                          </div>
                         </div>
 
                         {canReview ? (
-                          <div className="flex flex-wrap gap-2">
-                            <Button type="button" onClick={() => approveSubmission(submission.id)} disabled={actionIsRunning} className="h-9 rounded-full bg-[#d4e251] px-3 text-xs font-semibold text-[#003514] hover:bg-[#cfdc42]">
-                              {busyAction === `approve-${submission.id}` ? <LoaderCircle className="mr-2 size-3.5 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="mr-2 size-3.5" aria-hidden="true" />}
+                          <div className="flex shrink-0 flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              onClick={() => approveSubmission(submission.id)}
+                              disabled={actionIsRunning}
+                              className="h-9 rounded-full bg-[#d4e251] px-3 text-xs font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+                            >
+                              {busyAction === `approve-${submission.id}` ? (
+                                <LoaderCircle className="mr-2 size-3.5 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <CheckCircle2 className="mr-2 size-3.5" aria-hidden="true" />
+                              )}
                               Aprovar
                             </Button>
-                            <Button type="button" variant="ghost" onClick={() => setRejectingSubmissionId(submission.id)} disabled={actionIsRunning} className="h-9 rounded-full px-3 text-xs font-semibold text-[#7a4100] hover:bg-[#fff4de] hover:text-[#7a4100]">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => setRejectingSubmissionId(submission.id)}
+                              disabled={actionIsRunning}
+                              className="h-9 rounded-full px-3 text-xs font-semibold text-[#7a4100] hover:bg-[#fff4de] hover:text-[#7a4100] disabled:opacity-50"
+                            >
                               <XCircle className="mr-2 size-3.5" aria-hidden="true" />
                               Rejeitar
                             </Button>
@@ -258,7 +397,11 @@ const SubmissionsPage = () => {
                             placeholder="Nota de rejeição"
                             className="h-10 rounded-lg border-[#e1e2e4] bg-white"
                           />
-                          <Button type="submit" disabled={actionIsRunning} className="h-10 rounded-full bg-[#003514] px-4 text-xs font-semibold text-white hover:bg-[#003514]/90">
+                          <Button
+                            type="submit"
+                            disabled={actionIsRunning}
+                            className="h-10 rounded-full bg-[#003514] px-4 text-xs font-semibold text-white hover:bg-[#003514]/90"
+                          >
                             Confirmar
                           </Button>
                         </form>
@@ -268,7 +411,7 @@ const SubmissionsPage = () => {
                 })
               ) : (
                 <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
-                  Ainda não existem submissões.
+                  {emptyMessage}
                 </p>
               )}
             </div>
