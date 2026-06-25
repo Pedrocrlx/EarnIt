@@ -1,17 +1,14 @@
 import {
   CheckCircle2,
   ClipboardCheck,
-  ClipboardList,
   Clock3,
   Coins,
   LoaderCircle,
   RotateCcw,
-  UsersRound,
-  WalletCards,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import DashboardShell from "@/components/NavbarMobile";
+import ChildShell from "@/components/ChildShell";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/useAuth";
 import { useToast } from "@/context/useToast";
@@ -32,9 +29,9 @@ type TaskAction =
   | { label: string; mode: "submit" };
 
 const statusLabels: Record<string, string> = {
-  approved: "Aprovada",
-  pending: "Pendente",
-  rejected: "Rejeitada",
+  approved: "✅ Aprovada",
+  pending: "⏳ Em revisão",
+  rejected: "🔁 Tenta outra vez",
 };
 
 const statusStyles: Record<string, string> = {
@@ -72,11 +69,11 @@ const getTaskAction = (task: ChildTaskResponse): TaskAction => {
   }
 
   if (submission.status === "approved") {
-    return { label: "Concluída", mode: "disabled" };
+    return { label: "Concluída ✅", mode: "disabled" };
   }
 
   if (submission.submitted_at) {
-    return { label: "Em revisão", mode: "disabled" };
+    return { label: "Em revisão ⏳", mode: "disabled" };
   }
 
   return { label: "Enviar", mode: "submit" };
@@ -117,7 +114,7 @@ const ChildDashboard = () => {
       showToast(
         caughtError instanceof Error
           ? caughtError.message
-          : "Não foi possível carregar o painel.",
+          : "Não foi possível carregar as tarefas.",
         "error",
       );
     } finally {
@@ -126,7 +123,7 @@ const ChildDashboard = () => {
   }, [selectedChild, showToast]);
 
   useEffect(() => {
-    // Synchronizes async server state with the selected child dashboard.
+    // Synchronizes async server state with the selected child task list.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadDashboard();
   }, [loadDashboard]);
@@ -141,7 +138,7 @@ const ChildDashboard = () => {
     try {
       await submitTaskRequest(selectedChild.id, task.id);
       await loadDashboard();
-      showToast("Tarefa enviada para aprovação.");
+      showToast("Tarefa enviada para aprovação. 🚀");
     } catch (caughtError) {
       showToast(
         caughtError instanceof Error
@@ -164,7 +161,7 @@ const ChildDashboard = () => {
     try {
       await resubmitTaskRequest(selectedChild.id, submissionId);
       await loadDashboard();
-      showToast("Tarefa reenviada para aprovação.");
+      showToast("Tarefa reenviada para aprovação. 🚀");
     } catch (caughtError) {
       showToast(
         caughtError instanceof Error
@@ -188,230 +185,172 @@ const ChildDashboard = () => {
     return action.mode === "submit" || action.mode === "resubmit";
   }).length;
   const actionIsRunning = busyAction !== null;
-  const walletPoints = formatPoints(wallet?.balance_points ?? 0);
+  const progress = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
   return (
-    <DashboardShell>
-      <main className="relative z-0 flex w-full max-w-[1200px] flex-none grow-0 flex-col items-start gap-10 self-stretch bg-[#f8f9fb] px-4 py-6 pb-16 text-[#191c1e] sm:px-6 lg:h-[1024px] lg:min-h-[1024px] lg:w-[1024px] lg:px-10 lg:py-10 lg:pb-[258px]">
-        {!selectedChild ? (
-          <section className="flex w-full flex-col gap-5 rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
-            <div>
-              <p className="text-sm font-semibold uppercase text-[#5f6800]">
-                Perfil da criança
-              </p>
-              <h1 className="mt-1 font-montserrat text-2xl font-bold text-[#003514]">
-                Escolha um perfil
-              </h1>
-              <p className="mt-2 text-sm leading-6 text-[#404940]">
-                Selecione uma criança para ver tarefas, progresso e carteira.
-              </p>
-            </div>
-            <Button
-              asChild
-              className="h-11 w-fit rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42]"
-            >
-              <Link to="/profile">Trocar perfil</Link>
-            </Button>
-          </section>
-        ) : (
-          <>
-            <header className="flex w-full flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold uppercase text-[#5f6800]">
-                  Lista de tarefas
-                </p>
-                <h1 className="mt-1 font-montserrat text-2xl font-bold text-[#003514] sm:text-3xl">
-                  Olá, {selectedChild.name}
+    <ChildShell points={wallet?.balance_points ?? 0} loading={loading}>
+      {!selectedChild ? (
+        <section className="flex flex-col gap-4 rounded-2xl border border-[#e1e2e4] bg-white p-5 text-center">
+          <h1 className="font-montserrat text-xl font-bold text-[#003514]">
+            Escolhe um perfil
+          </h1>
+          <p className="text-sm leading-6 text-[#404940]">
+            Seleciona o teu perfil para veres as tuas tarefas e pontos.
+          </p>
+          <Button
+            asChild
+            className="h-11 rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42]"
+          >
+            <Link to="/profile">Escolher perfil</Link>
+          </Button>
+        </section>
+      ) : (
+        <div className="flex flex-col gap-5">
+          {/* Progress hero */}
+          <section className="rounded-2xl border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <h1 className="font-montserrat text-xl font-bold text-[#003514]">
+                  As minhas tarefas
                 </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-[#404940]">
-                  Vê as tuas tarefas, envia o que terminaste e acompanha os pontos ganhos.
+                <p className="mt-1 text-sm text-[#404940]">
+                  {completedCount} de {tasks.length} concluídas
                 </p>
               </div>
-              <Button
-                asChild
-                variant="ghost"
-                className="h-11 rounded-full border border-[#e1e2e4] bg-white px-5 text-sm font-semibold text-[#003514] hover:bg-white"
-              >
-                <Link to="/profile">
-                  <UsersRound className="mr-2 size-4" aria-hidden="true" />
-                  Trocar perfil
-                </Link>
-              </Button>
-            </header>
+              <span className="text-2xl font-bold text-[#5f6800]">{progress}%</span>
+            </div>
+            <div className="mt-3 h-3 overflow-hidden rounded-full bg-[#edeef0]">
+              <div
+                className="h-full rounded-full bg-[#d4e251] transition-[width]"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="rounded-xl bg-[#f8f9fb] px-3 py-2 text-center">
+                <p className="text-lg font-bold text-[#003514]">{availableCount}</p>
+                <p className="text-xs font-semibold text-[#59625a]">Para fazer</p>
+              </div>
+              <div className="rounded-xl bg-[#fff4de] px-3 py-2 text-center">
+                <p className="text-lg font-bold text-[#7a4100]">{waitingCount}</p>
+                <p className="text-xs font-semibold text-[#7a4100]">Em revisão</p>
+              </div>
+              <div className="rounded-xl bg-[#eef7d1] px-3 py-2 text-center">
+                <p className="text-lg font-bold text-[#4b5c00]">{completedCount}</p>
+                <p className="text-xs font-semibold text-[#5f6800]">Feitas</p>
+              </div>
+            </div>
+          </section>
 
-            <section className="grid w-full gap-3 md:grid-cols-4">
-              <article className="rounded-lg border border-[#e1e2e4] bg-white p-5">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold text-[#404940]">Pontos</p>
-                    <p className="mt-2 text-3xl font-bold text-[#003514]">
-                      {walletPoints}
-                    </p>
-                  </div>
-                  <WalletCards className="size-5 text-[#5f6800]" aria-hidden="true" />
-                </div>
-              </article>
-              <article className="rounded-lg border border-[#e1e2e4] bg-white p-5">
-                <p className="text-sm font-semibold text-[#404940]">Disponíveis</p>
-                <p className="mt-2 text-3xl font-bold text-[#003514]">
-                  {availableCount}
-                </p>
-              </article>
-              <article className="rounded-lg border border-[#e1e2e4] bg-white p-5">
-                <p className="text-sm font-semibold text-[#404940]">Em revisão</p>
-                <p className="mt-2 text-3xl font-bold text-[#003514]">
-                  {waitingCount}
-                </p>
-              </article>
-              <article className="rounded-lg border border-[#e1e2e4] bg-white p-5">
-                <p className="text-sm font-semibold text-[#404940]">Concluídas</p>
-                <p className="mt-2 text-3xl font-bold text-[#003514]">
-                  {completedCount}
-                </p>
-              </article>
-            </section>
+          {/* Task list */}
+          {loading ? (
+            <p className="rounded-2xl bg-[#f3f4f6] px-4 py-8 text-center text-sm font-semibold text-[#404940]">
+              A carregar tarefas...
+            </p>
+          ) : tasks.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {tasks.map((task) => {
+                const action = getTaskAction(task);
+                const status = task.submission?.status;
+                const reward = Number(task.reward_amount);
+                const isBusy =
+                  busyAction === `submit-${task.id}` ||
+                  (action.mode === "resubmit" &&
+                    busyAction === `resubmit-${action.submissionId}`);
 
-            <section className="grid w-full gap-6 xl:grid-cols-[1fr_320px]">
-              <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-lg font-bold text-[#003514]">
-                      Tarefas de hoje
-                    </h2>
-                    <p className="mt-1 text-sm text-[#404940]">
-                      Envia as tarefas quando estiverem prontas.
-                    </p>
-                  </div>
-                  <ClipboardList className="size-5 text-[#404940]" aria-hidden="true" />
-                </div>
-
-                <div className="mt-5 grid gap-3">
-                  {loading ? (
-                    <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
-                      A carregar tarefas...
-                    </p>
-                  ) : tasks.length > 0 ? (
-                    tasks.map((task) => {
-                      const action = getTaskAction(task);
-                      const status = task.submission?.status;
-                      const isBusy =
-                        busyAction === `submit-${task.id}` ||
-                        (action.mode === "resubmit" &&
-                          busyAction === `resubmit-${action.submissionId}`);
-
-                      return (
-                        <article
-                          key={task.id}
-                          className="flex flex-col gap-4 rounded-lg border border-[#e1e2e4] bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="font-semibold text-[#191c1e]">
-                                {task.title}
-                              </h3>
-                              <span className="rounded-full bg-[#f3f4f6] px-2.5 py-1 text-xs font-semibold text-[#404940]">
-                                {taskTypeLabels[task.task_type] ?? task.task_type}
-                              </span>
-                              {status ? (
-                                <span
-                                  className={cn(
-                                    "rounded-full px-2.5 py-1 text-xs font-semibold",
-                                    statusStyles[status] ?? "bg-[#f3f4f6] text-[#404940]",
-                                  )}
-                                >
-                                  {statusLabels[status] ?? status}
-                                </span>
-                              ) : null}
-                            </div>
-                            {task.description ? (
-                              <p className="mt-2 text-sm leading-5 text-[#404940]">
-                                {task.description}
-                              </p>
-                            ) : null}
-                            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[#59625a]">
-                              <Coins className="size-4" aria-hidden="true" />
-                              {formatPoints(Number(task.reward_amount))}
-                              {task.expires_at ? (
-                                <>
-                                  <span aria-hidden="true">·</span>
-                                  <Clock3 className="size-4" aria-hidden="true" />
-                                  {new Date(task.expires_at).toLocaleDateString("pt-PT")}
-                                </>
-                              ) : null}
-                            </p>
-                            {task.submission?.rejection_note ? (
-                              <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
-                                {task.submission.rejection_note}
-                              </p>
-                            ) : null}
-                            {action.mode === "disabled" && action.reason ? (
-                              <p className="mt-2 text-xs font-semibold text-[#7a4100]">
-                                {action.reason}
-                              </p>
-                            ) : null}
-                          </div>
-
-                          {action.mode === "submit" || action.mode === "resubmit" ? (
-                            <Button
-                              type="button"
-                              onClick={() =>
-                                action.mode === "submit"
-                                  ? submitTask(task)
-                                  : resubmitTask(action.submissionId)
-                              }
-                              disabled={actionIsRunning}
-                              className="h-11 shrink-0 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
-                            >
-                              {isBusy ? (
-                                <LoaderCircle
-                                  className="mr-2 size-4 animate-spin"
-                                  aria-hidden="true"
-                                />
-                              ) : action.mode === "submit" ? (
-                                <ClipboardCheck
-                                  className="mr-2 size-4"
-                                  aria-hidden="true"
-                                />
-                              ) : (
-                                <RotateCcw className="mr-2 size-4" aria-hidden="true" />
-                              )}
-                              {action.label}
-                            </Button>
-                          ) : (
-                            <span className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-[#f3f4f6] px-5 text-sm font-semibold text-[#404940]">
-                              <CheckCircle2 className="mr-2 size-4" aria-hidden="true" />
-                              {action.label}
-                            </span>
+                return (
+                  <article
+                    key={task.id}
+                    className="flex h-full flex-col gap-3 rounded-2xl border border-[#e1e2e4] bg-white p-4 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-bold text-[#003514]">{task.title}</h3>
+                      {status ? (
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full px-2.5 py-1 text-xs font-bold",
+                            statusStyles[status] ?? "bg-[#f3f4f6] text-[#404940]",
                           )}
-                        </article>
-                      );
-                    })
-                  ) : (
-                    <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
-                      Ainda não tens tarefas.
-                    </p>
-                  )}
-                </div>
-              </section>
+                        >
+                          {statusLabels[status] ?? status}
+                        </span>
+                      ) : null}
+                    </div>
 
-              <aside className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
-                <h2 className="text-lg font-bold text-[#003514]">Objetivos</h2>
-                <p className="mt-1 text-sm leading-5 text-[#404940]">
-                  Faz pedidos dos teus desejos e acompanha o progresso dos pontos
-                  até os alcançares.
-                </p>
-                <Button
-                  asChild
-                  className="mt-4 h-11 w-full rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42]"
-                >
-                  <Link to="/dashboard/goals">Ver os meus objetivos</Link>
-                </Button>
-              </aside>
-            </section>
-          </>
-        )}
-      </main>
-    </DashboardShell>
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-[#59625a]">
+                      <span className="rounded-full bg-[#f3f4f6] px-2.5 py-1 text-xs font-semibold text-[#404940]">
+                        {taskTypeLabels[task.task_type] ?? task.task_type}
+                      </span>
+                      {reward > 0 ? (
+                        <span className="flex items-center gap-1.5 rounded-full bg-[#eef7d1] px-2.5 py-1 text-xs font-bold text-[#5f6800]">
+                          <Coins className="size-3.5" aria-hidden="true" />
+                          {formatPoints(reward)} pts
+                        </span>
+                      ) : null}
+                      {task.expires_at ? (
+                        <span className="flex items-center gap-1.5">
+                          <Clock3 className="size-4" aria-hidden="true" />
+                          {new Date(task.expires_at).toLocaleDateString("pt-PT")}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {task.description ? (
+                      <p className="text-sm leading-5 text-[#404940]">
+                        {task.description}
+                      </p>
+                    ) : null}
+
+                    {task.submission?.rejection_note ? (
+                      <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                        {task.submission.rejection_note}
+                      </p>
+                    ) : null}
+
+                    {action.mode === "submit" || action.mode === "resubmit" ? (
+                      <Button
+                        type="button"
+                        onClick={() =>
+                          action.mode === "submit"
+                            ? submitTask(task)
+                            : resubmitTask(action.submissionId)
+                        }
+                        disabled={actionIsRunning}
+                        className="mt-auto h-12 w-full rounded-full bg-[#d4e251] text-sm font-bold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+                      >
+                        {isBusy ? (
+                          <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                        ) : action.mode === "submit" ? (
+                          <ClipboardCheck className="mr-2 size-4" aria-hidden="true" />
+                        ) : (
+                          <RotateCcw className="mr-2 size-4" aria-hidden="true" />
+                        )}
+                        {action.label}
+                      </Button>
+                    ) : (
+                      <div className="mt-auto flex flex-col gap-1">
+                        <span className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[#f3f4f6] text-sm font-bold text-[#404940]">
+                          <CheckCircle2 className="mr-2 size-4" aria-hidden="true" />
+                          {action.label}
+                        </span>
+                        {action.reason ? (
+                          <p className="text-center text-xs font-semibold text-[#7a4100]">
+                            {action.reason}
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="rounded-2xl bg-[#f3f4f6] px-4 py-10 text-center text-sm font-semibold text-[#404940]">
+              Ainda não tens tarefas. ✨
+            </p>
+          )}
+        </div>
+      )}
+    </ChildShell>
   );
 };
 

@@ -1,5 +1,6 @@
-import { Check, Gift, LoaderCircle, Sparkles, Target } from "lucide-react";
+import { Check, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import ChildShell from "@/components/ChildShell";
 import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,12 +19,17 @@ import {
   rejectGoal,
   requestGoal,
 } from "@/services/goalService";
-import { getWallet } from "@/services/taskService";
 import { getPointValue } from "@/services/profileService";
-import type { Goal, GoalListResponse, WalletResponse } from "@/services/types";
+import type { Goal, GoalListResponse } from "@/services/types";
 
 const progressPercent = (balance: number, target: number) =>
   target > 0 ? Math.min(100, Math.round((balance / target) * 100)) : 0;
+
+// Faint vertical gridlines every 10% so progress reads granularly over the bar.
+const progressGrid = {
+  backgroundImage:
+    "repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 1px), rgba(0,53,20,0.14) calc(10% - 1px), rgba(0,53,20,0.14) 10%)",
+};
 
 const childChip = (name: string) => (
   <span className="shrink-0 rounded-full bg-[#eef7d1] px-2.5 py-1 text-xs font-bold text-[#5f6800]">
@@ -31,47 +37,10 @@ const childChip = (name: string) => (
   </span>
 );
 
-const Movements = ({ wallet }: { wallet: WalletResponse | null }) => (
-  <section className="rounded-2xl border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
-    <h2 className="text-lg font-bold text-[#003514]">Últimos movimentos</h2>
-    <div className="mt-4 grid gap-2">
-      {wallet && wallet.transactions.length > 0 ? (
-        wallet.transactions.slice(0, 6).map((movement) => (
-          <div
-            key={movement.id}
-            className="flex items-center justify-between gap-3 rounded-lg bg-[#f8f9fb] px-4 py-3"
-          >
-            <span className="min-w-0 truncate text-sm text-[#404940]">
-              {movement.description ?? "Movimento"}
-            </span>
-            <span
-              className={`shrink-0 text-sm font-bold ${
-                movement.transaction_type === "debit"
-                  ? "text-[#7a4100]"
-                  : "text-[#5f6800]"
-              }`}
-            >
-              {movement.transaction_type === "debit" ? "−" : "+"}
-              {formatPoints(movement.amount_points)}
-            </span>
-          </div>
-        ))
-      ) : (
-        <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
-          Ainda não existem movimentos.
-        </p>
-      )}
-    </div>
-  </section>
-);
-
-const pageMain = (children: React.ReactNode) => (
-  <DashboardShell>
-    <main className="min-h-screen bg-[#f8f9fb] px-4 py-6 text-[#191c1e] sm:px-6 lg:px-10">
-      <section className="mx-auto flex w-full max-w-4xl flex-col gap-6">{children}</section>
-    </main>
-  </DashboardShell>
-);
+const segmentClass = (active: boolean) =>
+  `rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+    active ? "bg-[#003514] text-white" : "text-[#404940] hover:text-[#003514]"
+  }`;
 
 // ---------------------------------------------------------------------------
 // Child view — make a wish, watch progress.
@@ -90,7 +59,6 @@ const ChildGoals = () => {
   );
 
   const [data, setData] = useState<GoalListResponse | null>(null);
-  const [wallet, setWallet] = useState<WalletResponse | null>(null);
   const [wish, setWish] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -99,12 +67,7 @@ const ChildGoals = () => {
       return;
     }
     try {
-      const [goals, walletData] = await Promise.all([
-        listGoals(child.id),
-        getWallet(child.id),
-      ]);
-      setData(goals);
-      setWallet(walletData);
+      setData(await listGoals(child.id));
     } catch (caughtError) {
       showToast(
         caughtError instanceof Error
@@ -143,20 +106,23 @@ const ChildGoals = () => {
   };
 
   const balance = data?.balance_points ?? 0;
-  // Rejected goals are hidden from the child.
-  const visibleGoals = (data?.goals ?? []).filter((goal) => goal.status !== "rejected");
+  // Rejected and already-conquered (redeemed) goals are hidden from the child —
+  // only what they're still working towards stays on the list.
+  const visibleGoals = (data?.goals ?? []).filter(
+    (goal) => goal.status === "requested" || goal.status === "approved",
+  );
 
-  return pageMain(
-    <>
-      <header className="rounded-2xl bg-[#003514] p-6 text-white shadow-[0px_14px_30px_-18px_rgba(3,78,34,0.6)]">
-        <p className="text-sm font-semibold uppercase tracking-[0.06em] text-[#d4e251]">
+  return (
+    <ChildShell points={balance} loading={data === null}>
+      <div className="flex flex-col gap-5">
+      <div>
+        <h1 className="font-montserrat text-xl font-bold text-[#003514]">
           Os meus objetivos
-        </p>
-        <p className="mt-2 text-3xl font-bold">{formatPoints(balance)}</p>
-        <p className="mt-1 text-sm text-white/80">
+        </h1>
+        <p className="mt-1 text-sm text-[#404940]">
           Ganha pontos a fazer tarefas e troca-os pelos teus desejos.
         </p>
-      </header>
+      </div>
 
       <section className="rounded-2xl border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
         <h2 className="flex items-center gap-2 text-lg font-bold text-[#003514]">
@@ -185,62 +151,64 @@ const ChildGoals = () => {
         </div>
       </section>
 
-      <section className="grid gap-3">
+      <section className="overflow-hidden rounded-2xl border border-[#e1e2e4] bg-white shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
         {visibleGoals.length > 0 ? (
-          visibleGoals.map((goal) => (
-            <article
-              key={goal.id}
-              className="rounded-2xl border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="font-bold text-[#003514]">{goal.name}</h3>
-                {goal.status === "redeemed" ? (
-                  <span className="shrink-0 rounded-full bg-[#eef7d1] px-3 py-1 text-xs font-bold text-[#5f6800]">
-                    Conquistado 🎉
-                  </span>
-                ) : null}
-              </div>
-
-              {goal.status === "requested" ? (
-                <p className="mt-2 text-sm font-semibold text-[#404940]">
-                  À espera de aprovação…
-                </p>
-              ) : null}
-
-              {goal.status === "approved" && goal.target_amount ? (
-                <div className="mt-3">
-                  <div className="h-3 overflow-hidden rounded-full bg-[#edeef0]">
-                    <div
-                      className="h-full rounded-full bg-[#d4e251] transition-[width]"
-                      style={{ width: `${progressPercent(balance, goal.target_amount)}%` }}
-                    />
+          <div className="divide-y divide-[#e1e2e4]">
+            {visibleGoals.map((goal) => {
+              const target = goal.target_amount ?? 0;
+              const pending = goal.status !== "approved" || target <= 0;
+              const percent = progressPercent(balance, target);
+              const ready = !pending && balance >= target;
+              return (
+                <div key={goal.id} className="px-5 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-baseline gap-2">
+                      <p className="truncate font-bold text-[#003514]">{goal.name}</p>
+                      {!pending ? (
+                        <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-[#7a8278]">
+                          {formatPoints(Math.min(balance, target))} pts / {formatPoints(target)} pts
+                        </span>
+                      ) : null}
+                    </div>
+                    {ready ? (
+                      <span className="shrink-0 rounded-full bg-[#eef7d1] px-2.5 py-1 text-xs font-bold text-[#5f6800]">
+                        Pronto! 🎉
+                      </span>
+                    ) : null}
                   </div>
-                  <p className="mt-2 text-sm font-semibold text-[#003514]">
-                    {formatPoints(Math.min(balance, goal.target_amount))} /{" "}
-                    {formatPoints(goal.target_amount)}
-                    {balance >= goal.target_amount ? (
-                      <span className="ml-1 text-[#5f6800]">
-                        · Já podes resgatar! Pede a um adulto 🎉
-                      </span>
+
+                  <div className="mt-3 flex items-center gap-3">
+                    {pending ? (
+                      <div className="h-5 flex-1 rounded-full border-2 border-dashed border-[#cbd5cd] bg-[#f7f8f6]" />
                     ) : (
-                      <span className="ml-1 text-[#404940]">
-                        · Faltam {formatPoints(goal.target_amount - balance)}
-                      </span>
+                      <div className="relative h-5 flex-1 overflow-hidden rounded-full bg-[#edeef0]">
+                        <div
+                          className="absolute inset-y-0 left-0 bg-[#d4e251] transition-[width]"
+                          style={{ width: `${percent}%` }}
+                        />
+                        <div className="absolute inset-0" style={progressGrid} />
+                      </div>
                     )}
-                  </p>
+                    <span
+                      className={`shrink-0 text-right text-sm font-bold ${
+                        pending ? "w-20 text-[#7a8278]" : "w-12 text-[#003514]"
+                      }`}
+                    >
+                      {pending ? "À espera" : `${percent}%`}
+                    </span>
+                  </div>
                 </div>
-              ) : null}
-            </article>
-          ))
+              );
+            })}
+          </div>
         ) : (
-          <p className="rounded-2xl bg-[#f3f4f6] px-4 py-8 text-center text-sm font-semibold text-[#404940]">
+          <p className="px-5 py-10 text-center text-sm font-semibold text-[#404940]">
             Ainda não tens objetivos. Faz um pedido! ✨
           </p>
         )}
       </section>
-
-      <Movements wallet={wallet} />
-    </>,
+      </div>
+    </ChildShell>
   );
 };
 
@@ -264,6 +232,10 @@ const ParentGoals = () => {
   const [pointValueEur, setPointValueEur] = useState(0.01);
   const [targets, setTargets] = useState<Record<string, string>>({});
   const [busyGoalId, setBusyGoalId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [goalView, setGoalView] = useState<"pending" | "approved" | "history">(
+    "pending",
+  );
 
   useEffect(() => {
     void getPointValue()
@@ -274,8 +246,10 @@ const ParentGoals = () => {
   const load = useCallback(async () => {
     if (children.length === 0) {
       setEntries([]);
+      setLoading(false);
       return;
     }
+    setLoading(true);
     try {
       const results = await Promise.all(
         children.map(async (child) => {
@@ -295,6 +269,8 @@ const ParentGoals = () => {
           : "Não foi possível carregar os objetivos.",
         "error",
       );
+    } finally {
+      setLoading(false);
     }
   }, [children, showToast]);
 
@@ -343,199 +319,239 @@ const ParentGoals = () => {
     (goal) => goal.status === "redeemed" || goal.status === "rejected",
   );
 
-  return pageMain(
-    <>
-      <header className="rounded-2xl border border-[#e1e2e4] bg-white p-5 sm:p-6">
-        <p className="text-sm font-semibold uppercase text-[#5f6800]">Objetivos</p>
-        <h1 className="mt-1 font-montserrat text-2xl font-bold text-[#003514]">
-          Pedidos e recompensas de todas as crianças
-        </h1>
-      </header>
+  const emptyMessage =
+    goalView === "pending"
+      ? "Sem pedidos pendentes."
+      : goalView === "approved"
+        ? "Nenhum objetivo aprovado."
+        : "Sem histórico de objetivos.";
 
-      {children.length === 0 ? (
-        <p className="rounded-2xl bg-[#f3f4f6] px-4 py-8 text-center text-sm font-semibold text-[#404940]">
-          Ainda não existem perfis de crianças.
+  const renderPending = (goal: GoalWithChild) => {
+    const euros = Number(targets[goal.id]) || 0;
+    const points = pointValueEur > 0 ? Math.round(euros / pointValueEur) : 0;
+    return (
+      <article key={goal.id} className="py-4 first:pt-0 last:pb-0">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-semibold text-[#191c1e]">{goal.name}</h3>
+          {childChip(goal.childName)}
+        </div>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex-1 space-y-1">
+            <Label
+              htmlFor={`target-${goal.id}`}
+              className="text-xs font-semibold text-[#404940]"
+            >
+              Valor do objetivo (€)
+            </Label>
+            <Input
+              id={`target-${goal.id}`}
+              type="number"
+              min="0"
+              step="0.01"
+              value={targets[goal.id] ?? ""}
+              onChange={(event) =>
+                setTargets((current) => ({
+                  ...current,
+                  [goal.id]: event.target.value,
+                }))
+              }
+              disabled={busyGoalId === goal.id}
+              className="h-11 rounded-lg border-[#e1e2e4] bg-white"
+            />
+            {euros > 0 ? (
+              <p className="text-xs text-[#59625a]">
+                = {formatPoints(points)} a poupar
+              </p>
+            ) : null}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              onClick={() => approve(goal)}
+              disabled={busyGoalId === goal.id}
+              className="h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+            >
+              Aprovar
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() =>
+                runGoalAction(goal.id, () => rejectGoal(goal.child_id, goal.id))
+              }
+              disabled={busyGoalId === goal.id}
+              className="h-11 rounded-full bg-[#f3f4f6] px-5 text-sm font-semibold text-[#7a4100] hover:bg-[#fff4de]"
+            >
+              Recusar
+            </Button>
+          </div>
+        </div>
+      </article>
+    );
+  };
+
+  const renderApproved = (goal: GoalWithChild) => {
+    const target = goal.target_amount ?? 0;
+    const canRedeem = goal.balance >= target;
+    return (
+      <article key={goal.id} className="py-4 first:pt-0 last:pb-0">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <h3 className="truncate font-semibold text-[#191c1e]">{goal.name}</h3>
+            {childChip(goal.childName)}
+          </div>
+          <Button
+            type="button"
+            onClick={() =>
+              runGoalAction(goal.id, () => redeemGoal(goal.child_id, goal.id))
+            }
+            disabled={busyGoalId === goal.id || !canRedeem}
+            className="h-10 shrink-0 rounded-full bg-[#003514] px-5 text-sm font-semibold text-[#d4e251] hover:bg-[#024d22] disabled:opacity-40"
+          >
+            {busyGoalId === goal.id ? (
+              <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
+            ) : null}
+            Resgatar
+          </Button>
+        </div>
+        <div className="mt-3 h-3 overflow-hidden rounded-full bg-[#edeef0]">
+          <div
+            className="h-full rounded-full bg-[#d4e251]"
+            style={{ width: `${progressPercent(goal.balance, target)}%` }}
+          />
+        </div>
+        <p className="mt-2 text-sm font-semibold text-[#404940]">
+          {formatPoints(Math.min(goal.balance, target))} / {formatPoints(target)}
+          {!canRedeem ? (
+            <span> · Faltam {formatPoints(target - goal.balance)}</span>
+          ) : null}
         </p>
-      ) : (
-        <>
+      </article>
+    );
+  };
 
-          <section className="rounded-2xl border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-[#003514]">
-              <Target className="size-5" aria-hidden="true" /> Pedidos pendentes
-            </h2>
-            <div className="mt-4 grid gap-3">
-              {requested.length > 0 ? (
-                requested.map((goal) => {
-                  const euros = Number(targets[goal.id]) || 0;
-                  const points =
-                    pointValueEur > 0 ? Math.round(euros / pointValueEur) : 0;
-                  return (
-                    <div key={goal.id} className="rounded-xl bg-[#f8f9fb] p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="font-bold text-[#003514]">{goal.name}</p>
-                        {childChip(goal.childName)}
-                      </div>
-                      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
-                        <div className="flex-1 space-y-1">
-                          <Label
-                            htmlFor={`target-${goal.id}`}
-                            className="text-xs font-semibold text-[#404940]"
-                          >
-                            Valor do objetivo (€)
-                          </Label>
-                          <Input
-                            id={`target-${goal.id}`}
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={targets[goal.id] ?? ""}
-                            onChange={(event) =>
-                              setTargets((current) => ({
-                                ...current,
-                                [goal.id]: event.target.value,
-                              }))
-                            }
-                            disabled={busyGoalId === goal.id}
-                            className="h-11 rounded-lg border-[#e1e2e4] bg-white"
-                          />
-                          {euros > 0 ? (
-                            <p className="text-xs text-[#59625a]">
-                              = {formatPoints(points)} a poupar
-                            </p>
-                          ) : null}
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            onClick={() => approve(goal)}
-                            disabled={busyGoalId === goal.id}
-                            className="h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
-                          >
-                            Aprovar
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() =>
-                              runGoalAction(goal.id, () =>
-                                rejectGoal(goal.child_id, goal.id),
-                              )
-                            }
-                            disabled={busyGoalId === goal.id}
-                            className="h-11 rounded-full bg-[#f3f4f6] px-5 text-sm font-semibold text-[#7a4100] hover:bg-[#fff4de]"
-                          >
-                            Recusar
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
-                  Sem pedidos pendentes.
-                </p>
-              )}
+  const renderHistory = (goal: GoalWithChild) => (
+    <article
+      key={goal.id}
+      className="flex items-center justify-between gap-3 py-4 first:pt-0 last:pb-0"
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="min-w-0 truncate text-sm font-semibold text-[#191c1e]">
+          {goal.name}
+        </span>
+        {childChip(goal.childName)}
+      </div>
+      <span
+        className={`flex shrink-0 items-center gap-1 text-xs font-bold ${
+          goal.status === "redeemed" ? "text-[#5f6800]" : "text-[#7a4100]"
+        }`}
+      >
+        {goal.status === "redeemed" ? (
+          <>
+            <Check className="size-3.5" aria-hidden="true" /> Resgatado
+          </>
+        ) : (
+          "Recusado"
+        )}
+      </span>
+    </article>
+  );
+
+  const visibleGoals =
+    goalView === "pending"
+      ? requested
+      : goalView === "approved"
+        ? approved
+        : history;
+
+  return (
+    <DashboardShell>
+      <main className="flex min-h-screen w-full flex-col items-center gap-10 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
+        <section className="flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10">
+          <header className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold uppercase text-[#5f6800]">
+                Gestão familiar
+              </p>
+              <h1 className="mt-1 font-montserrat text-2xl font-bold text-[#003514] sm:text-3xl">
+                Objetivos
+              </h1>
             </div>
-          </section>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={load}
+              disabled={loading || busyGoalId !== null}
+              aria-label="Atualizar"
+              className="size-11 shrink-0 rounded-full border border-[#e1e2e4] text-[#003514] hover:bg-white"
+            >
+              <RefreshCw
+                className={`size-5 ${loading ? "animate-spin" : ""}`}
+                aria-hidden="true"
+              />
+            </Button>
+          </header>
 
-          <section className="rounded-2xl border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-[#003514]">
-              <Gift className="size-5" aria-hidden="true" /> Objetivos aprovados
-            </h2>
-            <div className="mt-4 grid gap-3">
-              {approved.length > 0 ? (
-                approved.map((goal) => {
-                  const target = goal.target_amount ?? 0;
-                  const canRedeem = goal.balance >= target;
-                  return (
-                    <div key={goal.id} className="rounded-xl bg-[#f8f9fb] p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <p className="truncate font-bold text-[#003514]">
-                            {goal.name}
-                          </p>
-                          {childChip(goal.childName)}
-                        </div>
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            runGoalAction(goal.id, () =>
-                              redeemGoal(goal.child_id, goal.id),
-                            )
-                          }
-                          disabled={busyGoalId === goal.id || !canRedeem}
-                          className="h-10 shrink-0 rounded-full bg-[#003514] px-5 text-sm font-semibold text-[#d4e251] hover:bg-[#024d22] disabled:opacity-40"
-                        >
-                          {busyGoalId === goal.id ? (
-                            <LoaderCircle
-                              className="mr-2 size-4 animate-spin"
-                              aria-hidden="true"
-                            />
-                          ) : null}
-                          Resgatar
-                        </Button>
-                      </div>
-                      <div className="mt-3 h-3 overflow-hidden rounded-full bg-[#edeef0]">
-                        <div
-                          className="h-full rounded-full bg-[#d4e251]"
-                          style={{ width: `${progressPercent(goal.balance, target)}%` }}
-                        />
-                      </div>
-                      <p className="mt-2 text-sm font-semibold text-[#404940]">
-                        {formatPoints(Math.min(goal.balance, target))} /{" "}
-                        {formatPoints(target)}
-                        {!canRedeem ? (
-                          <span> · Faltam {formatPoints(target - goal.balance)}</span>
-                        ) : null}
-                      </p>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
-                  Nenhum objetivo aprovado.
-                </p>
-              )}
-            </div>
-          </section>
-
-          {history.length > 0 ? (
-            <section className="rounded-2xl border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
-              <h2 className="text-lg font-bold text-[#003514]">Histórico</h2>
-              <div className="mt-4 grid gap-2">
-                {history.map((goal) => (
-                  <div
-                    key={goal.id}
-                    className="flex items-center justify-between gap-3 rounded-lg bg-[#f8f9fb] px-4 py-3"
+          {children.length === 0 ? (
+            <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
+              <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
+                Ainda não existem perfis de crianças.
+              </p>
+            </section>
+          ) : (
+            <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="text-lg font-bold text-[#003514]">
+                  Objetivos das crianças
+                </h2>
+                <div className="inline-flex rounded-full border border-[#e1e2e4] bg-[#f8f9fb] p-1">
+                  <button
+                    type="button"
+                    onClick={() => setGoalView("pending")}
+                    className={segmentClass(goalView === "pending")}
                   >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="min-w-0 truncate text-sm text-[#404940]">
-                        {goal.name}
-                      </span>
-                      {childChip(goal.childName)}
-                    </div>
-                    <span
-                      className={`flex shrink-0 items-center gap-1 text-xs font-bold ${
-                        goal.status === "redeemed" ? "text-[#5f6800]" : "text-[#7a4100]"
-                      }`}
-                    >
-                      {goal.status === "redeemed" ? (
-                        <>
-                          <Check className="size-3.5" aria-hidden="true" /> Resgatado
-                        </>
-                      ) : (
-                        "Recusado"
-                      )}
-                    </span>
-                  </div>
-                ))}
+                    Pendentes ({requested.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGoalView("approved")}
+                    className={segmentClass(goalView === "approved")}
+                  >
+                    Aprovados ({approved.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGoalView("history")}
+                    className={segmentClass(goalView === "history")}
+                  >
+                    Histórico ({history.length})
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-5 divide-y divide-[#e1e2e4]">
+                {loading ? (
+                  <p className="py-8 text-center text-sm font-semibold text-[#404940]">
+                    A carregar objetivos...
+                  </p>
+                ) : visibleGoals.length > 0 ? (
+                  goalView === "pending"
+                    ? visibleGoals.map(renderPending)
+                    : goalView === "approved"
+                      ? visibleGoals.map(renderApproved)
+                      : visibleGoals.map(renderHistory)
+                ) : (
+                  <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
+                    {emptyMessage}
+                  </p>
+                )}
               </div>
             </section>
-          ) : null}
-        </>
-      )}
-    </>,
+          )}
+        </section>
+      </main>
+    </DashboardShell>
   );
 };
 

@@ -1,11 +1,9 @@
 import {
   CalendarDays,
-  ImageUp,
   LoaderCircle,
   Plus,
+  RefreshCw,
   Save,
-  UserRound,
-  UsersRound,
 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import DashboardShell from "@/components/NavbarMobile";
@@ -15,26 +13,10 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/useAuth";
 import { useToast } from "@/context/useToast";
 import { isFutureDate } from "@/lib/validation";
-import {
-  createChild as createChildRequest,
-  updateChildBirthDate,
-  uploadChildAvatar,
-} from "@/services/profileService";
+import { updateChildBirthDate } from "@/services/profileService";
+import CreateChildModal from "./CreateChildModal";
 
-type MutationState = "idle" | "saving-family" | "creating-child";
-
-type CreateChildForm = {
-  birthDate: string;
-  name: string;
-};
-
-const initialChildForm: CreateChildForm = {
-  birthDate: "",
-  name: "",
-};
-
-const avatarContentTypes = ["image/jpeg", "image/png", "image/webp"];
-const avatarMaxBytes = 5 * 1024 * 1024;
+const metaItemClass = "flex items-center gap-1.5 text-sm text-[#404940]";
 
 const getTodayInputValue = () => {
   const today = new Date();
@@ -48,81 +30,27 @@ const ManageProfilesPage = () => {
   const { showToast } = useToast();
   const familyName = familyProfile?.family_name?.trim() || "Família";
   const children = familyProfile?.children ?? [];
-  const [childForm, setChildForm] = useState<CreateChildForm>(initialChildForm);
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarInputKey, setAvatarInputKey] = useState(0);
-  const [mutationState, setMutationState] = useState<MutationState>("idle");
+  const [refreshing, setRefreshing] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [editingBirthDate, setEditingBirthDate] = useState("");
   const [updatingChildId, setUpdatingChildId] = useState<string | null>(null);
 
-  const actionIsRunning = mutationState !== "idle" || updatingChildId !== null;
+  const actionIsRunning = updatingChildId !== null || refreshing;
 
   const refreshFamily = async () => {
-    await refreshSession();
+    setRefreshing(true);
+    try {
+      await refreshSession();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
-  const createChild = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const childName = childForm.name.trim();
-    if (!childName) {
-      showToast("Indique o nome da criança.", "error");
-      return;
-    }
-
-    if (avatarFile && !avatarContentTypes.includes(avatarFile.type)) {
-      showToast("O avatar deve ser uma imagem JPEG, PNG ou WebP.", "error");
-      return;
-    }
-
-    if (avatarFile && avatarFile.size > avatarMaxBytes) {
-      showToast("O avatar não pode exceder 5 MB.", "error");
-      return;
-    }
-
-    setMutationState("creating-child");
-
-    try {
-      const child = await createChildRequest({
-        name: childName,
-        birth_date: childForm.birthDate || null,
-        avatar_url: null,
-      });
-
-      if (avatarFile) {
-        try {
-          await uploadChildAvatar(child.id, avatarFile);
-        } catch (caughtError) {
-          setChildForm(initialChildForm);
-          setAvatarFile(null);
-          setAvatarInputKey((currentKey) => currentKey + 1);
-          await refreshFamily();
-          showToast(
-            caughtError instanceof Error
-              ? `Perfil criado, mas não foi possível guardar o avatar: ${caughtError.message}`
-              : "Perfil criado, mas não foi possível guardar o avatar.",
-            "error",
-          );
-          return;
-        }
-      }
-
-      setChildForm(initialChildForm);
-      setAvatarFile(null);
-      setAvatarInputKey((currentKey) => currentKey + 1);
-      await refreshFamily();
-      showToast("Perfil criado.");
-    } catch (caughtError) {
-      showToast(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Não foi possível criar o perfil.",
-        "error",
-      );
-    } finally {
-      setMutationState("idle");
-    }
+  const handleCreated = (message: string) => {
+    showToast(message);
+    setCreateModalOpen(false);
+    void refreshFamily();
   };
 
   const startEditingBirthDate = (child: (typeof children)[number]) => {
@@ -146,7 +74,7 @@ const ManageProfilesPage = () => {
     try {
       await updateChildBirthDate(editingChildId, editingBirthDate || null);
       setEditingChildId(null);
-      await refreshFamily();
+      await refreshSession();
       showToast("Data de nascimento atualizada.");
     } catch (caughtError) {
       showToast(
@@ -162,138 +90,59 @@ const ManageProfilesPage = () => {
 
   return (
     <DashboardShell>
-      <main className="min-h-screen bg-[#f8f9fb] px-4 py-6 text-[#191c1e] sm:px-6 lg:px-10">
-        <section className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-          <header>
-            <p className="text-sm font-semibold uppercase text-[#5f6800]">
-              Gestão familiar
-            </p>
-            <h1 className="mt-1 font-montserrat text-2xl font-bold text-[#003514] sm:text-3xl">
-              Gerir perfis
-            </h1>
+      <main className="flex min-h-screen w-full flex-col items-center gap-10 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
+        <section className="flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10">
+          <header className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold uppercase text-[#5f6800]">
+                Gestão familiar
+              </p>
+              <h1 className="mt-1 font-montserrat text-2xl font-bold text-[#003514] sm:text-3xl">
+                Perfis
+              </h1>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={refreshFamily}
+              disabled={actionIsRunning}
+              aria-label="Atualizar"
+              className="size-11 shrink-0 rounded-full border border-[#e1e2e4] text-[#003514] hover:bg-white"
+            >
+              <RefreshCw
+                className={`size-5 ${refreshing ? "animate-spin" : ""}`}
+                aria-hidden="true"
+              />
+            </Button>
           </header>
 
-          <section className="box-border flex min-h-[202px] w-full max-w-[946px] flex-none flex-col items-start gap-6 rounded-2xl border border-[#e1e2e4] bg-white p-[25px] shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
-            <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-center gap-3">
-                <span className="flex size-11 items-center justify-center rounded-full bg-[#eef7d1] text-[#5f6800]">
-                  <UsersRound className="size-5" aria-hidden="true" />
-                </span>
-                <div>
-                  <h2 className="font-montserrat text-xl font-bold text-[#003514]">
-                    {familyName}
-                  </h2>
-                  <p className="mt-1 text-sm leading-5 text-[#404940]">
-                    Reveja e mantenha os perfis ligados à conta parental.
-                  </p>
-                </div>
-              </div>
-            </div>
+          {createModalOpen ? (
+            <CreateChildModal
+              onClose={() => setCreateModalOpen(false)}
+              onCreated={handleCreated}
+            />
+          ) : null}
 
-            <div className="grid w-full gap-3 sm:grid-cols-3">
-              <div className="rounded-lg bg-[#f8f9fb] px-4 py-3">
-                <p className="text-xs font-semibold uppercase text-[#59625a]">
-                  Total de crianças
-                </p>
-                <p className="mt-1 text-2xl font-bold text-[#003514]">
-                  {children.length}
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section className="grid w-full max-w-[946px] gap-6 lg:grid-cols-2">
-            <form
-              onSubmit={createChild}
-              className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)] sm:p-6"
-            >
-              <h2 className="text-lg font-bold text-[#003514]">
-                Novo perfil
-              </h2>
-              <div className="mt-5 grid gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="child-name" className="text-[#404940]">
-                    Nome da criança
-                  </Label>
-                  <Input
-                    id="child-name"
-                    value={childForm.name}
-                    onChange={(event) =>
-                      setChildForm((currentForm) => ({
-                        ...currentForm,
-                        name: event.target.value,
-                      }))
-                    }
-                    disabled={actionIsRunning}
-                    className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="child-birth-date" className="text-[#404940]">
-                    Data de nascimento (opcional)
-                  </Label>
-                  <Input
-                    id="child-birth-date"
-                    type="date"
-                    max={getTodayInputValue()}
-                    value={childForm.birthDate}
-                    onChange={(event) =>
-                      setChildForm((currentForm) => ({
-                        ...currentForm,
-                        birthDate: event.target.value,
-                      }))
-                    }
-                    disabled={actionIsRunning}
-                    className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="child-avatar-file" className="text-[#404940]">
-                    Avatar (opcional)
-                  </Label>
-                  <Input
-                    key={avatarInputKey}
-                    id="child-avatar-file"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(event) => {
-                      setAvatarFile(event.target.files?.[0] ?? null);
-                    }}
-                    disabled={actionIsRunning}
-                    className="h-12 cursor-pointer rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] file:mr-3 file:border-0 file:bg-transparent file:text-sm file:font-semibold file:text-[#003514] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
-                  />
-                  <p className="flex items-center gap-1.5 text-xs text-[#59625a]">
-                    <ImageUp className="size-3.5" aria-hidden="true" />
-                    JPEG, PNG ou WebP, até 5 MB.
-                  </p>
-                </div>
-              </div>
-              <Button
-                type="submit"
-                disabled={actionIsRunning}
-                className="mt-5 h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
-              >
-                {mutationState === "creating-child" ? (
-                  <LoaderCircle className="mr-2 size-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Plus className="mr-2 size-4" aria-hidden="true" />
-                )}
-                Criar perfil
-              </Button>
-            </form>
-          </section>
-
-          <section className="w-full max-w-[946px] rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)] sm:p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div>
+          <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-lg font-bold text-[#003514]">
                   Perfis das crianças
                 </h2>
-                <p className="mt-1 text-sm leading-5 text-[#404940]">
-                  Só o perfil parental pode ver e gerir esta lista.
-                </p>
+                <span className="rounded-full bg-[#f8f9fb] px-3 py-1 text-sm font-semibold text-[#404940]">
+                  {familyName} · {children.length}
+                </span>
               </div>
-              <UserRound className="size-5 text-[#404940]" aria-hidden="true" />
+              <Button
+                type="button"
+                onClick={() => setCreateModalOpen(true)}
+                disabled={actionIsRunning}
+                className="h-10 shrink-0 rounded-full bg-[#d4e251] px-4 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+              >
+                <Plus className="mr-2 size-4" aria-hidden="true" />
+                Novo perfil
+              </Button>
             </div>
 
             <div className="mt-5 divide-y divide-[#e1e2e4]">
@@ -319,8 +168,11 @@ const ManageProfilesPage = () => {
                         <p className="truncate font-semibold text-[#191c1e]">
                           {child.name}
                         </p>
-                        <p className="mt-0.5 flex items-center gap-1.5 text-sm text-[#404940]">
-                          <CalendarDays className="size-4" aria-hidden="true" />
+                        <p className={`mt-0.5 ${metaItemClass}`}>
+                          <CalendarDays
+                            className="size-4 text-[#7a8278]"
+                            aria-hidden="true"
+                          />
                           {child.birth_date || "Data de nascimento não definida"}
                         </p>
                       </div>
@@ -359,10 +211,7 @@ const ManageProfilesPage = () => {
                                 aria-hidden="true"
                               />
                             ) : (
-                              <Save
-                                className="mr-2 size-3.5"
-                                aria-hidden="true"
-                              />
+                              <Save className="mr-2 size-3.5" aria-hidden="true" />
                             )}
                             Guardar
                           </Button>
@@ -383,7 +232,7 @@ const ManageProfilesPage = () => {
                         variant="ghost"
                         onClick={() => startEditingBirthDate(child)}
                         disabled={actionIsRunning}
-                        className="h-9 rounded-full px-3 text-xs font-semibold text-[#003514] hover:bg-[#f3f4f6]"
+                        className="h-9 shrink-0 rounded-full px-3 text-xs font-semibold text-[#003514] hover:bg-[#f3f4f6]"
                       >
                         {child.birth_date ? "Editar data" : "Definir data"}
                       </Button>
