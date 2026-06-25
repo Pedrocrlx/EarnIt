@@ -64,9 +64,7 @@ async def list_child_tasks(
     tasks = (
         (
             await session.execute(
-                select(Task)
-                .where(Task.child_id == child_id)
-                .order_by(Task.task_type)
+                select(Task).where(Task.child_id == child_id).order_by(Task.task_type)
             )
         )
         .scalars()

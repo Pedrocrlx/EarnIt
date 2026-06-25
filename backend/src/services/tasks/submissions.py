@@ -161,9 +161,7 @@ async def approve_submission(
         raise HTTPException(status_code=409, detail="Submission is not pending")
     # task_id is null when the task was deleted; the orphaned submission can still
     # be reviewed, but no reward is credited (_apply_approval no-ops on None).
-    task = (
-        await session.get(Task, submission.task_id) if submission.task_id else None
-    )
+    task = await session.get(Task, submission.task_id) if submission.task_id else None
     _apply_approval(session, submission, task, datetime.now(UTC))
     await session.commit()
     logger.info("Submission approved: submission_id=%s", submission.id)
