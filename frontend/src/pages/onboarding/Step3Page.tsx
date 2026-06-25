@@ -7,8 +7,16 @@ import { useAuth } from "@/context/useAuth";
 import { useToast } from "@/context/useToast";
 import { useSetPin } from "@/hooks/useSetPin";
 import { apiFetch } from "@/lib/api";
-import { clearDraft, readDraft } from "@/lib/onboarding-draft";
+import {
+  clearOnboardingAvatars,
+  getOnboardingAvatar,
+} from "@/lib/onboarding-avatar-files";
+import { clearDraft, readDraft, writeDraft } from "@/lib/onboarding-draft";
 import { cn } from "@/lib/utils";
+import {
+  createChild as createChildRequest,
+  uploadChildAvatar,
+} from "@/services/profileService";
 import OnboardingLayout from "./OnboardingLayout";
 
 type PinResponse = {
@@ -60,20 +68,27 @@ const OnboardingStep3Page = () => {
         body: JSON.stringify({ family_name: familyName }),
       });
 
-      // Skip creation if a previous attempt already created them (retry safety).
-      const current = await refreshSession();
-      if ((current?.children.length ?? 0) === 0) {
-        await Promise.all(
-          draftChildren.map((child) =>
-            apiFetch("/profiles/children", {
-              method: "POST",
-              body: JSON.stringify({
-                name: child.firstName.trim(),
-                birth_date: child.birthDate || null,
-              }),
-            }),
-          ),
-        );
+      // Persist each child ID in the draft as soon as it is created. This keeps
+      // retries idempotent and lets an optional avatar use the normal upload
+      // endpoint backed by the Docker avatar volume.
+      for (const child of draftChildren) {
+        let childId = child.backendId;
+
+        if (!childId) {
+          const createdChild = await createChildRequest({
+            name: child.firstName.trim(),
+            birth_date: child.birthDate || null,
+            avatar_url: null,
+          });
+          childId = createdChild.id;
+          child.backendId = childId;
+          writeDraft({ children: draftChildren });
+        }
+
+        const avatarFile = getOnboardingAvatar(child.clientId);
+        if (avatarFile) {
+          await uploadChildAvatar(childId, avatarFile);
+        }
       }
 
       await apiFetch<PinResponse>("/auth/pin", {
@@ -83,6 +98,7 @@ const OnboardingStep3Page = () => {
 
       const profile = await refreshSession();
       clearDraft();
+      clearOnboardingAvatars();
       navigate(profile?.onboarding_completed ? "/profile" : "/onboarding/step2", {
         replace: true,
       });

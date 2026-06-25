@@ -8,7 +8,12 @@ const DRAFT_KEY = "earnit:onboarding:draft";
 // extra ones afterwards in Perfis, up to the backend's per-account limit.
 export const ONBOARDING_MAX_CHILDREN = 5;
 
-export type DraftChild = { firstName: string; birthDate: string };
+export type DraftChild = {
+  clientId: number;
+  firstName: string;
+  birthDate: string;
+  backendId?: string;
+};
 
 export type OnboardingDraft = {
   familyName: string;

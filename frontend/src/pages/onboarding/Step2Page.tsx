@@ -1,10 +1,22 @@
-import { ArrowLeftIcon, ArrowRightIcon, PersonIcon, PlusIcon } from "@radix-ui/react-icons";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ImageIcon,
+  PersonIcon,
+  PlusIcon,
+} from "@radix-ui/react-icons";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/context/useToast";
+import { AVATAR_ACCEPT, validateAvatarFile } from "@/lib/avatar";
+import {
+  getOnboardingAvatar,
+  removeOnboardingAvatar,
+  setOnboardingAvatar,
+} from "@/lib/onboarding-avatar-files";
 import {
   ONBOARDING_MAX_CHILDREN,
   readDraft,
@@ -23,6 +35,7 @@ type ChildProfile = {
   id: number;
   firstName: string;
   birthDate: string;
+  backendId?: string;
 };
 
 const createChild = (id: number): ChildProfile => ({
@@ -39,9 +52,10 @@ const getInitialChildren = (): ChildProfile[] => {
 
   if (draft.children && draft.children.length > 0) {
     return draft.children.map((child, index) => ({
-      id: index + 1,
+      id: child.clientId ?? index + 1,
       firstName: child.firstName ?? "",
       birthDate: child.birthDate ?? "",
+      backendId: child.backendId,
     }));
   }
 
@@ -58,6 +72,14 @@ const OnboardingStep2Page = () => {
   const [children, setChildren] = useState<ChildProfile[]>(getInitialChildren);
   const [nextChildId, setNextChildId] = useState(children.length + 1);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [avatarNames, setAvatarNames] = useState<Record<number, string>>(() =>
+    Object.fromEntries(
+      children.flatMap((child) => {
+        const avatar = getOnboardingAvatar(child.id);
+        return avatar ? [[child.id, avatar.name]] : [];
+      }),
+    ),
+  );
 
   const getFieldKey = (
     id: number,
@@ -126,6 +148,12 @@ const OnboardingStep2Page = () => {
   };
 
   const removeChild = (id: number) => {
+    removeOnboardingAvatar(id);
+    setAvatarNames((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
     setFieldErrors((currentErrors) =>
       Object.fromEntries(
         Object.entries(currentErrors).filter(([key]) => !key.startsWith(`${id}.`)),
@@ -139,6 +167,27 @@ const OnboardingStep2Page = () => {
 
       return currentChildren.filter((child) => child.id !== id);
     });
+  };
+
+  const selectAvatar = (childId: number, file: File | null) => {
+    if (!file) {
+      removeOnboardingAvatar(childId);
+      setAvatarNames((current) => {
+        const next = { ...current };
+        delete next[childId];
+        return next;
+      });
+      return;
+    }
+
+    const avatarError = validateAvatarFile(file);
+    if (avatarError) {
+      showToast(avatarError, "error");
+      return;
+    }
+
+    setOnboardingAvatar(childId, file);
+    setAvatarNames((current) => ({ ...current, [childId]: file.name }));
   };
 
   const updateChild = (
@@ -166,8 +215,10 @@ const OnboardingStep2Page = () => {
     // No network here — the children are created in one go on step 3's Concluir.
     writeDraft({
       children: children.map((child) => ({
+        clientId: child.id,
         firstName: child.firstName.trim(),
         birthDate: child.birthDate,
+        backendId: child.backendId,
       })),
     });
     navigate("/onboarding/step3");
@@ -290,6 +341,35 @@ const OnboardingStep2Page = () => {
                         message={getChildError(child.id, "birthDate")}
                       />
                     </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor={`child-${child.id}-avatar`}
+                      className="pl-1 text-sm font-semibold text-[#404940]"
+                    >
+                      Avatar <span className="font-medium">(opcional)</span>
+                    </label>
+                    <Input
+                      id={`child-${child.id}-avatar`}
+                      type="file"
+                      accept={AVATAR_ACCEPT}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        const avatarError = file ? validateAvatarFile(file) : null;
+                        selectAvatar(child.id, file);
+                        if (avatarError) {
+                          event.target.value = "";
+                        }
+                      }}
+                      className="h-14 cursor-pointer rounded-xl border-2 border-transparent bg-[#f3f4f6] px-4 text-sm text-[#191c1e] file:mr-3 file:border-0 file:bg-transparent file:text-sm file:font-semibold file:text-[#003514] focus-visible:border-[#003514] focus-visible:ring-0"
+                    />
+                    <p className="flex items-center gap-1.5 pl-1 text-xs font-medium leading-5 text-[#404940]/70">
+                      <ImageIcon className="size-3.5" aria-hidden="true" />
+                      {avatarNames[child.id]
+                        ? `${avatarNames[child.id]} selecionado`
+                        : "JPEG, PNG ou WebP, até 5 MB. Pode adicionar mais tarde."}
+                    </p>
                   </div>
                 </div>
               </section>

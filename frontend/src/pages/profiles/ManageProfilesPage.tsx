@@ -1,4 +1,11 @@
-import { CalendarIcon, CheckIcon, PlusIcon, ReloadIcon, UpdateIcon } from "@radix-ui/react-icons";
+import {
+  CalendarIcon,
+  CheckIcon,
+  ImageIcon,
+  PlusIcon,
+  ReloadIcon,
+  UpdateIcon,
+} from "@radix-ui/react-icons";
 import { type FormEvent, useState } from "react";
 import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
@@ -6,8 +13,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/useAuth";
 import { useToast } from "@/context/useToast";
+import { AVATAR_ACCEPT, validateAvatarFile } from "@/lib/avatar";
 import { isFutureDate } from "@/lib/validation";
-import { updateChildBirthDate } from "@/services/profileService";
+import {
+  updateChildBirthDate,
+  uploadChildAvatar,
+} from "@/services/profileService";
 import CreateChildModal from "./CreateChildModal";
 
 const metaItemClass = "flex items-center gap-1.5 text-sm text-[#404940]";
@@ -29,8 +40,14 @@ const ManageProfilesPage = () => {
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [editingBirthDate, setEditingBirthDate] = useState("");
   const [updatingChildId, setUpdatingChildId] = useState<string | null>(null);
+  const [avatarFiles, setAvatarFiles] = useState<Record<string, File | null>>({});
+  const [avatarInputVersions, setAvatarInputVersions] = useState<
+    Record<string, number>
+  >({});
+  const [updatingAvatarId, setUpdatingAvatarId] = useState<string | null>(null);
 
-  const actionIsRunning = updatingChildId !== null || refreshing;
+  const actionIsRunning =
+    updatingChildId !== null || updatingAvatarId !== null || refreshing;
 
   const refreshFamily = async () => {
     setRefreshing(true);
@@ -38,6 +55,48 @@ const ManageProfilesPage = () => {
       await refreshSession();
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const selectAvatar = (childId: string, file: File | null) => {
+    if (file) {
+      const avatarError = validateAvatarFile(file);
+      if (avatarError) {
+        showToast(avatarError, "error");
+        return false;
+      }
+    }
+
+    setAvatarFiles((current) => ({ ...current, [childId]: file }));
+    return true;
+  };
+
+  const saveAvatar = async (childId: string) => {
+    const avatarFile = avatarFiles[childId];
+    if (!avatarFile) {
+      showToast("Selecione uma imagem para o avatar.", "error");
+      return;
+    }
+
+    setUpdatingAvatarId(childId);
+    try {
+      await uploadChildAvatar(childId, avatarFile);
+      setAvatarFiles((current) => ({ ...current, [childId]: null }));
+      setAvatarInputVersions((current) => ({
+        ...current,
+        [childId]: (current[childId] ?? 0) + 1,
+      }));
+      await refreshSession();
+      showToast("Avatar atualizado.");
+    } catch (caughtError) {
+      showToast(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Não foi possível atualizar o avatar.",
+        "error",
+      );
+    } finally {
+      setUpdatingAvatarId(null);
     }
   };
 
@@ -171,66 +230,112 @@ const ManageProfilesPage = () => {
                         </p>
                       </div>
                     </div>
-                    {editingChildId === child.id ? (
-                      <form
-                        onSubmit={saveBirthDate}
-                        className="grid w-full max-w-xs gap-2"
-                      >
+                    <div className="grid w-full max-w-sm gap-3">
+                      <div className="space-y-2">
                         <Label
-                          htmlFor={`profile-birth-date-${child.id}`}
+                          htmlFor={`profile-avatar-${child.id}`}
                           className="text-[#404940]"
                         >
-                          Data de nascimento
+                          Avatar
                         </Label>
-                        <Input
-                          id={`profile-birth-date-${child.id}`}
-                          type="date"
-                          max={getTodayInputValue()}
-                          value={editingBirthDate}
-                          onChange={(event) => {
-                            setEditingBirthDate(event.target.value);
-                          }}
-                          disabled={updatingChildId === child.id}
-                          className="h-10 rounded-lg border-[#e1e2e4] bg-white"
-                        />
-                        <div className="flex gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Input
+                            key={`${child.id}-${avatarInputVersions[child.id] ?? 0}`}
+                            id={`profile-avatar-${child.id}`}
+                            type="file"
+                            accept={AVATAR_ACCEPT}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0] ?? null;
+                              if (!selectAvatar(child.id, file)) {
+                                event.target.value = "";
+                              }
+                            }}
+                            disabled={actionIsRunning}
+                            className="h-10 cursor-pointer rounded-lg border-[#e1e2e4] bg-white text-xs file:mr-2 file:border-0 file:bg-transparent file:text-xs file:font-semibold file:text-[#003514]"
+                          />
                           <Button
-                            type="submit"
-                            disabled={updatingChildId === child.id}
-                            className="h-9 rounded-full bg-[#d4e251] px-4 text-xs font-semibold text-[#003514] hover:bg-[#cfdc42]"
+                            type="button"
+                            onClick={() => saveAvatar(child.id)}
+                            disabled={actionIsRunning || !avatarFiles[child.id]}
+                            className="h-10 shrink-0 rounded-full bg-[#f3f7da] px-4 text-xs font-semibold text-[#003514] hover:bg-[#e8efbe]"
                           >
-                            {updatingChildId === child.id ? (
+                            {updatingAvatarId === child.id ? (
                               <UpdateIcon
                                 className="mr-2 size-3.5 animate-spin"
                                 aria-hidden="true"
                               />
                             ) : (
-                              <CheckIcon className="mr-2 size-3.5" aria-hidden="true" />
+                              <ImageIcon
+                                className="mr-2 size-3.5"
+                                aria-hidden="true"
+                              />
                             )}
-                            Guardar
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => setEditingChildId(null)}
-                            disabled={updatingChildId === child.id}
-                            className="h-9 rounded-full px-4 text-xs font-semibold text-[#404940]"
-                          >
-                            Cancelar
+                            Guardar avatar
                           </Button>
                         </div>
-                      </form>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => startEditingBirthDate(child)}
-                        disabled={actionIsRunning}
-                        className="h-9 shrink-0 rounded-full px-3 text-xs font-semibold text-[#003514] hover:bg-[#f3f4f6]"
-                      >
-                        {child.birth_date ? "Editar data" : "Definir data"}
-                      </Button>
-                    )}
+                      </div>
+
+                      {editingChildId === child.id ? (
+                        <form onSubmit={saveBirthDate} className="grid gap-2">
+                          <Label
+                            htmlFor={`profile-birth-date-${child.id}`}
+                            className="text-[#404940]"
+                          >
+                            Data de nascimento
+                          </Label>
+                          <Input
+                            id={`profile-birth-date-${child.id}`}
+                            type="date"
+                            max={getTodayInputValue()}
+                            value={editingBirthDate}
+                            onChange={(event) => {
+                              setEditingBirthDate(event.target.value);
+                            }}
+                            disabled={updatingChildId === child.id}
+                            className="h-10 rounded-lg border-[#e1e2e4] bg-white"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              type="submit"
+                              disabled={updatingChildId === child.id}
+                              className="h-9 rounded-full bg-[#d4e251] px-4 text-xs font-semibold text-[#003514] hover:bg-[#cfdc42]"
+                            >
+                              {updatingChildId === child.id ? (
+                                <UpdateIcon
+                                  className="mr-2 size-3.5 animate-spin"
+                                  aria-hidden="true"
+                                />
+                              ) : (
+                                <CheckIcon
+                                  className="mr-2 size-3.5"
+                                  aria-hidden="true"
+                                />
+                              )}
+                              Guardar
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => setEditingChildId(null)}
+                              disabled={updatingChildId === child.id}
+                              className="h-9 rounded-full px-4 text-xs font-semibold text-[#404940]"
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </form>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => startEditingBirthDate(child)}
+                          disabled={actionIsRunning}
+                          className="h-9 justify-self-end rounded-full px-3 text-xs font-semibold text-[#003514] hover:bg-[#f3f4f6]"
+                        >
+                          {child.birth_date ? "Editar data" : "Definir data"}
+                        </Button>
+                      )}
+                    </div>
                   </article>
                 ))
               ) : (

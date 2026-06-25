@@ -394,9 +394,13 @@ const DashboardPage = () => {
                   );
                 })
               ) : (
-                <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
-                  Sem submissões por rever. 🎉
-                </p>
+                <div className="flex items-center justify-center gap-2 rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
+                  <CheckCircledIcon
+                    className="size-4 text-[#5f6800]"
+                    aria-hidden="true"
+                  />
+                  <p>Sem submissões por rever.</p>
+                </div>
               )}
             </div>
           </section>

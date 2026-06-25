@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/context/useToast";
+import { AVATAR_ACCEPT, validateAvatarFile } from "@/lib/avatar";
 import {
   createChild as createChildRequest,
   uploadChildAvatar,
@@ -14,9 +15,6 @@ type CreateChildModalProps = {
   onClose: () => void;
   onCreated: (message: string) => void;
 };
-
-const avatarContentTypes = ["image/jpeg", "image/png", "image/webp"];
-const avatarMaxBytes = 5 * 1024 * 1024;
 
 const getTodayInputValue = () => {
   const today = new Date();
@@ -41,14 +39,12 @@ const CreateChildModal = ({ onClose, onCreated }: CreateChildModalProps) => {
       return;
     }
 
-    if (avatarFile && !avatarContentTypes.includes(avatarFile.type)) {
-      showToast("O avatar deve ser uma imagem JPEG, PNG ou WebP.", "error");
-      return;
-    }
-
-    if (avatarFile && avatarFile.size > avatarMaxBytes) {
-      showToast("O avatar não pode exceder 5 MB.", "error");
-      return;
+    if (avatarFile) {
+      const avatarError = validateAvatarFile(avatarFile);
+      if (avatarError) {
+        showToast(avatarError, "error");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -125,7 +121,7 @@ const CreateChildModal = ({ onClose, onCreated }: CreateChildModalProps) => {
             <Input
               id="child-avatar-file"
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept={AVATAR_ACCEPT}
               onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)}
               disabled={submitting}
               className="h-12 cursor-pointer rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] file:mr-3 file:border-0 file:bg-transparent file:text-sm file:font-semibold file:text-[#003514] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"

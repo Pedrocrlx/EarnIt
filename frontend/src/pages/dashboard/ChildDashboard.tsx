@@ -22,9 +22,25 @@ type TaskAction =
   | { label: string; mode: "submit" };
 
 const statusLabels: Record<string, string> = {
-  approved: "✅ Aprovada",
-  pending: "⏳ Em revisão",
-  rejected: "🔁 Tenta outra vez",
+  approved: "Aprovada",
+  pending: "Em revisão",
+  rejected: "Tenta outra vez",
+};
+
+const statusIcon = (status: string) => {
+  if (status === "approved") {
+    return <CheckCircledIcon className="size-3.5" aria-hidden="true" />;
+  }
+
+  if (status === "pending") {
+    return <ClockIcon className="size-3.5" aria-hidden="true" />;
+  }
+
+  if (status === "rejected") {
+    return <ResetIcon className="size-3.5" aria-hidden="true" />;
+  }
+
+  return null;
 };
 
 const statusStyles: Record<string, string> = {
@@ -62,11 +78,11 @@ const getTaskAction = (task: ChildTaskResponse): TaskAction => {
   }
 
   if (submission.status === "approved") {
-    return { label: "Concluída ✅", mode: "disabled" };
+    return { label: "Concluída", mode: "disabled" };
   }
 
   if (submission.submitted_at) {
-    return { label: "Em revisão ⏳", mode: "disabled" };
+    return { label: "Em revisão", mode: "disabled" };
   }
 
   return { label: "Enviar", mode: "submit" };
@@ -131,7 +147,7 @@ const ChildDashboard = () => {
     try {
       await submitTaskRequest(selectedChild.id, task.id);
       await loadDashboard();
-      showToast("Tarefa enviada para aprovação. 🚀");
+      showToast("Tarefa enviada para aprovação.");
     } catch (caughtError) {
       showToast(
         caughtError instanceof Error
@@ -154,7 +170,7 @@ const ChildDashboard = () => {
     try {
       await resubmitTaskRequest(selectedChild.id, submissionId);
       await loadDashboard();
-      showToast("Tarefa reenviada para aprovação. 🚀");
+      showToast("Tarefa reenviada para aprovação.");
     } catch (caughtError) {
       showToast(
         caughtError instanceof Error
@@ -260,10 +276,11 @@ const ChildDashboard = () => {
                       {status ? (
                         <span
                           className={cn(
-                            "shrink-0 rounded-full px-2.5 py-1 text-xs font-bold",
+                            "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold",
                             statusStyles[status] ?? "bg-[#f3f4f6] text-[#404940]",
                           )}
                         >
+                          {statusIcon(status)}
                           {statusLabels[status] ?? status}
                         </span>
                       ) : null}
@@ -337,9 +354,10 @@ const ChildDashboard = () => {
               })}
             </div>
           ) : (
-            <p className="rounded-2xl bg-[#f3f4f6] px-4 py-10 text-center text-sm font-semibold text-[#404940]">
-              Ainda não tens tarefas. ✨
-            </p>
+            <div className="flex flex-col items-center gap-2 rounded-2xl bg-[#f3f4f6] px-4 py-10 text-center text-sm font-semibold text-[#404940]">
+              <StarIcon className="size-5 text-[#5f6800]" aria-hidden="true" />
+              <p>Ainda não tens tarefas.</p>
+            </div>
           )}
         </div>
       )}

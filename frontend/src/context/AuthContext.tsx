@@ -7,8 +7,23 @@ import { apiFetch } from "@/lib/api";
 
 const fetchFamilyProfile = () => apiFetch<FamilyProfile>("/profiles/family");
 
+const AUTH_PUBLIC_PATHS = new Set([
+  "/login",
+  "/register",
+  "/verification",
+  "/forgot-password",
+  "/forgot-password/verify",
+  "/reset-password",
+]);
+
+const shouldRestoreSession = () =>
+  !AUTH_PUBLIC_PATHS.has(window.location.pathname);
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [status, setStatus] = useState<AuthStatus>("loading");
+  const restoreSessionOnMount = shouldRestoreSession();
+  const [status, setStatus] = useState<AuthStatus>(
+    restoreSessionOnMount ? "loading" : "unauthenticated",
+  );
   const [familyProfile, setFamilyProfile] = useState<FamilyProfile | null>(null);
 
   const refreshSession = useCallback(async () => {
@@ -25,6 +40,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   useEffect(() => {
+    // Public authentication screens do not need a family profile before the
+    // user authenticates. Skipping restoration there avoids an expected 401.
+    if (!restoreSessionOnMount) {
+      return;
+    }
+
     let isMounted = true;
 
     const loadSession = async () => {
@@ -47,7 +68,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [restoreSessionOnMount]);
 
   const login = useCallback(async () => {
     setStatus("loading");
