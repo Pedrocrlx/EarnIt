@@ -109,11 +109,13 @@ async def update_task_endpoint(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> TaskResponse:
-    """Update a task's title, description, expiry, or active state.
+    """Update a task's title, description, expiry, reward, or active state.
 
     Only the owning parent can update a task. Returns 404 if the task is not found
     or does not belong to the current user. All fields are optional — omit fields
-    that should not change.
+    that should not change; send an explicit `null` to clear `description`/`expires_at`.
+    `reward_amount` must match the task type (duty = 0, extra > 0). Editing the reward
+    affects only future approvals; already-credited wallet entries are immutable.
     """
     task = await get_task_or_404(task_id, current_user, session)
     task = await update_task(task, body, session)

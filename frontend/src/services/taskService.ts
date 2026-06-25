@@ -17,9 +17,10 @@ export type CreateTaskPayload = {
 };
 
 export type UpdateTaskPayload = {
-  child_id: string;
-  description: string | null;
-  title: string;
+  description?: string | null;
+  expires_at?: string | null;
+  reward_amount?: number;
+  title?: string;
 };
 
 export const listTasks = () => apiFetch<TaskResponse[]>("/tasks");
@@ -40,6 +41,12 @@ export const updateTask = (taskId: string, payload: UpdateTaskPayload) =>
 
 export const deleteTask = (taskId: string) =>
   apiFetch<TaskResponse>(`/tasks/${taskId}`, { method: "DELETE" });
+
+export const reactivateTask = (taskId: string) =>
+  apiFetch<TaskResponse>(`/tasks/${taskId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_active: true }),
+  });
 
 export const approveSubmission = (submissionId: string) =>
   apiFetch<SubmissionResponse>(`/tasks/submissions/${submissionId}/approve`, {

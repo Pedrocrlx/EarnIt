@@ -49,18 +49,25 @@ class TaskCreateRequest(BaseModel):
 
 
 class TaskUpdateRequest(BaseModel):
-    """Body for ``PATCH /tasks/{id}`` — all fields optional (partial update)."""
+    """Body for ``PATCH /tasks/{id}`` — all fields optional (partial update).
+
+    A field present with ``null`` clears it (description, expires_at); an omitted
+    field is left unchanged. ``reward_amount`` must obey the task's type rule
+    (duty = 0, extra > 0).
+    """
 
     title: str | None = Field(default=None, min_length=1, max_length=150)
     description: str | None = None
     expires_at: datetime | None = None
     is_active: bool | None = None
+    reward_amount: int | None = Field(default=None, ge=0)
 
     model_config = {
         "json_schema_extra": {
             "example": {
                 "title": "Arrumar o quarto",
                 "description": "Arrumar antes do almoço",
+                "reward_amount": 150,
                 "is_active": True,
             }
         }

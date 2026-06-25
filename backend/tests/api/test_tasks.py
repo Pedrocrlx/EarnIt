@@ -209,6 +209,97 @@ async def test_task_of_other_user_returns_404(client: AsyncClient, mock_mail):
     assert res.status_code == 404
 
 
+async def test_update_extra_reward(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id, reward=5)
+
+    res = await client.patch(
+        f"{_TASKS_URL}/{task['id']}",
+        json={"reward_amount": 50},
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 200
+    assert res.json()["reward_amount"] == 50
+
+
+async def test_update_clears_expires_at_with_null(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+
+    future = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+    await client.patch(
+        f"{_TASKS_URL}/{task['id']}",
+        json={"expires_at": future},
+        cookies={"access_token": token},
+    )
+    res = await client.patch(
+        f"{_TASKS_URL}/{task['id']}",
+        json={"expires_at": None},
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 200
+    assert res.json()["expires_at"] is None
+
+
+async def test_update_duty_with_nonzero_reward_returns_422(
+    client: AsyncClient, mock_mail
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _duty(client, token, child_id)
+
+    res = await client.patch(
+        f"{_TASKS_URL}/{task['id']}",
+        json={"reward_amount": 5},
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 422
+
+
+async def test_update_extra_with_zero_reward_returns_422(
+    client: AsyncClient, mock_mail
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+
+    res = await client.patch(
+        f"{_TASKS_URL}/{task['id']}",
+        json={"reward_amount": 0},
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 422
+
+
+async def test_editing_reward_does_not_change_approved_credit(
+    client: AsyncClient, mock_mail
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id, reward=5)
+
+    sub = (await _submit(client, token, child_id, task["id"])).json()
+    await client.post(
+        f"{_SUBS_URL}/{sub['id']}/approve", cookies={"access_token": token}
+    )
+
+    # Bump the reward after the credit was already written.
+    res = await client.patch(
+        f"{_TASKS_URL}/{task['id']}",
+        json={"reward_amount": 50},
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 200
+
+    # The already-credited wallet entry is an immutable snapshot — unchanged.
+    wallet = await client.get(
+        f"/api/v1/children/{child_id}/wallet", cookies={"access_token": token}
+    )
+    assert wallet.json()["balance_points"] == 5
+
+
 async def test_create_task_without_token_returns_401(client: AsyncClient):
     res = await client.post(
         _TASKS_URL, json={"child_id": str(uuid4()), "title": "T", "task_type": "duty"}

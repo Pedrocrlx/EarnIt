@@ -76,15 +76,36 @@ async def list_tasks(
 async def update_task(
     task: Task, body: TaskUpdateRequest, session: AsyncSession
 ) -> Task:
-    """Apply a partial update — only the fields present in ``body`` change."""
-    if body.title is not None:
-        task.title = body.title
-    if body.description is not None:
-        task.description = body.description
-    if body.expires_at is not None:
-        task.expires_at = body.expires_at
-    if body.is_active is not None:
-        task.is_active = body.is_active
+    """Apply a partial update — only the fields *present in the request* change.
+
+    Uses ``exclude_unset`` so an explicit ``null`` clears a field (description,
+    expires_at) while an omitted field is left as-is. ``reward_amount`` must match
+    the task's type (duty = 0, extra > 0).
+    """
+    data = body.model_dump(exclude_unset=True)
+
+    if "reward_amount" in data:
+        reward = data["reward_amount"]
+        if task.task_type == "duty" and reward != 0:
+            raise HTTPException(
+                status_code=422, detail="Duty tasks must have reward_amount of 0"
+            )
+        if task.task_type == "extra_task" and reward <= 0:
+            raise HTTPException(
+                status_code=422,
+                detail="Extra tasks must have reward_amount greater than 0",
+            )
+        task.reward_amount = reward
+
+    if "title" in data and data["title"] is not None:
+        task.title = data["title"]
+    if "description" in data:
+        task.description = data["description"]
+    if "expires_at" in data:
+        task.expires_at = data["expires_at"]
+    if "is_active" in data and data["is_active"] is not None:
+        task.is_active = data["is_active"]
+
     task.updated_at = datetime.now(UTC)
     await session.commit()
     logger.info("Task updated: task_id=%s", task.id)

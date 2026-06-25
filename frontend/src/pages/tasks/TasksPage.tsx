@@ -1,23 +1,48 @@
-import { LoaderCircle, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Clock,
+  Coins,
+  LoaderCircle,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Tag,
+  Trash2,
+  UserRound,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { formatEuros } from "@/lib/points";
 import { getPointValue } from "@/services/profileService";
 import {
   deleteTask as deleteTaskRequest,
   listTasks,
-  updateTask as updateTaskRequest,
+  reactivateTask as reactivateTaskRequest,
 } from "@/services/taskService";
 import type { TaskResponse } from "@/services/types";
 import { useAuth } from "@/context/useAuth";
 import CreateTaskModal from "./CreateTaskModal";
+import EditTaskModal from "./EditTaskModal";
 
 const taskTypeLabels: Record<string, string> = {
   duty: "Rotina",
   extra_task: "Extra",
 };
+
+const formatExpiry = (value: string) =>
+  new Date(value).toLocaleString("pt-PT", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+const segmentClass = (active: boolean) =>
+  `rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+    active ? "bg-[#003514] text-white" : "text-[#404940] hover:text-[#003514]"
+  }`;
+
+const metaItemClass = "flex items-center gap-1.5 text-sm text-[#404940]";
 
 const TasksPage = () => {
   const { familyProfile } = useAuth();
@@ -26,16 +51,14 @@ const TasksPage = () => {
     [familyProfile?.children],
   );
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editingChildId, setEditingChildId] = useState("");
-  const [editingTitle, setEditingTitle] = useState("");
-  const [editingDescription, setEditingDescription] = useState("");
+  const [editingTask, setEditingTask] = useState<TaskResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [pointValueEur, setPointValueEur] = useState(0.01);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [taskView, setTaskView] = useState<"active" | "inactive">("active");
 
   useEffect(() => {
     let isMounted = true;
@@ -55,6 +78,10 @@ const TasksPage = () => {
     () => new Map(children.map((child) => [child.id, child.name])),
     [children],
   );
+
+  const activeTasks = useMemo(() => tasks.filter((task) => task.is_active), [tasks]);
+  const inactiveTasks = useMemo(() => tasks.filter((task) => !task.is_active), [tasks]);
+  const visibleTasks = taskView === "active" ? activeTasks : inactiveTasks;
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -87,43 +114,16 @@ const TasksPage = () => {
   };
 
   const startEditTask = (task: TaskResponse) => {
-    setEditingTaskId(task.id);
-    setEditingChildId(task.child_id);
-    setEditingTitle(task.title);
-    setEditingDescription(task.description ?? "");
     setErrorMessage("");
     setSuccessMessage("");
+    setEditingTask(task);
   };
 
-  const updateTask = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!editingTaskId || !editingTitle.trim() || !editingChildId) {
-      setErrorMessage("Escolha a criança e indique o título da tarefa.");
-      return;
-    }
-
-    setBusyAction(`update-${editingTaskId}`);
+  const handleEdited = (message: string) => {
+    setSuccessMessage(message);
     setErrorMessage("");
-    setSuccessMessage("");
-
-    try {
-      await updateTaskRequest(editingTaskId, {
-        child_id: editingChildId,
-        title: editingTitle.trim(),
-        description: editingDescription.trim() || null,
-      });
-      setEditingTaskId(null);
-      await loadTasks();
-      setSuccessMessage("Tarefa atualizada.");
-    } catch (caughtError) {
-      setErrorMessage(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Não foi possível atualizar a tarefa.",
-      );
-    } finally {
-      setBusyAction(null);
-    }
+    setEditingTask(null);
+    void loadTasks();
   };
 
   const deleteTask = async (taskId: string) => {
@@ -140,6 +140,26 @@ const TasksPage = () => {
         caughtError instanceof Error
           ? caughtError.message
           : "Não foi possível desativar a tarefa.",
+      );
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const reactivate = async (taskId: string) => {
+    setBusyAction(`reactivate-${taskId}`);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      await reactivateTaskRequest(taskId);
+      await loadTasks();
+      setSuccessMessage("Tarefa reativada.");
+    } catch (caughtError) {
+      setErrorMessage(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Não foi possível reativar a tarefa.",
       );
     } finally {
       setBusyAction(null);
@@ -198,11 +218,35 @@ const TasksPage = () => {
             />
           ) : null}
 
+          {editingTask ? (
+            <EditTaskModal
+              task={editingTask}
+              pointValueEur={pointValueEur}
+              onClose={() => setEditingTask(null)}
+              onSaved={handleEdited}
+            />
+          ) : null}
+
           <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
-            <div className="flex items-center justify-between gap-4">
-              <div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-lg font-bold text-[#003514]">Lista de tarefas</h2>
-                <p className="mt-1 text-sm text-[#404940]">Tarefas criadas para as crianças.</p>
+                <div className="inline-flex rounded-full border border-[#e1e2e4] bg-[#f8f9fb] p-1">
+                  <button
+                    type="button"
+                    onClick={() => setTaskView("active")}
+                    className={segmentClass(taskView === "active")}
+                  >
+                    Ativas ({activeTasks.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTaskView("inactive")}
+                    className={segmentClass(taskView === "inactive")}
+                  >
+                    Desativadas ({inactiveTasks.length})
+                  </button>
+                </div>
               </div>
               <Button
                 type="button"
@@ -220,80 +264,88 @@ const TasksPage = () => {
                 <p className="py-8 text-center text-sm font-semibold text-[#404940]">
                   A carregar tarefas...
                 </p>
-              ) : tasks.length > 0 ? (
-                tasks.map((task) => (
+              ) : visibleTasks.length > 0 ? (
+                visibleTasks.map((task) => (
                   <article key={task.id} className="py-4 first:pt-0 last:pb-0">
-                    {editingTaskId === task.id ? (
-                      <form onSubmit={updateTask} className="grid gap-3">
-                        <select
-                          value={editingChildId}
-                          onChange={(event) => setEditingChildId(event.target.value)}
-                          disabled={actionIsRunning || children.length === 0}
-                          className="h-11 w-full rounded-lg border border-[#e1e2e4] bg-white px-3 text-sm font-semibold text-[#191c1e] outline-none focus:border-[#003514] focus:ring-[3px] focus:ring-[#003514]/15"
-                        >
-                          {children.map((child) => (
-                            <option key={child.id} value={child.id}>{child.name}</option>
-                          ))}
-                        </select>
-                        <Input
-                          value={editingTitle}
-                          onChange={(event) => setEditingTitle(event.target.value)}
-                          disabled={actionIsRunning}
-                          className="h-11 rounded-lg border-[#e1e2e4] bg-white"
-                        />
-                        <Input
-                          value={editingDescription}
-                          onChange={(event) => setEditingDescription(event.target.value)}
-                          disabled={actionIsRunning}
-                          placeholder="Descrição (opcional)"
-                          className="h-11 rounded-lg border-[#e1e2e4] bg-white"
-                        />
-                        <div className="flex gap-2">
-                          <Button type="submit" disabled={actionIsRunning} className="h-9 rounded-full bg-[#d4e251] px-4 text-xs font-semibold text-[#003514] hover:bg-[#cfdc42]">
-                            Guardar
-                          </Button>
-                          <Button type="button" variant="ghost" onClick={() => setEditingTaskId(null)} disabled={actionIsRunning} className="h-9 rounded-full px-4 text-xs font-semibold text-[#404940]">
-                            Cancelar
-                          </Button>
-                        </div>
-                      </form>
-                    ) : (
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="font-semibold text-[#191c1e]">{task.title}</h3>
-                            <span className="rounded-full bg-[#f3f4f6] px-2.5 py-1 text-xs font-semibold text-[#404940]">
-                              {taskTypeLabels[task.task_type] ?? task.task_type}
-                            </span>
-                            {!task.is_active ? (
-                              <span className="rounded-full bg-[#fff4de] px-2.5 py-1 text-xs font-semibold text-[#7a4100]">
-                                Inativa
+                            {task.task_type === "extra_task" ? (
+                              <span className="flex items-center gap-1.5 rounded-full bg-[#eef7d1] px-2.5 py-1 text-xs font-semibold text-[#5f6800]">
+                                <Coins className="size-3.5" aria-hidden="true" />
+                                {formatEuros(Number(task.reward_amount) * pointValueEur)} (
+                                {Number(task.reward_amount).toLocaleString("pt-PT")} pts)
                               </span>
                             ) : null}
                           </div>
-                          <p className="mt-1 text-sm text-[#404940]">
-                            {childNameById.get(task.child_id) ?? "Criança"} · {formatEuros(Number(task.reward_amount) * pointValueEur)} · {Number(task.reward_amount).toLocaleString("pt-PT")} pontos
-                          </p>
                           {task.description ? (
-                            <p className="mt-1 text-sm text-[#59625a]">{task.description}</p>
-                          ) : null}
+                            <p className="mt-1.5 text-sm text-[#59625a]">{task.description}</p>
+                          ) : (
+                            <p className="mt-1.5 text-sm italic text-[#9aa39b]">Sem descrição</p>
+                          )}
+                          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                            <span className={metaItemClass}>
+                              <Tag className="size-4 text-[#7a8278]" aria-hidden="true" />
+                              {taskTypeLabels[task.task_type] ?? task.task_type}
+                            </span>
+                            <span className={metaItemClass}>
+                              <UserRound className="size-4 text-[#7a8278]" aria-hidden="true" />
+                              {childNameById.get(task.child_id) ?? "Criança"}
+                            </span>
+                            {task.expires_at ? (
+                              (() => {
+                                const expired =
+                                  task.is_active && new Date(task.expires_at) < new Date();
+                                return (
+                                  <span
+                                    className={`flex items-center gap-1.5 text-sm ${
+                                      expired ? "font-semibold text-[#7a4100]" : "text-[#404940]"
+                                    }`}
+                                  >
+                                    <Clock
+                                      className={`size-4 ${expired ? "text-[#7a4100]" : "text-[#7a8278]"}`}
+                                      aria-hidden="true"
+                                    />
+                                    {expired ? "Expirou " : ""}
+                                    {formatExpiry(task.expires_at)}
+                                  </span>
+                                );
+                              })()
+                            ) : (
+                              <span className={metaItemClass}>
+                                <Clock className="size-4 text-[#7a8278]" aria-hidden="true" />
+                                sem prazo
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="flex shrink-0 gap-2">
-                          <Button type="button" variant="ghost" onClick={() => startEditTask(task)} disabled={actionIsRunning} className="h-9 rounded-full px-3 text-xs font-semibold text-[#003514] hover:bg-[#f3f4f6]">
-                            Editar
-                          </Button>
-                          <Button type="button" variant="ghost" onClick={() => deleteTask(task.id)} disabled={actionIsRunning || !task.is_active} className="h-9 rounded-full px-3 text-xs font-semibold text-[#7a4100] hover:bg-[#fff4de] hover:text-[#7a4100] disabled:opacity-50">
-                            {busyAction === `delete-${task.id}` ? <LoaderCircle className="mr-2 size-3.5 animate-spin" aria-hidden="true" /> : <Trash2 className="mr-2 size-3.5" aria-hidden="true" />}
-                            Desativar
-                          </Button>
+                          {task.is_active ? (
+                            <>
+                              <Button type="button" variant="ghost" onClick={() => startEditTask(task)} disabled={actionIsRunning} className="h-9 rounded-full px-3 text-xs font-semibold text-[#003514] hover:bg-[#f3f4f6]">
+                                Editar
+                              </Button>
+                              <Button type="button" variant="ghost" onClick={() => deleteTask(task.id)} disabled={actionIsRunning} className="h-9 rounded-full px-3 text-xs font-semibold text-[#7a4100] hover:bg-[#fff4de] hover:text-[#7a4100] disabled:opacity-50">
+                                {busyAction === `delete-${task.id}` ? <LoaderCircle className="mr-2 size-3.5 animate-spin" aria-hidden="true" /> : <Trash2 className="mr-2 size-3.5" aria-hidden="true" />}
+                                Desativar
+                              </Button>
+                            </>
+                          ) : (
+                            <Button type="button" onClick={() => reactivate(task.id)} disabled={actionIsRunning} className="h-9 rounded-full bg-[#d4e251] px-3 text-xs font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60">
+                              {busyAction === `reactivate-${task.id}` ? <LoaderCircle className="mr-2 size-3.5 animate-spin" aria-hidden="true" /> : <RotateCcw className="mr-2 size-3.5" aria-hidden="true" />}
+                              Reativar
+                            </Button>
+                          )}
                         </div>
                       </div>
-                    )}
                   </article>
                 ))
               ) : (
                 <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
-                  Ainda não existem tarefas.
+                  {taskView === "active"
+                    ? "Ainda não existem tarefas."
+                    : "Sem tarefas desativadas."}
                 </p>
               )}
             </div>
