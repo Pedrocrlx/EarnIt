@@ -53,7 +53,7 @@ export const LandingPage = () => {
               <h1 className="text-4xl font-normal leading-[1.12] tracking-normal text-[#003514] sm:text-5xl md:text-[52px] md:leading-[62px] lg:text-[56px] lg:leading-[66px]">
                 Transforme tarefas em
                 <br />
-                <span className="text-[#c2cf40]">conquistas.</span>
+                <span className="text-[#748000]">conquistas.</span>
               </h1>
               <p className="mt-5 max-w-[520px] text-base font-normal leading-7 text-[#404940] sm:text-lg sm:leading-8 lg:text-[22px] lg:leading-9">
                 Torne a responsabilidade divertida. A EarnIt ajuda os pais a organizar tarefas
@@ -64,10 +64,13 @@ export const LandingPage = () => {
               </Button>
             </div>
 
-            <div className="relative mx-auto flex w-full max-w-[220px] justify-center sm:max-w-[260px] md:max-w-[280px] lg:max-w-[300px]">
+            <div className="mascot-float relative mx-auto flex w-full max-w-[220px] justify-center sm:max-w-[260px] md:max-w-[280px] lg:max-w-[300px]">
               <img
                 src="/mascot/avocado.webp"
                 alt="Mascote abacate da EarnIt"
+                width={359}
+                height={508}
+                fetchPriority="high"
                 className="h-auto w-full object-contain transition-transform duration-300 ease-out hover:-translate-y-1 hover:scale-[1.02]"
               />
             </div>
@@ -93,7 +96,7 @@ export const LandingPage = () => {
                 src="/mascot/kiwi.webp"
                 alt=""
                 aria-hidden="true"
-                className="pointer-events-none absolute -top-28 left-0 hidden w-[200px] select-none transition-transform duration-500 ease-out group-hover/steps:translate-y-1 lg:block"
+                className="mascot-drift pointer-events-none absolute -top-28 left-0 hidden w-[200px] select-none transition-transform duration-500 ease-out group-hover/steps:translate-y-1 lg:block"
               />
               <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:gap-8">
                 {howItWorksSteps.map((step) => {

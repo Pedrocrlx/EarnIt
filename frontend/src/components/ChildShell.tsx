@@ -67,12 +67,14 @@ export const ChildShell = ({ points, loading = false, children }: ChildShellProp
             <Button
               type="button"
               variant="ghost"
-              size="icon"
               onClick={() => navigate("/profile")}
               aria-label="Trocar perfil"
-              className="size-10 rounded-full text-white hover:bg-white/10 hover:text-white"
+              className="h-10 rounded-full px-3 text-white hover:bg-white/10 hover:text-white sm:gap-2 sm:px-4"
             >
               <LoopIcon className="size-5" aria-hidden="true" />
+              <span className="hidden text-sm font-semibold sm:inline">
+                Trocar perfil
+              </span>
             </Button>
           </div>
         </div>

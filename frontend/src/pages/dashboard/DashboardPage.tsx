@@ -1,5 +1,13 @@
 import { ArchiveIcon, CalendarIcon, CheckCircledIcon, ChevronRightIcon, CrossCircledIcon, ImageIcon, OpenInNewWindowIcon, StarIcon, TargetIcon, UpdateIcon } from "@radix-ui/react-icons";
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type FormEvent,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Link } from "react-router-dom";
 import DashboardShell from "@/components/NavbarMobile";
 import { Button } from "@/components/ui/button";
@@ -22,7 +30,7 @@ import type {
   SubmissionResponse,
   TaskResponse,
 } from "@/services/types";
-import ChildDashboard from "./ChildDashboard";
+const ChildDashboard = lazy(() => import("./ChildDashboard"));
 
 type ChildGoals = { balance: number; goals: Goal[] };
 type GoalWithChild = Goal & { childName: string };
@@ -143,7 +151,17 @@ const DashboardPage = () => {
 
   // Child path delegates entirely to the child dashboard.
   if (!isParent) {
-    return <ChildDashboard />;
+    return (
+      <Suspense
+        fallback={
+          <main className="flex min-h-[60vh] items-center justify-center px-6 text-sm font-semibold text-[#52604f]">
+            A preparar o teu painel...
+          </main>
+        }
+      >
+        <ChildDashboard />
+      </Suspense>
+    );
   }
 
   const familyName = familyProfile?.family_name?.trim() || "Família";

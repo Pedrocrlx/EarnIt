@@ -26,13 +26,13 @@ export const Modal = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#003514]/60 px-4 py-6 backdrop-blur-sm"
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-[#003514]/60 px-4 py-6 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
     >
       <div
-        className={`max-h-[90vh] w-full ${widthClassName} overflow-y-auto rounded-xl bg-white p-5 shadow-[0px_20px_40px_-12px_rgba(0,0,0,0.35)] sm:p-6`}
+        className={`modal-panel max-h-[90vh] w-full ${widthClassName} overflow-y-auto rounded-xl bg-white p-5 shadow-[0px_20px_40px_-12px_rgba(0,0,0,0.35)] sm:p-6`}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
