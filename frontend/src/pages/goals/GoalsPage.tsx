@@ -1,4 +1,9 @@
-import { CheckIcon, MagicWandIcon, ReloadIcon, UpdateIcon } from "@radix-ui/react-icons";
+import {
+  CheckCircledIcon,
+  CheckIcon,
+  MagicWandIcon,
+  UpdateIcon,
+} from "@radix-ui/react-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ChildShell from "@/components/ChildShell";
 import DashboardShell from "@/components/NavbarMobile";
@@ -171,8 +176,12 @@ const ChildGoals = () => {
                       ) : null}
                     </div>
                     {ready ? (
-                      <span className="shrink-0 rounded-full bg-[#eef7d1] px-2.5 py-1 text-xs font-bold text-[#5f6800]">
-                        Pronto! 🎉
+                      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#eef7d1] px-2.5 py-1 text-xs font-bold text-[#5f6800]">
+                        <CheckCircledIcon
+                          className="size-3.5"
+                          aria-hidden="true"
+                        />
+                        Pronto!
                       </span>
                     ) : null}
                   </div>
@@ -202,9 +211,13 @@ const ChildGoals = () => {
             })}
           </div>
         ) : (
-          <p className="px-5 py-10 text-center text-sm font-semibold text-[#404940]">
-            Ainda não tens objetivos. Faz um pedido! ✨
-          </p>
+          <div className="flex flex-col items-center gap-2 px-5 py-10 text-center text-sm font-semibold text-[#404940]">
+            <MagicWandIcon
+              className="size-5 text-[#5f6800]"
+              aria-hidden="true"
+            />
+            <p>Ainda não tens objetivos. Faz um pedido!</p>
+          </div>
         )}
       </section>
       </div>
@@ -468,7 +481,7 @@ const ParentGoals = () => {
     <DashboardShell>
       <main className="flex min-h-screen w-full flex-col items-center gap-10 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
         <section className="flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10">
-          <header className="flex items-center justify-between gap-4">
+          <header>
             <div>
               <p className="text-sm font-semibold uppercase text-[#5f6800]">
                 Gestão familiar
@@ -477,20 +490,6 @@ const ParentGoals = () => {
                 Objetivos
               </h1>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={load}
-              disabled={loading || busyGoalId !== null}
-              aria-label="Atualizar"
-              className="size-11 shrink-0 rounded-full border border-[#e1e2e4] text-[#003514] hover:bg-white"
-            >
-              <ReloadIcon
-                className={`size-5 ${loading ? "animate-spin" : ""}`}
-                aria-hidden="true"
-              />
-            </Button>
           </header>
 
           {children.length === 0 ? (

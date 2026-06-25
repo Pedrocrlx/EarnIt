@@ -3,7 +3,6 @@ import {
   CheckIcon,
   ImageIcon,
   PlusIcon,
-  ReloadIcon,
   UpdateIcon,
 } from "@radix-ui/react-icons";
 import { type FormEvent, useState } from "react";
@@ -35,7 +34,6 @@ const ManageProfilesPage = () => {
   const { showToast } = useToast();
   const familyName = familyProfile?.family_name?.trim() || "Família";
   const children = familyProfile?.children ?? [];
-  const [refreshing, setRefreshing] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [editingBirthDate, setEditingBirthDate] = useState("");
@@ -47,15 +45,10 @@ const ManageProfilesPage = () => {
   const [updatingAvatarId, setUpdatingAvatarId] = useState<string | null>(null);
 
   const actionIsRunning =
-    updatingChildId !== null || updatingAvatarId !== null || refreshing;
+    updatingChildId !== null || updatingAvatarId !== null;
 
   const refreshFamily = async () => {
-    setRefreshing(true);
-    try {
-      await refreshSession();
-    } finally {
-      setRefreshing(false);
-    }
+    await refreshSession();
   };
 
   const selectAvatar = (childId: string, file: File | null) => {
@@ -145,7 +138,7 @@ const ManageProfilesPage = () => {
     <DashboardShell>
       <main className="flex min-h-screen w-full flex-col items-center gap-10 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
         <section className="flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10">
-          <header className="flex items-center justify-between gap-4">
+          <header>
             <div>
               <p className="text-sm font-semibold uppercase text-[#5f6800]">
                 Gestão familiar
@@ -154,20 +147,6 @@ const ManageProfilesPage = () => {
                 Perfis
               </h1>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={refreshFamily}
-              disabled={actionIsRunning}
-              aria-label="Atualizar"
-              className="size-11 shrink-0 rounded-full border border-[#e1e2e4] text-[#003514] hover:bg-white"
-            >
-              <ReloadIcon
-                className={`size-5 ${refreshing ? "animate-spin" : ""}`}
-                aria-hidden="true"
-              />
-            </Button>
           </header>
 
           {createModalOpen ? (
