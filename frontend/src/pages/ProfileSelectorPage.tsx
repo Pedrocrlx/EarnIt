@@ -5,8 +5,10 @@ import Logo from "@/components/Logo";
 import { ParentPinDialog } from "@/components/ParentPinDialog";
 import { useAuth } from "@/context/useAuth";
 import {
+  lockParentProfile,
   PARENT_PROFILE_ID,
   SELECTED_PROFILE_STORAGE_KEY,
+  unlockParentProfile,
 } from "@/lib/profile-selection";
 
 type SelectableProfile = {
@@ -34,6 +36,9 @@ export const ProfileSelectorPage = () => {
   const [pinModalIsOpen, setPinModalIsOpen] = useState(false);
 
   useEffect(() => {
+    // Entering the selector always closes any previous parent unlock. The parent
+    // must submit the PIN again before a parent dashboard route can be opened.
+    lockParentProfile();
     void refreshSession();
   }, [refreshSession]);
 
@@ -61,11 +66,13 @@ export const ProfileSelectorPage = () => {
       return;
     }
 
+    lockParentProfile();
     window.localStorage.setItem(SELECTED_PROFILE_STORAGE_KEY, profileId);
     navigate("/dashboard");
   };
 
   const enterParent = () => {
+    unlockParentProfile();
     window.localStorage.setItem(SELECTED_PROFILE_STORAGE_KEY, PARENT_PROFILE_ID);
     navigate("/dashboard");
   };

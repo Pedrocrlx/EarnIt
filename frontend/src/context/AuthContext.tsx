@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { AuthContext } from "@/context/auth-context";
 import type { AuthStatus, FamilyProfile } from "@/context/auth-context";
 import { apiFetch } from "@/lib/api";
+import { clearProfileSelection } from "@/lib/profile-selection";
 
 const fetchFamilyProfile = () => apiFetch<FamilyProfile>("/profiles/family");
 
@@ -79,6 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       await apiFetch("/auth/logout", { method: "POST" });
     } finally {
+      clearProfileSelection();
       setFamilyProfile(null);
       setStatus("unauthenticated");
     }

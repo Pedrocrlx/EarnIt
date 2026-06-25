@@ -5,7 +5,10 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import Logo from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/useAuth";
-import { selectedProfileIsParent } from "@/lib/profile-selection";
+import {
+  lockParentProfile,
+  selectedProfileIsParent,
+} from "@/lib/profile-selection";
 import { cn } from "@/lib/utils";
 
 type DashboardShellProps = {
@@ -39,6 +42,7 @@ export const DashboardShell = ({ children }: DashboardShellProps) => {
 
   const handleSwitchProfile = () => {
     setMobileMenuIsOpen(false);
+    lockParentProfile();
     navigate("/profile");
   };
 

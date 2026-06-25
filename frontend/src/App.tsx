@@ -2,7 +2,11 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
-import { selectedProfileIsParent } from "@/lib/profile-selection";
+import {
+  getSelectedProfileId,
+  parentPinIsUnlocked,
+  selectedProfileIsParent,
+} from "@/lib/profile-selection";
 
 const DashboardPage = lazy(() => import("@/pages/dashboard/DashboardPage"));
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
@@ -29,6 +33,7 @@ const VerifyResetCodePage = lazy(
 const ResetPasswordPage = lazy(
   () => import("@/pages/authentication/ResetPasswordPage"),
 );
+const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
 const PageFallback = () => (
   <main className="flex min-h-screen items-center justify-center bg-[#f8f9fb] px-4">
@@ -48,9 +53,23 @@ const CompletedOnboardingRoute = ({
   <ProtectedRoute requireOnboardingComplete>{children}</ProtectedRoute>
 );
 
+const DashboardRoute = ({ children }: { children: ReactNode }) => {
+  const selectedProfileId = getSelectedProfileId();
+
+  if (!selectedProfileId) {
+    return <Navigate to="/profile" replace />;
+  }
+
+  if (selectedProfileIsParent() && !parentPinIsUnlocked()) {
+    return <Navigate to="/profile" replace />;
+  }
+
+  return <CompletedOnboardingRoute>{children}</CompletedOnboardingRoute>;
+};
+
 const ParentDashboardRoute = ({ children }: { children: ReactNode }) => {
-  if (!selectedProfileIsParent()) {
-    return <Navigate to="/dashboard" replace />;
+  if (!selectedProfileIsParent() || !parentPinIsUnlocked()) {
+    return <Navigate to="/profile" replace />;
   }
 
   return <CompletedOnboardingRoute>{children}</CompletedOnboardingRoute>;
@@ -112,17 +131,17 @@ function App() {
             <Route
               path="/dashboard"
               element={
-                <CompletedOnboardingRoute>
+                <DashboardRoute>
                   <DashboardPage />
-                </CompletedOnboardingRoute>
+                </DashboardRoute>
               }
             />
             <Route
               path="/dashboard/goals"
               element={
-                <CompletedOnboardingRoute>
+                <DashboardRoute>
                   <GoalsPage />
-                </CompletedOnboardingRoute>
+                </DashboardRoute>
               }
             />
             <Route
@@ -157,6 +176,7 @@ function App() {
                 </ParentDashboardRoute>
               }
             />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>
       </Layout>
