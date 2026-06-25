@@ -18,13 +18,13 @@ from src.services.verification import core
 
 # purpose -> (email subject, template filename in src/email/)
 _EMAILS = {
-    core.PURPOSE_ACCOUNT: ("Verify your EarnIt account", "verification_code.html"),
+    core.PURPOSE_ACCOUNT: ("Verifique a sua conta EarnIt", "verification_code.html"),
     core.PURPOSE_PASSWORD_RESET: (
-        "Reset your EarnIt password",
+        "Redefinir a sua palavra-passe EarnIt",
         "password_reset_code.html",
     ),
     core.PURPOSE_PIN_RESET: (
-        "Reset your EarnIt parental PIN",
+        "Redefinir o seu PIN parental EarnIt",
         "pin_reset_code.html",
     ),
 }
