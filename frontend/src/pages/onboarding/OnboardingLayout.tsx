@@ -19,8 +19,8 @@ export const OnboardingLayout = ({ step, children }: OnboardingLayoutProps) => (
     <section className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-[640px] flex-col items-center justify-center gap-10">
       <header className="flex w-full flex-col items-center gap-8">
         <img
-          src="/earnit_icon_black.webp"
-          alt="EarnIt"
+          src="/earnit_logo_black.webp"
+          alt="Logótipo EarnIt"
           className="h-16 w-auto object-contain"
         />
 

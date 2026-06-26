@@ -65,6 +65,8 @@ See the detailed [frontend documentation](frontend/README.md) and
 ### Prerequisites
 
 - Docker with Docker Compose
+- `uv` for backend dependency and environment management
+- Bun for frontend dependency and script management
 - `make`
 
 ### 1. Configure the backend

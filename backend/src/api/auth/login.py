@@ -56,7 +56,10 @@ async def login(
         # No user_id to log here without re-introducing an enumeration signal via log
         # volume/content — the failure itself is the only thing worth recording.
         logger.warning("Login failed: invalid credentials")
-        raise HTTPException(status_code=401, detail="Invalid login credentials.")
+        raise HTTPException(
+            status_code=401,
+            detail="Login inválido: Conta desativada ou senha incorreta",
+        )
 
     # is_active is checked before email_verified_at — a disabled-and-unverified
     # account always reports account_disabled, never account_unverified.
