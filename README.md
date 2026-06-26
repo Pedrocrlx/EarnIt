@@ -14,7 +14,7 @@ The full development stack runs with Docker Compose behind Nginx:
 - **PostgreSQL 17** stores accounts, profiles, tasks, wallets, and goals.
 - **Mailpit** captures development emails for account verification and
   password/PIN recovery.
-- Named Docker volumes persist PostgreSQL data and uploaded child avatars.
+- Named Docker volumes persist PostgreSQL data, child avatars, and task proofs.
 
 The browser uses only Nginx for application traffic. Nginx routes `/` to the
 frontend and `/api`, `/docs`, and `/openapi.json` to FastAPI. FastAPI connects
@@ -22,11 +22,11 @@ to PostgreSQL and sends email through Mailpit's internal SMTP endpoint.
 Mailpit's web interface is exposed separately for developers.
 
 ```mermaid
-flowchart LR
+flowchart TB
     Browser([User browser])
-    Developer([Developer])
 
     subgraph Stack[Docker Compose network]
+        direction TB
         Proxy[Nginx reverse proxy]
         Frontend[React + Vite frontend]
         API[FastAPI backend]
@@ -34,6 +34,7 @@ flowchart LR
         Mailpit[Mailpit SMTP sink]
         DBVolume[(postgres_data)]
         AvatarVolume[(avatar_uploads)]
+        ProofVolume[(submission_proofs)]
     end
 
     Browser -->|http://localhost:80| Proxy
@@ -41,9 +42,10 @@ flowchart LR
     Proxy -->|/api, /docs, /openapi.json| API
     API -->|SQL| DB
     API -->|SMTP port 1025| Mailpit
-    Developer -->|Web UI port 8025| Mailpit
+    Mailpit -->|Web UI port 8025| Developer([Developer])
     DB -.->|persists data| DBVolume
     API -.->|stores child avatars| AvatarVolume
+    API -.->|stores task proofs| ProofVolume
 ```
 
 ## Tech Stack
