@@ -15,11 +15,11 @@ const progressWidth: Record<OnboardingLayoutProps["step"], string> = {
 // Shared onboarding chrome: centred frame, logo, and the step progress header.
 // Each step provides its own title block + form/content as children.
 export const OnboardingLayout = ({ step, children }: OnboardingLayoutProps) => (
-  <main className="min-h-screen bg-[#f8f9fb] px-4 py-10 sm:px-6 sm:py-14 lg:py-20">
+  <main className="min-h-screen bg-[#f8f9fb] px-4 py-10 sm:px-6 lg:py-20">
     <section className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-[640px] flex-col items-center justify-center gap-10">
       <header className="flex w-full flex-col items-center gap-8">
         <img
-          src="/earnit_logo_black.webp"
+          src="/earnit_icon_black.webp"
           alt="EarnIt"
           className="h-16 w-auto object-contain"
         />

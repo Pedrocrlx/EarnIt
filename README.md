@@ -228,3 +228,27 @@ See the [contribution guide](docs/contribute_guide.md) and
 
 - **GPT-5.2-Codex** assisted with CI pipelines, documentation, and Docker
   Compose services.
+
+### Phase 3 - Development
+
+- **Claude Code** was used on the backend as a coding assistant across routers,
+  services, models, schemas, tests, and documentation.
+- **Codex** was used on the frontend for page creation, using the Figma MCP to
+  reproduce pages planned and designed in Figma. Codex also implemented
+  frontend components, input validation, UI animations, and fetching services
+  that integrate the frontend with backend endpoints.
+- Frontend work followed a spec-driven development flow using `spec.md`: Codex
+  executed the implementation from the team's planning, requirements, and
+  decisions rather than making product decisions independently.
+- AI assistance helped with module planning, spec-first implementation for
+  complex flows, reuse opportunities, boilerplate, tests, documentation, and
+  mechanical cleanup.
+- A minimalism-focused review pass was used to identify speculative
+  abstractions, duplicated logic, and dead configuration; the team reviewed each
+  suggestion before accepting changes.
+- The team reviewed and understood all AI-assisted code. Architectural choices,
+  the data model, frontend flows, UI behavior, and auth/verification decisions
+  remained team-owned, and AI suggestions were overridden when they did not fit
+  the project.
+- See [backend/docs/AI_USAGE.md](backend/docs/AI_USAGE.md) for the detailed
+  backend AI usage statement.

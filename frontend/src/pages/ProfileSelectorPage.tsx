@@ -80,8 +80,7 @@ export const ProfileSelectorPage = () => {
   return (
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[#f1f5e6] to-[#f8f9fb] px-5 py-10 text-[#191c1e] sm:px-8">
       <section className="flex w-full max-w-3xl flex-col items-center">
-        <Logo className="h-12" />
-
+        <Logo className="h-35" />
         <div className="mt-8 text-center">
           {familyName ? (
             <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#5f6800]">
