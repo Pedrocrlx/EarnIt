@@ -1,0 +1,120 @@
+"""Forgot/reset parental PIN — email-based recovery for the PIN set in pin.py.
+
+Reuses the stateless verification-code primitive with purpose='pin_reset'
+(see app/services/verification/pin_reset.py). Unlike /auth/forgot-password,
+the caller already holds a full access_token session, so there's no
+anti-enumeration concern — failures are reported directly (429/410/400)
+instead of being collapsed into a generic response.
+"""
+
+import logging
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.database import get_session
+from src.dependencies import get_current_user
+from src.models.auth import User
+from src.schemas.auth import ResetPinRequest, VerifyPinCodeRequest
+from src.security.hashing import hash_secret
+from src.services.accounts import maybe_complete_onboarding
+from src.services.verification import core, flows
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["auth/recovery"])
+
+
+@router.post("/forgot-pin", summary="Request a PIN reset code")
+async def forgot_pin(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Send a PIN reset code to the authenticated parent's email.
+
+    Rate-limited: returns 429 with `retry_after_seconds` if a valid code is already
+    active. Unlike `/forgot-password`, the caller holds a full session so failures are
+    reported directly instead of being collapsed into a generic response. Continue with
+    `POST /reset-pin` to set a new PIN.
+    """
+    now = core.now()
+
+    # Anti-spam: a fresh code can only be issued once the current window has closed.
+    if flows.is_window_open(current_user, now):
+        logger.info("PIN reset rate-limited: user_id=%s", current_user.id)
+        return JSONResponse(
+            status_code=429,
+            content={
+                "status": "error",
+                "message": (
+                    "A PIN reset code is still active. "
+                    "Please wait before requesting another."
+                ),
+                "retry_after_seconds": flows.seconds_until_resend(current_user, now),
+            },
+        )
+
+    # Rotate the anchor synchronously (it's the source of truth), then email the
+    # new code off the critical path.
+    expires_at = await flows.rotate(current_user, session)
+    background_tasks.add_task(flows.send_code, current_user, core.PURPOSE_PIN_RESET)
+    logger.info("PIN reset code requested: user_id=%s", current_user.id)
+    return {
+        "status": "success",
+        "message": "A PIN reset code has been sent.",
+        "expires_at": expires_at,
+    }
+
+
+@router.post("/reset-pin/verify", summary="Check a PIN reset code")
+async def verify_pin_reset_code(
+    body: VerifyPinCodeRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Validate a PIN reset code without consuming it or setting a PIN.
+
+    Lets the UI confirm the emailed code before the parent picks a new PIN. Nothing
+    is rotated, so the same code still works for the subsequent `POST /reset-pin`.
+    Returns 410 if the code window has expired, 400 if the code is wrong.
+    """
+    now = core.now()
+    if not flows.is_window_open(current_user, now):
+        raise HTTPException(status_code=410, detail="PIN reset code has expired.")
+    if not flows.verify(current_user, core.PURPOSE_PIN_RESET, body.code):
+        raise HTTPException(status_code=400, detail="Invalid PIN reset code.")
+    return {"status": "success", "valid": True}
+
+
+@router.post("/reset-pin", summary="Set a new PIN from reset code")
+async def reset_pin(
+    body: ResetPinRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Redeem a PIN reset code and set a new 4-digit PIN.
+
+    Requires a valid code issued by `POST /forgot-pin`. Returns 410 if the code window
+    has expired, 400 if the code is wrong. The old code is invalidated on success
+    (anchor rotation prevents replay). May complete onboarding if conditions are met.
+    """
+    now = core.now()
+    if not flows.is_window_open(current_user, now):
+        logger.info("PIN reset failed: code expired (user_id=%s)", current_user.id)
+        raise HTTPException(status_code=410, detail="PIN reset code has expired.")
+
+    if not flows.verify(current_user, core.PURPOSE_PIN_RESET, body.code):
+        logger.warning("PIN reset failed: invalid code (user_id=%s)", current_user.id)
+        raise HTTPException(status_code=400, detail="Invalid PIN reset code.")
+
+    # Bumping updated_at moves the anchor, so the just-used code can never be replayed.
+    current_user.parent_pin_hash = await hash_secret(body.new_pin)
+    current_user.pin_set_at = now
+    current_user.updated_at = now
+    await session.commit()
+
+    await maybe_complete_onboarding(current_user, session)
+
+    logger.info("PIN reset completed: user_id=%s", current_user.id)
+    return {"status": "success", "message": "PIN has been reset."}

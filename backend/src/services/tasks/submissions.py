@@ -1,0 +1,388 @@
+"""Submission service — the submit/review lifecycle and reward crediting.
+
+Covers a child submitting a task, a parent approving/rejecting (single or
+batch), and resubmitting a rejected one. Approving a rewarded extra task writes
+a wallet credit. Also owns the daily maintenance loop that, each midnight,
+generates a fresh submission slot for every active duty and purges expired limbo
+accounts.
+"""
+
+import asyncio
+import logging
+from datetime import UTC, datetime, time, timedelta
+from uuid import UUID
+
+from fastapi import HTTPException
+from sqlalchemy import or_, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.database import AsyncSessionLocal
+from src.models.auth import Child, User
+from src.models.tasks import Task, TaskSubmission, WalletTransaction
+from src.services import accounts
+from src.services.submission_proofs import delete_proof, store_proof
+from src.services.tasks._shared import get_child_or_404, get_submission_or_404
+
+_maintenance_task: asyncio.Task | None = None
+
+logger = logging.getLogger(__name__)
+
+
+async def submit_task(
+    task_id: UUID,
+    child_id: UUID,
+    proof_data: bytes,
+    proof_suffix: str,
+    user: User,
+    session: AsyncSession,
+) -> TaskSubmission:
+    """Record a child's completion of a task.
+
+    Duties flip today's pre-generated slot from ``open`` to ``pending`` (409 if it
+    isn't ``open`` — already submitted, reviewed, or missed); extra tasks create a
+    new pending submission (409 if one is already pending or approved). The local
+    import of ``get_task_or_404`` avoids a circular import between this module and
+    ``crud``.
+    """
+    from src.services.tasks.crud import get_task_or_404
+
+    task = await get_task_or_404(task_id, user, session)
+    if task.child_id != child_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+    await get_child_or_404(child_id, user, session)
+
+    now = datetime.now(UTC)
+    if task.expires_at is not None and task.expires_at <= now:
+        raise HTTPException(status_code=410, detail="Task has expired")
+
+    if task.task_type == "duty":
+        result = await session.execute(
+            select(TaskSubmission).where(
+                TaskSubmission.task_id == task_id,
+                TaskSubmission.scheduled_date == now.date(),
+            )
+        )
+        slot = result.scalar_one_or_none()
+        if slot is None:
+            raise HTTPException(status_code=404, detail="No duty slot found for today")
+        if slot.status != "open":
+            raise HTTPException(
+                status_code=409, detail="Duty already submitted for today"
+            )
+        slot.status = "pending"
+        slot.submitted_at = now
+        await store_proof(slot.id, proof_data, proof_suffix)
+        slot.proof_url = f"/api/v1/tasks/submissions/{slot.id}/proof"
+        await session.commit()
+        logger.info("Duty submitted: submission_id=%s", slot.id)
+        return slot
+    else:
+        result = await session.execute(
+            select(TaskSubmission).where(
+                TaskSubmission.task_id == task_id,
+                TaskSubmission.status.in_(["pending", "approved"]),
+            )
+        )
+        if result.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Task already has a pending or approved submission",
+            )
+        submission = TaskSubmission(
+            task_id=task_id,
+            child_id=child_id,
+            submitted_at=now,
+            status="pending",
+        )
+        await store_proof(submission.id, proof_data, proof_suffix)
+        submission.proof_url = f"/api/v1/tasks/submissions/{submission.id}/proof"
+        session.add(submission)
+        await session.commit()
+        logger.info("Extra task submitted: submission_id=%s", submission.id)
+        return submission
+
+
+async def resubmit_task(
+    submission_id: UUID,
+    child_id: UUID,
+    proof_data: bytes,
+    proof_suffix: str,
+    user: User,
+    session: AsyncSession,
+) -> TaskSubmission:
+    """Reset a rejected submission back to pending for another review.
+
+    Clears the rejection note and review timestamp and re-stamps
+    ``submitted_at``. Raises 410 if the task has expired (the retry window is
+    closed), or 409 unless the submission is currently rejected.
+    """
+    await get_child_or_404(child_id, user, session)
+    submission = await session.get(TaskSubmission, submission_id)
+    if submission is None or submission.child_id != child_id:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    now = datetime.now(UTC)
+    # Expiry dominates: once the task is past its deadline the child can no longer
+    # patch a submission, regardless of its status. The parent may still review it.
+    task = await session.get(Task, submission.task_id)
+    if task and task.expires_at is not None and task.expires_at <= now:
+        raise HTTPException(status_code=410, detail="Task has expired")
+    # A duty slot can only be resubmitted on its own day — yesterday's chore is closed.
+    if submission.scheduled_date is not None and submission.scheduled_date < now.date():
+        raise HTTPException(status_code=410, detail="The day for this duty has passed")
+    if submission.status != "rejected":
+        raise HTTPException(
+            status_code=409, detail="Only rejected submissions can be resubmitted"
+        )
+    submission.status = "pending"
+    submission.submitted_at = now
+    submission.rejection_note = None
+    submission.reviewed_at = None
+    await store_proof(submission.id, proof_data, proof_suffix)
+    submission.proof_url = f"/api/v1/tasks/submissions/{submission.id}/proof"
+    await session.commit()
+    logger.info("Submission resubmitted: submission_id=%s", submission.id)
+    return submission
+
+
+def _apply_approval(
+    session: AsyncSession, submission: TaskSubmission, task: Task | None, now: datetime
+) -> None:
+    """Mark a submission approved and, for a rewarded extra task, add a wallet credit.
+
+    The caller owns the commit, so single and batch approval write the same way.
+    """
+    submission.status = "approved"
+    submission.reviewed_at = now
+    if task and task.task_type == "extra_task" and task.reward_amount > 0:
+        session.add(
+            WalletTransaction(
+                child_id=submission.child_id,
+                task_submission_id=submission.id,
+                amount=task.reward_amount,
+                transaction_type="credit",
+                description=f"Approved: {task.title}",
+            )
+        )
+
+
+async def approve_submission(
+    submission_id: UUID, user: User, session: AsyncSession
+) -> TaskSubmission:
+    """Approve one pending submission, crediting the wallet if rewarded.
+
+    A rewarded extra task writes a ``credit`` wallet transaction; duties (zero
+    reward) just flip status. Raises 409 unless the submission is pending.
+    """
+    submission = await get_submission_or_404(submission_id, user, session)
+    if submission.status != "pending":
+        raise HTTPException(status_code=409, detail="Submission is not pending")
+    if not submission.proof_url:
+        raise HTTPException(status_code=409, detail="Submission has no proof image")
+    # task_id is null when the task was deleted; the orphaned submission can still
+    # be reviewed, but no reward is credited (_apply_approval no-ops on None).
+    task = await session.get(Task, submission.task_id) if submission.task_id else None
+    _apply_approval(session, submission, task, datetime.now(UTC))
+    await delete_proof(submission.id)
+    submission.proof_url = None
+    await session.commit()
+    logger.info("Submission approved: submission_id=%s", submission.id)
+    return submission
+
+
+async def reject_submission(
+    submission_id: UUID, rejection_note: str | None, user: User, session: AsyncSession
+) -> TaskSubmission:
+    """Reject one pending submission, attaching an optional note for the child.
+
+    Raises 409 unless the submission is pending. No wallet entry is written; the
+    child may later resubmit via ``resubmit_task``.
+    """
+    submission = await get_submission_or_404(submission_id, user, session)
+    if submission.status != "pending":
+        raise HTTPException(status_code=409, detail="Submission is not pending")
+    submission.status = "rejected"
+    submission.reviewed_at = datetime.now(UTC)
+    submission.rejection_note = rejection_note
+    await delete_proof(submission.id)
+    submission.proof_url = None
+    await session.commit()
+    logger.info("Submission rejected: submission_id=%s", submission.id)
+    return submission
+
+
+async def batch_approve(
+    user: User, session: AsyncSession, child_id: UUID | None = None
+) -> int:
+    """Approve every pending submission for the parent (or one child).
+
+    Crediting follows the same rule as single approval — rewarded extra tasks
+    write a wallet credit. Returns the number of submissions approved.
+    """
+    children_q = select(Child.id).where(Child.user_id == user.id)
+    if child_id is not None:
+        children_q = children_q.where(Child.id == child_id)
+    child_ids = list((await session.execute(children_q)).scalars().all())
+    if not child_ids:
+        return 0
+
+    result = await session.execute(
+        select(TaskSubmission).where(
+            TaskSubmission.child_id.in_(child_ids),
+            TaskSubmission.status == "pending",
+            TaskSubmission.submitted_at.is_not(None),
+        )
+    )
+    submissions = result.scalars().all()
+    submissions = [sub for sub in submissions if sub.proof_url]
+
+    now = datetime.now(UTC)
+    count = 0
+    for sub in submissions:
+        task = await session.get(Task, sub.task_id) if sub.task_id else None
+        _apply_approval(session, sub, task, now)
+        await delete_proof(sub.id)
+        sub.proof_url = None
+        count += 1
+
+    await session.commit()
+    logger.info("Batch approved %d submission(s) for user_id=%s", count, user.id)
+    return count
+
+
+async def list_submissions(
+    user: User,
+    session: AsyncSession,
+    child_id: UUID | None = None,
+    status: str | None = None,
+) -> list[TaskSubmission]:
+    """List submissions across the parent's children, optionally filtered.
+
+    Scopes to one child via ``child_id`` and/or one ``status`` when provided.
+    """
+    children_q = select(Child.id).where(Child.user_id == user.id)
+    if child_id is not None:
+        children_q = children_q.where(Child.id == child_id)
+    child_ids = list((await session.execute(children_q)).scalars().all())
+
+    query = select(TaskSubmission).where(TaskSubmission.child_id.in_(child_ids))
+    if status is not None:
+        query = query.where(TaskSubmission.status == status)
+    result = await session.execute(query)
+    return list(result.scalars().all())
+
+
+# ---------------------------------------------------------------------------
+# Daily duty slot generation (tasks 15 & 16)
+# ---------------------------------------------------------------------------
+
+
+async def generate_daily_duty_slots(session: AsyncSession) -> int:
+    """Insert an ``open`` slot for every active duty task that lacks one today.
+
+    A slot starts ``open`` (awaiting the child); it becomes ``pending`` on submit and
+    is swept to ``failed`` if its day ends still open. Safe to call multiple times —
+    the unique constraint on (task_id, scheduled_date) is the DB-level guard; the
+    pre-check here avoids unnecessary writes.
+    """
+    now = datetime.now(UTC)
+    today = now.date()
+    duties = (
+        (
+            await session.execute(
+                select(Task).where(
+                    Task.task_type == "duty",
+                    or_(Task.expires_at.is_(None), Task.expires_at > now),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    count = 0
+    for duty in duties:
+        existing = (
+            await session.execute(
+                select(TaskSubmission).where(
+                    TaskSubmission.task_id == duty.id,
+                    TaskSubmission.scheduled_date == today,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            session.add(
+                TaskSubmission(
+                    task_id=duty.id,
+                    child_id=duty.child_id,
+                    scheduled_date=today,
+                    status="open",
+                )
+            )
+            count += 1
+
+    if count:
+        await session.commit()
+        logger.info("Generated %d duty slot(s) for %s", count, today)
+    return count
+
+
+async def fail_overdue_duty_slots(session: AsyncSession) -> int:
+    """Mark each still-``open`` duty slot from a past day as ``failed``; return count.
+
+    A duty must be done on its own day; once ``scheduled_date`` is in the past and the
+    slot was never submitted (still ``open``), the day closed unattempted → terminal
+    ``failed``. Submitted-but-unreviewed slots (``pending``) are left for the parent.
+    """
+    today = datetime.now(UTC).date()
+    result = await session.execute(
+        update(TaskSubmission)
+        .where(
+            TaskSubmission.status == "open",
+            TaskSubmission.scheduled_date < today,
+        )
+        .values(status="failed")
+    )
+    await session.commit()
+    if result.rowcount:
+        logger.info("Marked %d overdue duty slot(s) as failed", result.rowcount)
+    return result.rowcount
+
+
+def _seconds_until_next_midnight() -> float:
+    """Seconds from now until the next UTC midnight (the loop's sleep)."""
+    now = datetime.now(UTC)
+    next_midnight = datetime.combine(
+        now.date() + timedelta(days=1), time.min, tzinfo=UTC
+    )
+    return (next_midnight - now).total_seconds()
+
+
+async def _run_maintenance() -> None:
+    """One pass: fail overdue duty slots, open today's, and purge limbo accounts."""
+    async with AsyncSessionLocal() as session:
+        await fail_overdue_duty_slots(session)
+        await generate_daily_duty_slots(session)
+        await accounts.purge_expired_limbo_accounts(session)
+
+
+async def _daily_maintenance_loop() -> None:
+    """Sleep until each midnight, then run a maintenance pass forever."""
+    while True:
+        await asyncio.sleep(_seconds_until_next_midnight())
+        await _run_maintenance()
+
+
+async def start_daily_maintenance() -> None:
+    """Startup hook: run one maintenance pass now, then repeat each midnight."""
+    global _maintenance_task
+    await _run_maintenance()
+    _maintenance_task = asyncio.create_task(_daily_maintenance_loop())
+
+
+async def stop_daily_maintenance() -> None:
+    """Cancel the midnight loop (shutdown / test teardown)."""
+    global _maintenance_task
+    if _maintenance_task is not None:
+        _maintenance_task.cancel()
+        await asyncio.gather(_maintenance_task, return_exceptions=True)
+        _maintenance_task = None

@@ -22,15 +22,38 @@ venv/
 
 # Environment files
 .env
+.env.local
+.env.*.local
+backend/uploads/
 
 # Dependency caches/tools
 .uv/
 
-# Node (in case a frontend is added later)
+# Node / Bun / Vite (frontend)
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+bun-error.log*
+.vite/
+frontend/dist/
+
+# Database files (local dev)
+*.db
+*.sqlite
+
+# Test coverage
+coverage/
+coverage.xml
+
+# TLS certificates
+*.pem
+*.key
+*.crt
+*.p12
+
+# Claude Code session/memory (personal, not project code)
+.claude/
 
 # IDE/editor
 .vscode/
@@ -39,3 +62,5 @@ pnpm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+backend/tasks_photos/

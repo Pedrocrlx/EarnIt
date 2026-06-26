@@ -1,35 +1,50 @@
 services:
-    # +++++ PostgreSQL Database +++++++++++++++++++++++++++++++++++++++++
-    db:
-        image: postgres:17-alpine
-        container_name: earnIt_db
-        ports:
-            - "5432:5432"
-        volumes:
-            - postgres_data:/var/lib/postgresql/data
-            - ./ops/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-        env_file:
-            - .env
-        healthcheck:
-            test:
-                ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-            interval: 5s
-            timeout: 5s
-            retries: 5
+  # PostgreSQL 17 — schema managed by Alembic, data persisted in a named volume.
+  db:
+    image: postgres:17-alpine
+    container_name: earnIt_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-    # +++++ FastAPI +++++++++++++++++++++++++++++++++++++++++
-    api:
-        container_name: earnIt_api
-        build:
-            context: .
-            dockerfile: ops/Dockerfile
-        ports:
-            - "8000:8000"
-        volumes:
-            - .:/app
-        depends_on:
-            db:
-                condition: service_healthy
+  # FastAPI app — mounts the source tree so code changes are picked up without rebuilds.
+  api:
+    container_name: earnIt_api
+    build:
+      context: .
+      dockerfile: ops/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - submission_proofs:/app/uploads/submission-proofs
+    environment:
+      # .env (mounted into the container) targets local/pytest with
+      # POSTGRES_HOST=localhost — override it to the compose service name so
+      # the api container reaches the db container.
+      POSTGRES_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  mailpit:
+    image: axllent/mailpit:v1.30.1
+    container_name: earnIt_mailpit
+    ports:
+      - "8025:8025"   # web UI: open http://localhost:8025 to read captured emails
+      - "1025:1025"   # SMTP sink: the API sends here (MAIL_SERVER=mailpit, MAIL_PORT=1025)
+    restart: unless-stopped
 
 volumes:
-    postgres_data:
+  postgres_data:
+  submission_proofs:

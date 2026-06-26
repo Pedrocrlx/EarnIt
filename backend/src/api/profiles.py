@@ -1,0 +1,359 @@
+"""Child profiles & family view: create/update children, view the family summary.
+
+All three routes require a full access_token session (see
+app/dependencies.py). Creating a child re-checks the onboarding trigger
+(app/services/accounts.maybe_complete_onboarding) — this may be the second of
+its two conditions (PIN set in app/routers/auth/pin.py + >=1 child) to become
+true.
+"""
+
+import logging
+from pathlib import Path
+from uuid import UUID
+
+import anyio
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.config import settings
+from src.database import get_session
+from src.dependencies import get_current_user
+from src.models.auth import Child, User
+from src.schemas.profiles import (
+    ChildCreateRequest,
+    ChildUpdateRequest,
+    PointValueResponse,
+    SetPointValueRequest,
+    SetPointValueResponse,
+    UpdateFamilyNameRequest,
+    UpdateFamilyNameResponse,
+)
+from src.services.accounts import maybe_complete_onboarding
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/v1/profiles")
+
+_AVATAR_CONTENT_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+
+
+def _replace_avatar_file(
+    directory: Path, child_id: UUID, data: bytes, suffix: str
+) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    for existing_file in directory.glob(f"{child_id}.*"):
+        existing_file.unlink(missing_ok=True)
+
+    avatar_path = directory / f"{child_id}{suffix}"
+    avatar_path.write_bytes(data)
+    return avatar_path
+
+
+def _find_avatar_file(directory: Path, child_id: UUID) -> Path | None:
+    return next(directory.glob(f"{child_id}.*"), None)
+
+
+def _matches_image_type(data: bytes, content_type: str) -> bool:
+    if content_type == "image/jpeg":
+        return data.startswith(b"\xff\xd8\xff")
+    if content_type == "image/png":
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
+    if content_type == "image/webp":
+        return len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP"
+    return False
+
+
+@router.patch(
+    "/family-name", tags=["profiles/family"], summary="Set the family display name"
+)
+async def update_family_name(
+    body: UpdateFamilyNameRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> UpdateFamilyNameResponse:
+    """Update the parent's family display name.
+
+    Part of the onboarding flow. May mark onboarding as complete if a PIN and at
+    least one child profile are already set.
+    """
+    current_user.family_name = body.family_name
+    await session.commit()
+    logger.info("Family name updated: user_id=%s", current_user.id)
+    await maybe_complete_onboarding(current_user, session)
+    return UpdateFamilyNameResponse(status="success", family_name=body.family_name)
+
+
+@router.patch(
+    "/point-value",
+    tags=["profiles/family"],
+    summary="Set the family points→€ exchange rate",
+)
+async def set_point_value(
+    body: SetPointValueRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> SetPointValueResponse:
+    """Set how many euros one point is worth for this family (e.g. `0.015`).
+
+    Rewards and balances are stored in points; this rate is what the frontend uses
+    to display euros. Changing it **re-values everything** — a child's existing
+    points are simply shown at the new rate. Must be > 0, ≤ 4 decimal places.
+    """
+    current_user.point_value_eur = body.point_value_eur
+    await session.commit()
+    logger.info("Point value updated: user_id=%s", current_user.id)
+    return SetPointValueResponse(
+        status="success", point_value_eur=current_user.point_value_eur
+    )
+
+
+@router.get(
+    "/point-value",
+    tags=["profiles/family"],
+    summary="Get the family points→€ exchange rate",
+)
+async def get_point_value(
+    current_user: User = Depends(get_current_user),
+) -> PointValueResponse:
+    """Return the family's current points→€ rate, so the frontend can show what a
+    point is worth (multiply any point amount by `point_value_eur`)."""
+    return PointValueResponse(point_value_eur=current_user.point_value_eur)
+
+
+@router.post(
+    "/children",
+    status_code=201,
+    tags=["profiles/children"],
+    summary="Add a child profile",
+)
+async def create_child(
+    body: ChildCreateRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Create a child profile linked to the authenticated parent.
+
+    Each parent can have up to `MAX_CHILDREN_PER_USER` active children (default 10);
+    returns 409 (`children_cap_reached`) if the limit is hit. The returned `id` is
+    the `child_id` used by task, submission, and wallet endpoints. May complete
+    onboarding if the parental PIN is already set.
+    """
+    count = await session.scalar(
+        select(func.count()).where(Child.user_id == current_user.id)
+    )
+    if count >= settings.MAX_CHILDREN_PER_USER:
+        logger.info(
+            "Child profile creation blocked: cap reached (user_id=%s)", current_user.id
+        )
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "children_cap_reached",
+                "message": "Maximum number of child profiles reached.",
+            },
+        )
+
+    child = Child(
+        user_id=current_user.id,
+        name=body.name,
+        birth_date=body.birth_date,
+        avatar_url=body.avatar_url,
+    )
+    session.add(child)
+    await session.commit()
+
+    await maybe_complete_onboarding(current_user, session)
+
+    logger.info(
+        "Child profile created: user_id=%s, child_id=%s", current_user.id, child.id
+    )
+    return {
+        "id": child.id,
+        "user_id": child.user_id,
+        "name": child.name,
+        "birth_date": child.birth_date,
+        "avatar_url": child.avatar_url,
+        "is_active": child.is_active,
+    }
+
+
+@router.patch(
+    "/children/{child_id}",
+    tags=["profiles/children"],
+    summary="Update or deactivate a child profile",
+)
+async def update_child(
+    child_id: UUID,
+    body: ChildUpdateRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Update child details, or deactivate the profile when no body is sent.
+
+    Keeping the body optional preserves the existing no-body deactivation contract.
+    Returns 404 if the child does not belong to the current user.
+    """
+    child = await session.get(Child, child_id)
+    if child is None or child.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Child profile not found.")
+
+    if body is not None:
+        child.birth_date = body.birth_date
+        await session.commit()
+
+        logger.info(
+            "Child profile updated: user_id=%s, child_id=%s",
+            current_user.id,
+            child.id,
+        )
+        return {
+            "status": "success",
+            "id": child.id,
+            "birth_date": child.birth_date,
+        }
+
+    if not child.is_active:
+        raise HTTPException(
+            status_code=409, detail="Child profile is already inactive."
+        )
+
+    child.is_active = False
+    await session.commit()
+
+    logger.info(
+        "Child profile deactivated: user_id=%s, child_id=%s", current_user.id, child.id
+    )
+    return {
+        "status": "success",
+        "message": "Child profile deactivated.",
+        "id": child.id,
+        "is_active": child.is_active,
+    }
+
+
+@router.post(
+    "/children/{child_id}/avatar",
+    tags=["profiles/children"],
+    summary="Upload a child's avatar",
+)
+async def upload_child_avatar(
+    child_id: UUID,
+    avatar: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Store a JPEG, PNG, or WebP avatar and associate its URL with the child."""
+    child = await session.get(Child, child_id)
+    if child is None or child.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Child profile not found.")
+
+    content_type = avatar.content_type or ""
+    suffix = _AVATAR_CONTENT_TYPES.get(content_type)
+    if suffix is None:
+        raise HTTPException(
+            status_code=415,
+            detail="Avatar must be a JPEG, PNG, or WebP image.",
+        )
+
+    avatar_data = await avatar.read(settings.AVATAR_MAX_BYTES + 1)
+    if len(avatar_data) > settings.AVATAR_MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Avatar image is too large.",
+        )
+    if not avatar_data:
+        raise HTTPException(status_code=422, detail="Avatar image is empty.")
+    if not _matches_image_type(avatar_data, content_type):
+        raise HTTPException(status_code=422, detail="Avatar image is invalid.")
+
+    avatar_directory = Path(settings.AVATAR_UPLOAD_DIR)
+    await anyio.to_thread.run_sync(
+        _replace_avatar_file,
+        avatar_directory,
+        child.id,
+        avatar_data,
+        suffix,
+    )
+
+    child.avatar_url = f"/api/v1/profiles/children/{child.id}/avatar"
+    await session.commit()
+
+    return {
+        "status": "success",
+        "id": child.id,
+        "avatar_url": child.avatar_url,
+    }
+
+
+@router.get(
+    "/children/{child_id}/avatar",
+    tags=["profiles/children"],
+    summary="Get a child's avatar",
+    response_class=FileResponse,
+)
+async def get_child_avatar(
+    child_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Return the stored avatar when the child belongs to the current parent."""
+    child = await session.get(Child, child_id)
+    if child is None or child.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Child profile not found.")
+
+    avatar_path = await anyio.to_thread.run_sync(
+        _find_avatar_file,
+        Path(settings.AVATAR_UPLOAD_DIR),
+        child.id,
+    )
+    if avatar_path is None:
+        raise HTTPException(status_code=404, detail="Avatar not found.")
+
+    media_type = next(
+        (
+            content_type
+            for content_type, suffix in _AVATAR_CONTENT_TYPES.items()
+            if suffix == avatar_path.suffix
+        ),
+        "application/octet-stream",
+    )
+    return FileResponse(avatar_path, media_type=media_type)
+
+
+@router.get("/family", tags=["profiles/family"], summary="Get family summary")
+async def get_family(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Return the authenticated parent's profile with all their child profiles.
+
+    Includes both active and inactive children. Use the child `id` values returned
+    here as the `child_id` path parameter for task, submission, and wallet endpoints.
+    """
+    result = await session.execute(
+        select(Child).where(Child.user_id == current_user.id)
+    )
+    children = result.scalars().all()
+
+    return {
+        "id": current_user.id,
+        "family_name": current_user.family_name,
+        "onboarding_completed": current_user.onboarding_completed,
+        "point_value_eur": current_user.point_value_eur,
+        "children": [
+            {
+                "id": child.id,
+                "name": child.name,
+                "birth_date": child.birth_date,
+                "avatar_url": child.avatar_url,
+                "is_active": child.is_active,
+            }
+            for child in children
+        ],
+    }
