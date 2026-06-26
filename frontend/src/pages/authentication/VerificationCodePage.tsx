@@ -186,12 +186,12 @@ export const VerificationCode = () => {
           aria-labelledby="email-verification-title"
         >
           <div className="absolute -top-12 -right-12 w-32 h-32 bg-[#deec5a] rounded-full blur-[32px] opacity-20" />
-          
+
           <div className="flex flex-col items-center gap-6 relative z-10">
             <div className="flex w-16 h-16 items-center justify-center bg-[#edeef0] rounded-full shadow-[0px_1px_2px_#0000000d]">
               <EnvelopeClosedIcon className="w-7 h-6 text-[#003514]" />
             </div>
-            
+
             <div className="text-center space-y-2">
               <h1
                 id="email-verification-title"

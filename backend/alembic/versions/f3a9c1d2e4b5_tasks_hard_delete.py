@@ -71,8 +71,6 @@ def downgrade() -> None:
 
     op.add_column(
         "tasks",
-        sa.Column(
-            "is_active", sa.Boolean(), nullable=False, server_default=sa.true()
-        ),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
     )
     op.alter_column("tasks", "is_active", server_default=None)
