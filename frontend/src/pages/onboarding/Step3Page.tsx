@@ -12,6 +12,11 @@ import {
   getOnboardingAvatar,
 } from "@/lib/onboarding-avatar-files";
 import { clearDraft, readDraft, writeDraft } from "@/lib/onboarding-draft";
+import {
+  PARENT_PROFILE_ID,
+  SELECTED_PROFILE_STORAGE_KEY,
+  unlockParentProfile,
+} from "@/lib/profile-selection";
 import { cn } from "@/lib/utils";
 import {
   createChild as createChildRequest,
@@ -99,9 +104,14 @@ const OnboardingStep3Page = () => {
       const profile = await refreshSession();
       clearDraft();
       clearOnboardingAvatars();
-      navigate(profile?.onboarding_completed ? "/profile" : "/onboarding/step2", {
-        replace: true,
-      });
+      if (profile?.onboarding_completed) {
+        unlockParentProfile();
+        window.localStorage.setItem(SELECTED_PROFILE_STORAGE_KEY, PARENT_PROFILE_ID);
+        navigate("/dashboard", { replace: true });
+        return;
+      }
+
+      navigate("/onboarding/step2", { replace: true });
     } catch (caughtError) {
       showToast(
         caughtError instanceof Error

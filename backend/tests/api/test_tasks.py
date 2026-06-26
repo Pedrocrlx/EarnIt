@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from httpx import AsyncClient
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.tasks import TaskSubmission
@@ -80,6 +81,14 @@ async def test_create_duty_returns_201(client: AsyncClient, mock_mail):
     body = res.json()
     assert body["task_type"] == "duty"
     assert body["reward_amount"] == 0
+
+    child_tasks = await client.get(
+        f"/api/v1/children/{child_id}/tasks", cookies={"access_token": token}
+    )
+    duty = child_tasks.json()[0]
+    assert duty["submission"] is not None
+    assert duty["submission"]["status"] == "open"
+    assert duty["submission"]["scheduled_date"] == datetime.now(UTC).date().isoformat()
 
 
 async def test_create_extra_task_returns_201(client: AsyncClient, mock_mail):
@@ -452,11 +461,16 @@ async def test_extra_task_double_submit_returns_409(client: AsyncClient, mock_ma
     assert res.status_code == 409
 
 
-async def test_duty_submit_without_slot_returns_404(client: AsyncClient, mock_mail):
+async def test_duty_submit_without_slot_returns_404(
+    client: AsyncClient, mock_mail, db_session: AsyncSession
+):
     token = await register_and_verify(client, mock_mail)
     child_id = await _child(client, token)
     task = await _duty(client, token, child_id)
-    # No slot generated
+    await db_session.execute(
+        delete(TaskSubmission).where(TaskSubmission.task_id == UUID(task["id"]))
+    )
+    await db_session.commit()
 
     res = await _submit(client, token, child_id, task["id"])
     assert res.status_code == 404
@@ -749,7 +763,7 @@ async def test_wallet_cross_user_returns_404(client: AsyncClient, mock_mail):
 # duty slot background job
 
 
-async def test_generate_duty_slots_creates_slot_for_today(
+async def test_create_duty_opens_slot_for_today(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
     token = await register_and_verify(client, mock_mail)
@@ -757,7 +771,7 @@ async def test_generate_duty_slots_creates_slot_for_today(
     await _duty(client, token, child_id)
 
     count = await generate_daily_duty_slots(db_session)
-    assert count == 1
+    assert count == 0
 
     child_tasks = await client.get(
         f"/api/v1/children/{child_id}/tasks", cookies={"access_token": token}
@@ -770,7 +784,7 @@ async def test_generate_duty_slots_creates_slot_for_today(
     assert duties[0]["submission"]["submitted_at"] is None
 
 
-async def test_generate_duty_slots_is_idempotent(
+async def test_generate_duty_slots_skips_existing_today_slot(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
     token = await register_and_verify(client, mock_mail)
@@ -779,7 +793,7 @@ async def test_generate_duty_slots_is_idempotent(
 
     first = await generate_daily_duty_slots(db_session)
     second = await generate_daily_duty_slots(db_session)
-    assert first == 1
+    assert first == 0
     assert second == 0  # slot already exists — nothing inserted
 
 
