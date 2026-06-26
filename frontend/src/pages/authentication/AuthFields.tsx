@@ -1,4 +1,4 @@
-import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
+import { EnvelopeClosedIcon, EyeClosedIcon, EyeOpenIcon, LockClosedIcon } from "@radix-ui/react-icons";
 import type { ReactNode } from "react";
 
 import { FieldError } from "@/components/ui/field-error";
@@ -26,7 +26,7 @@ export const EmailField = ({ error, value, onChange }: EmailFieldProps) => (
       Email
     </Label>
     <div className="relative">
-      <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#404940]" />
+      <EnvelopeClosedIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#404940]" />
       <Input
         id="email"
         type="email"
@@ -76,7 +76,7 @@ export const PasswordField = ({
       {label}
     </Label>
     <div className="relative">
-      <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#404940]" />
+      <LockClosedIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#404940]" />
       <Input
         id={id}
         type={isVisible ? "text" : "password"}
@@ -99,9 +99,9 @@ export const PasswordField = ({
         aria-label={isVisible ? `Ocultar ${label}` : `Mostrar ${label}`}
       >
         {isVisible ? (
-          <EyeOff size={16} aria-hidden="true" />
+          <EyeClosedIcon className="size-4" aria-hidden="true" />
         ) : (
-          <Eye size={16} aria-hidden="true" />
+          <EyeOpenIcon className="size-4" aria-hidden="true" />
         )}
       </button>
     </div>

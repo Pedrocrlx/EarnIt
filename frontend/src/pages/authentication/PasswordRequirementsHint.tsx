@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle } from "lucide-react";
+import { CheckCircledIcon, CircleIcon } from "@radix-ui/react-icons";
 
 import { cn } from "@/lib/utils";
 import { getPasswordRequirements } from "@/lib/validation";
@@ -36,9 +36,9 @@ export const PasswordRequirementsHint = ({
             )}
           >
             {requirement.met ? (
-              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <CheckCircledIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
             ) : (
-              <Circle className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <CircleIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
             )}
             {requirement.label}
           </li>

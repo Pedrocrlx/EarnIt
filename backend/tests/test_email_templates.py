@@ -15,9 +15,9 @@ _env = Environment(loader=FileSystemLoader(_TEMPLATE_FOLDER), autoescape=True)
 
 # template -> a distinctive phrase only that purpose's copy contains
 _CASES = {
-    "verification_code.html": "verify your EarnIt account",
-    "password_reset_code.html": "reset your EarnIt password",
-    "pin_reset_code.html": "reset your EarnIt parental PIN",
+    "verification_code.html": "verificar a sua conta EarnIt",
+    "password_reset_code.html": "redefinir a sua palavra-passe EarnIt",
+    "pin_reset_code.html": "redefinir o seu PIN parental EarnIt",
 }
 
 
@@ -29,6 +29,6 @@ def test_template_renders_with_shared_chrome_and_own_copy(template_name, phrase)
     assert phrase in html
     # shared base rendered: code, expiry, and the inlined styles + footer
     assert "ABCD1234" in html
-    assert "expires in 10 minutes" in html
+    assert "expira em 10 minutos" in html
     assert ".code {" in html  # the <style> block from _base.html
-    assert "Family Allowance Manager" in html  # the shared footer
+    assert "Gestor de Mesada Familiar" in html  # the shared footer

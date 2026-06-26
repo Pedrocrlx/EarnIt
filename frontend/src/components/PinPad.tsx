@@ -1,4 +1,4 @@
-import { Delete } from "lucide-react";
+import { ResetIcon } from "@radix-ui/react-icons";
 import { cn } from "@/lib/utils";
 
 // Smartphone-style PIN keypad. Controlled: the parent owns the entry string and
@@ -80,7 +80,7 @@ export const PinPad = ({
                 aria-label="Apagar"
                 className="flex h-16 items-center justify-center rounded-2xl text-[#003514] transition active:scale-95 disabled:opacity-30 hover:bg-[#f3f4f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#003514]/30"
               >
-                <Delete className="size-6" aria-hidden="true" />
+                <ResetIcon className="size-6" aria-hidden="true" />
               </button>
             );
           }

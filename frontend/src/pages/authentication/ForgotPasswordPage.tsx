@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/context/useToast";
 import { validateEmail } from "@/lib/validation";
 import { requestPasswordReset } from "@/services/authService";
 import { EmailField } from "./AuthFields";
@@ -14,26 +15,25 @@ const successMessage = "If that email is registered, a password reset code has b
 
 const ForgotPasswordPage = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
-  const [formError, setFormError] = useState("");
-  const [formSuccess, setFormSuccess] = useState("");
 
   const mutation = useMutation({
     mutationFn: requestPasswordReset,
     onSuccess: () => {
-      setFormSuccess(successMessage);
-      setFormError("");
+      showToast(successMessage);
     },
     onError: (error: unknown) => {
-      setFormError(error instanceof Error ? error.message : "Não foi possível enviar o código.");
+      showToast(
+        error instanceof Error ? error.message : "Não foi possível enviar o código.",
+        "error",
+      );
     },
   });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setFormError("");
-    setFormSuccess("");
 
     const nextEmailError = validateEmail(email);
     if (nextEmailError) {
@@ -54,22 +54,8 @@ const ForgotPasswordPage = () => {
           onChange={(value) => {
             setEmail(value);
             setEmailError("");
-            setFormError("");
-            setFormSuccess("");
           }}
         />
-
-        {formError ? (
-          <p className="rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            {formError}
-          </p>
-        ) : null}
-
-        {formSuccess ? (
-          <p className="rounded-lg bg-[#eef7d1] px-4 py-3 text-sm font-semibold text-[#5f6800]">
-            {formSuccess}
-          </p>
-        ) : null}
 
         <Button
           type="submit"

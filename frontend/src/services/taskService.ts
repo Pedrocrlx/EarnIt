@@ -1,4 +1,4 @@
-import { API_BASE, apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import type {
   ChildTaskResponse,
   SubmissionResponse,
@@ -17,9 +17,10 @@ export type CreateTaskPayload = {
 };
 
 export type UpdateTaskPayload = {
-  child_id: string;
-  description: string | null;
-  title: string;
+  description?: string | null;
+  expires_at?: string | null;
+  reward_amount?: number;
+  title?: string;
 };
 
 export const listTasks = () => apiFetch<TaskResponse[]>("/tasks");
@@ -39,7 +40,7 @@ export const updateTask = (taskId: string, payload: UpdateTaskPayload) =>
   });
 
 export const deleteTask = (taskId: string) =>
-  apiFetch<TaskResponse>(`/tasks/${taskId}`, { method: "DELETE" });
+  apiFetch<void>(`/tasks/${taskId}`, { method: "DELETE" });
 
 export const approveSubmission = (submissionId: string) =>
   apiFetch<SubmissionResponse>(`/tasks/submissions/${submissionId}/approve`, {
@@ -64,23 +65,24 @@ export const listChildTasks = (childId: string) =>
 export const getWallet = (childId: string) =>
   apiFetch<WalletResponse>(`/children/${childId}/wallet`);
 
-const buildPhotoFormData = (photo: File) => {
+const proofFormData = (proof: File) => {
   const formData = new FormData();
-  formData.append("photo", photo);
+  formData.append("proof", proof);
   return formData;
 };
 
-export const submitTask = (childId: string, taskId: string, photo: File) =>
+export const submitTask = (childId: string, taskId: string, proof: File) =>
   apiFetch<SubmissionResponse>(`/children/${childId}/tasks/${taskId}/submit`, {
     method: "POST",
-    body: buildPhotoFormData(photo),
+    body: proofFormData(proof),
   });
 
-export const resubmitTask = (childId: string, submissionId: string, photo: File) =>
+export const resubmitTask = (
+  childId: string,
+  submissionId: string,
+  proof: File,
+) =>
   apiFetch<SubmissionResponse>(`/children/${childId}/submissions/${submissionId}`, {
     method: "PATCH",
-    body: buildPhotoFormData(photo),
+    body: proofFormData(proof),
   });
-
-export const getSubmissionPhotoUrl = (submissionId: string) =>
-  `${API_BASE}/tasks/submissions/${submissionId}/photo`;

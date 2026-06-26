@@ -38,7 +38,7 @@ docker compose exec api uv run alembic upgrade head  # Migrations (first run onl
 | `GET` | `/api/v1/profiles/family` | session | Parent profile + all children |
 | `POST` | `/api/v1/tasks` | session | Create a task (`duty` or `extra_task`) |
 | `GET` | `/api/v1/tasks` | session | List tasks (filter: `child_id`, `task_type`, `is_active`) |
-| `PATCH` | `/api/v1/tasks/{id}` | session | Partial update task fields |
+| `PATCH` | `/api/v1/tasks/{id}` | session | Partial update task fields (title, description, expires_at, is_active, reward_amount) |
 | `DELETE` | `/api/v1/tasks/{id}` | session | Soft-delete task |
 | `GET` | `/api/v1/tasks/submissions` | session | List submissions (filter: `child_id`, `status`) |
 | `POST` | `/api/v1/tasks/submissions/approve-all` | session | Batch-approve all pending (`child_id?`) |
@@ -457,8 +457,8 @@ All task-management endpoints require a full `access_token` session (parent). `c
 2. **`GET /api/v1/tasks`** *(`access_token` required)*
    - Query params: `child_id?`, `task_type?` (`duty` | `extra_task`), `is_active?` (bool).
    - Returns all matching tasks owned by the authenticated parent. → `200 list[TaskResponse]`
-3. **`PATCH /api/v1/tasks/{task_id}`** `{ title?, description?, expires_at?, is_active? }` *(`access_token` required)*
-   - `404` if the task doesn't exist or belongs to another user. Partial update — only provided fields are changed. → `200 TaskResponse`
+3. **`PATCH /api/v1/tasks/{task_id}`** `{ title?, description?, expires_at?, is_active?, reward_amount? }` *(`access_token` required)*
+   - `404` if the task doesn't exist or belongs to another user. Partial update (`exclude_unset`) — only fields present in the body change; sending an explicit `null` clears `description`/`expires_at`. `reward_amount` must match the task type (`duty` → `0`, `extra_task` → > 0, else `422`); editing it affects only **future** approvals — already-credited wallet entries are immutable snapshots. → `200 TaskResponse`
 4. **`DELETE /api/v1/tasks/{task_id}`** *(`access_token` required)*
    - Soft-delete: sets `is_active = false`. Inactive tasks stop generating daily slots but existing submissions are preserved. → `200 TaskResponse`
 

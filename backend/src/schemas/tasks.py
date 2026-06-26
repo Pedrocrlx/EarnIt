@@ -49,19 +49,24 @@ class TaskCreateRequest(BaseModel):
 
 
 class TaskUpdateRequest(BaseModel):
-    """Body for ``PATCH /tasks/{id}`` — all fields optional (partial update)."""
+    """Body for ``PATCH /tasks/{id}`` — all fields optional (partial update).
+
+    A field present with ``null`` clears it (description, expires_at); an omitted
+    field is left unchanged. ``reward_amount`` must obey the task's type rule
+    (duty = 0, extra > 0).
+    """
 
     title: str | None = Field(default=None, min_length=1, max_length=150)
     description: str | None = None
     expires_at: datetime | None = None
-    is_active: bool | None = None
+    reward_amount: int | None = Field(default=None, ge=0)
 
     model_config = {
         "json_schema_extra": {
             "example": {
                 "title": "Arrumar o quarto",
                 "description": "Arrumar antes do almoço",
-                "is_active": True,
+                "reward_amount": 150,
             }
         }
     }
@@ -78,7 +83,6 @@ class TaskResponse(BaseModel):
     task_type: str
     reward_amount: int  # whole-number amount stored in the `reward_amount` column
     expires_at: datetime | None
-    is_active: bool
     created_at: datetime
     updated_at: datetime
 
@@ -101,16 +105,22 @@ class RejectRequest(BaseModel):
 
 
 class SubmissionResponse(BaseModel):
-    """Serialised ``TaskSubmission`` returned by the submission endpoints."""
+    """Serialised ``TaskSubmission`` returned by the submission endpoints.
+
+    ``task_id`` is null once the task is deleted; ``task_title`` then holds the
+    snapshotted name so the completion still shows which task it belonged to.
+    """
 
     id: UUID
-    task_id: UUID
+    task_id: UUID | None
+    task_title: str | None
     child_id: UUID
     scheduled_date: date | None
     submitted_at: datetime | None
     status: str
     reviewed_at: datetime | None
     rejection_note: str | None
+    proof_url: str | None
 
     model_config = {"from_attributes": True}
 

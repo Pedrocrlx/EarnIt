@@ -51,7 +51,7 @@ AI agents must strictly generate code adhering to these specific technologies an
 * **Parent Authentication:** Secure stateless JWT (JSON Web Tokens) issued asynchronously by FastAPI upon successful email/password login.
 * **Token Storage:** Handled via secure, HTTP-only cookies to mitigate Cross-Site Scripting (XSS) token leakage.
 * **Child Authentication:** Hassle-free, direct access to the child dashboard from a shared family device without a password.
-* **Dashboard Switching Perimeter:** Transitioning from the Child to the Parent dashboard requires entering a parent-defined PIN. 
+* **Dashboard Switching Perimeter:** Transitioning from the Child to the Parent dashboard requires entering a parent-defined PIN.
   * The PIN must be salted and hashed in the database (never stored as raw text).
   * Verification must occur via an asynchronous backend endpoint (`/api/v1/auth/verify-pin`) utilizing a non-blocking hashing library (such as `passlib` with `bcrypt` or `argon2-cffi` configured for async execution).
 

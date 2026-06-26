@@ -1,4 +1,4 @@
-import { Menu, X } from "lucide-react";
+import { Cross2Icon, HamburgerMenuIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,7 @@ const mobileLinkStyle =
 export const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [menuIsOpen, setMenuIsOpen] = useState(false);
 
   const shouldHideNavbar =
@@ -44,12 +44,6 @@ export const Navbar = () => {
   const navigateAndClose = (path: string) => {
     setMenuIsOpen(false);
     navigate(path);
-  };
-
-  const logoutAndClose = async () => {
-    setMenuIsOpen(false);
-    await logout();
-    navigate("/");
   };
 
   return (
@@ -74,29 +68,13 @@ export const Navbar = () => {
         </nav>
         <div className="hidden items-center gap-2 sm:gap-4 md:flex">
           {isAuthenticated ? (
-            <>
-              <Button
-                variant="ghost"
-                onClick={() => navigate("/dashboard")}
-                className={cn(ghostButtonStyle)}
-              >
-                Painel
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => navigate("/dashboard/profiles")}
-                className={cn(ghostButtonStyle)}
-              >
-                Perfis
-              </Button>
-              <Button
-                variant="default"
-                onClick={logoutAndClose}
-                className={cn(primaryButtonStyle)}
-              >
-                Sair
-              </Button>
-            </>
+            <Button
+              variant="default"
+              onClick={() => navigate("/profile")}
+              className={cn(primaryButtonStyle)}
+            >
+              Ir para aplicação
+            </Button>
           ) : (
             <>
               <Button
@@ -126,9 +104,9 @@ export const Navbar = () => {
           aria-expanded={menuIsOpen}
         >
           {menuIsOpen ? (
-            <X className="size-5" aria-hidden="true" />
+            <Cross2Icon className="size-5" aria-hidden="true" />
           ) : (
-            <Menu className="size-5" aria-hidden="true" />
+            <HamburgerMenuIcon className="size-5" aria-hidden="true" />
           )}
         </button>
       </div>
@@ -150,29 +128,13 @@ export const Navbar = () => {
 
           <div className="mt-4 grid gap-3">
             {isAuthenticated ? (
-              <>
-                <Button
-                  variant="ghost"
-                  onClick={() => navigateAndClose("/dashboard")}
-                  className={cn(ghostButtonStyle, "w-full justify-center py-3")}
-                >
-                  Painel
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => navigateAndClose("/dashboard/profiles")}
-                  className={cn(ghostButtonStyle, "w-full justify-center py-3")}
-                >
-                  Perfis
-                </Button>
-                <Button
-                  variant="default"
-                  onClick={logoutAndClose}
-                  className={cn(primaryButtonStyle, "w-full justify-center py-3")}
-                >
-                  Sair
-                </Button>
-              </>
+              <Button
+                variant="default"
+                onClick={() => navigateAndClose("/profile")}
+                className={cn(primaryButtonStyle, "w-full justify-center py-3")}
+              >
+                Ir para aplicação
+              </Button>
             ) : (
               <>
                 <Button

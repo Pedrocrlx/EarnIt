@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/context/useToast";
 import { validatePassword, validateRequired } from "@/lib/validation";
 import { resetPassword } from "@/services/authService";
 import { PasswordField } from "./AuthFields";
@@ -12,13 +13,13 @@ import { PasswordRequirementsHint } from "./PasswordRequirementsHint";
 
 const ResetPasswordPage = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [newPasswordError, setNewPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
-  const [formError, setFormError] = useState("");
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [submittedOnce, setSubmittedOnce] = useState(false);
 
@@ -34,15 +35,15 @@ const ResetPasswordPage = () => {
       });
     },
     onError: (error: unknown) => {
-      setFormError(
+      showToast(
         error instanceof Error ? error.message : "Não foi possível redefinir a palavra-passe.",
+        "error",
       );
     },
   });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setFormError("");
     setSubmittedOnce(true);
 
     const nextPasswordError = validatePassword(newPassword);
@@ -74,7 +75,6 @@ const ResetPasswordPage = () => {
             setNewPassword(value);
             setNewPasswordError("");
             setConfirmPasswordError("");
-            setFormError("");
           }}
           onFocus={() => setPasswordFocused(true)}
           onVisibilityChange={setShowNewPassword}
@@ -94,17 +94,10 @@ const ResetPasswordPage = () => {
           onChange={(value) => {
             setConfirmPassword(value);
             setConfirmPasswordError("");
-            setFormError("");
           }}
           onVisibilityChange={setShowConfirmPassword}
           value={confirmPassword}
         />
-
-        {formError ? (
-          <p className="rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            {formError}
-          </p>
-        ) : null}
 
         <Button
           type="submit"

@@ -155,6 +155,16 @@ def _force_auth_on():
     settings.DISABLE_AUTH = original
 
 
+@pytest.fixture(autouse=True)
+def _submission_proof_directory(tmp_path, monkeypatch):
+    """Keep uploaded task proofs inside each test's temporary directory."""
+    monkeypatch.setattr(
+        settings,
+        "SUBMISSION_PROOF_UPLOAD_DIR",
+        str(tmp_path / "submission-proofs"),
+    )
+
+
 @pytest.fixture
 def mock_mail(monkeypatch):
     """Patches mail.send_message; returns list of captured MessageSchema objects."""

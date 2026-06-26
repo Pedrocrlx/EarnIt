@@ -1,5 +1,6 @@
-import { ArrowLeft, LoaderCircle, X } from "lucide-react";
+import { ArrowLeftIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
+import { Modal } from "@/components/Modal";
 import { PinPad } from "@/components/PinPad";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -165,7 +166,7 @@ export const ParentPinDialog = ({
     setActionError("");
     try {
       await resetPinRequest({ code: code.trim(), new_pin: newPin.confirmedPin });
-      // Settings context: parent is already unlocked — hand back to the page to
+      // GearIcon context: parent is already unlocked — hand back to the page to
       // close + confirm, instead of returning to the PIN verify step.
       if (onResetSuccess) {
         onResetSuccess();
@@ -195,34 +196,13 @@ export const ParentPinDialog = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#003514]/60 px-4 py-6"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="parent-pin-title"
+    <Modal
+      title={title}
+      subtitle={subtitle}
+      onClose={onClose}
+      closeDisabled={busy}
+      widthClassName="max-w-[380px]"
     >
-      <div className="w-full max-w-[380px] rounded-xl bg-white p-5 shadow-[0px_20px_40px_-12px_rgba(0,0,0,0.35)] sm:p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2
-              id="parent-pin-title"
-              className="font-montserrat text-xl font-bold text-[#003514]"
-            >
-              {title}
-            </h2>
-            <p className="mt-1 text-sm leading-5 text-[#404940]">{subtitle}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-            className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-[#404940] transition-colors hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-60"
-            aria-label="Fechar"
-          >
-            <X className="size-5" aria-hidden="true" />
-          </button>
-        </div>
-
         {step === "pin" ? (
           <>
             {resetDone ? (
@@ -245,7 +225,7 @@ export const ParentPinDialog = ({
 
             {isVerifying ? (
               <p className="mt-5 flex items-center justify-center gap-2 text-sm font-semibold text-[#003514]">
-                <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                <UpdateIcon className="size-4 animate-spin" aria-hidden="true" />
                 A verificar...
               </p>
             ) : pinError ? (
@@ -287,7 +267,7 @@ export const ParentPinDialog = ({
                 disabled={isSending}
                 className="h-12 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
               >
-                <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+                <ArrowLeftIcon className="mr-2 size-4" aria-hidden="true" />
                 {resetOnly ? "Cancelar" : "Voltar"}
               </Button>
               <Button
@@ -297,7 +277,7 @@ export const ParentPinDialog = ({
                 className="h-12 rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
               >
                 {isSending ? (
-                  <LoaderCircle className="mr-2 size-4 animate-spin" />
+                  <UpdateIcon className="mr-2 size-4 animate-spin" />
                 ) : null}
                 Enviar código
               </Button>
@@ -360,7 +340,7 @@ export const ParentPinDialog = ({
                 disabled={busy}
                 className="h-12 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
               >
-                <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+                <ArrowLeftIcon className="mr-2 size-4" aria-hidden="true" />
                 Voltar
               </Button>
               <Button
@@ -370,7 +350,7 @@ export const ParentPinDialog = ({
                 className="h-12 rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
               >
                 {isCheckingCode ? (
-                  <LoaderCircle className="mr-2 size-4 animate-spin" />
+                  <UpdateIcon className="mr-2 size-4 animate-spin" />
                 ) : null}
                 Continuar
               </Button>
@@ -427,7 +407,7 @@ export const ParentPinDialog = ({
                 disabled={isResetting}
                 className="h-12 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
               >
-                <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+                <ArrowLeftIcon className="mr-2 size-4" aria-hidden="true" />
                 Voltar
               </Button>
               <Button
@@ -437,15 +417,14 @@ export const ParentPinDialog = ({
                 className="h-12 rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
               >
                 {isResetting ? (
-                  <LoaderCircle className="mr-2 size-4 animate-spin" />
+                  <UpdateIcon className="mr-2 size-4 animate-spin" />
                 ) : null}
                 Redefinir PIN
               </Button>
             </div>
           </>
         ) : null}
-      </div>
-    </div>
+    </Modal>
   );
 };
 

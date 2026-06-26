@@ -10,6 +10,8 @@ from tests.conftest import _OTHER, _child, register_and_verify
 
 _TASKS_URL = "/api/v1/tasks"
 _SUBS_URL = "/api/v1/tasks/submissions"
+_PROOF_BYTES = b"\x89PNG\r\n\x1a\nproof-image"
+_PROOF_FILE = {"proof": ("proof.png", _PROOF_BYTES, "image/png")}
 
 # Shared helpers
 
@@ -46,6 +48,7 @@ async def _extra(
 async def _submit(client: AsyncClient, token: str, child_id: str, task_id: str) -> dict:
     res = await client.post(
         f"/api/v1/children/{child_id}/tasks/{task_id}/submit",
+        files=_PROOF_FILE,
         cookies={"access_token": token},
     )
     return res
@@ -77,7 +80,6 @@ async def test_create_duty_returns_201(client: AsyncClient, mock_mail):
     body = res.json()
     assert body["task_type"] == "duty"
     assert body["reward_amount"] == 0
-    assert body["is_active"] is True
 
 
 async def test_create_extra_task_returns_201(client: AsyncClient, mock_mail):
@@ -183,7 +185,7 @@ async def test_update_task_title(client: AsyncClient, mock_mail):
     assert res.json()["title"] == "New title"
 
 
-async def test_soft_delete_sets_is_active_false(client: AsyncClient, mock_mail):
+async def test_delete_task_hard_removes_it(client: AsyncClient, mock_mail):
     token = await register_and_verify(client, mock_mail)
     child_id = await _child(client, token)
     task = await _duty(client, token, child_id)
@@ -191,8 +193,36 @@ async def test_soft_delete_sets_is_active_false(client: AsyncClient, mock_mail):
     res = await client.delete(
         f"{_TASKS_URL}/{task['id']}", cookies={"access_token": token}
     )
-    assert res.status_code == 200
-    assert res.json()["is_active"] is False
+    assert res.status_code == 204
+
+    # The task is gone from the list and a second delete 404s.
+    listing = await client.get(_TASKS_URL, cookies={"access_token": token})
+    assert all(t["id"] != task["id"] for t in listing.json())
+    again = await client.delete(
+        f"{_TASKS_URL}/{task['id']}", cookies={"access_token": token}
+    )
+    assert again.status_code == 404
+
+
+async def test_delete_task_keeps_submissions_with_title_snapshot(
+    client: AsyncClient, mock_mail
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+    sub = (await _submit(client, token, child_id, task["id"])).json()
+
+    res = await client.delete(
+        f"{_TASKS_URL}/{task['id']}", cookies={"access_token": token}
+    )
+    assert res.status_code == 204
+
+    # The submission survives the task deletion, with task_id nulled and the
+    # task's title snapshotted so it still reads as a now-removed task.
+    subs = await client.get(_SUBS_URL, cookies={"access_token": token})
+    orphan = next(s for s in subs.json() if s["id"] == sub["id"])
+    assert orphan["task_id"] is None
+    assert orphan["task_title"] == task["title"]
 
 
 async def test_task_of_other_user_returns_404(client: AsyncClient, mock_mail):
@@ -207,6 +237,97 @@ async def test_task_of_other_user_returns_404(client: AsyncClient, mock_mail):
         cookies={"access_token": other_token},
     )
     assert res.status_code == 404
+
+
+async def test_update_extra_reward(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id, reward=5)
+
+    res = await client.patch(
+        f"{_TASKS_URL}/{task['id']}",
+        json={"reward_amount": 50},
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 200
+    assert res.json()["reward_amount"] == 50
+
+
+async def test_update_clears_expires_at_with_null(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+
+    future = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+    await client.patch(
+        f"{_TASKS_URL}/{task['id']}",
+        json={"expires_at": future},
+        cookies={"access_token": token},
+    )
+    res = await client.patch(
+        f"{_TASKS_URL}/{task['id']}",
+        json={"expires_at": None},
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 200
+    assert res.json()["expires_at"] is None
+
+
+async def test_update_duty_with_nonzero_reward_returns_422(
+    client: AsyncClient, mock_mail
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _duty(client, token, child_id)
+
+    res = await client.patch(
+        f"{_TASKS_URL}/{task['id']}",
+        json={"reward_amount": 5},
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 422
+
+
+async def test_update_extra_with_zero_reward_returns_422(
+    client: AsyncClient, mock_mail
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+
+    res = await client.patch(
+        f"{_TASKS_URL}/{task['id']}",
+        json={"reward_amount": 0},
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 422
+
+
+async def test_editing_reward_does_not_change_approved_credit(
+    client: AsyncClient, mock_mail
+):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id, reward=5)
+
+    sub = (await _submit(client, token, child_id, task["id"])).json()
+    await client.post(
+        f"{_SUBS_URL}/{sub['id']}/approve", cookies={"access_token": token}
+    )
+
+    # Bump the reward after the credit was already written.
+    res = await client.patch(
+        f"{_TASKS_URL}/{task['id']}",
+        json={"reward_amount": 50},
+        cookies={"access_token": token},
+    )
+    assert res.status_code == 200
+
+    # The already-credited wallet entry is an immutable snapshot — unchanged.
+    wallet = await client.get(
+        f"/api/v1/children/{child_id}/wallet", cookies={"access_token": token}
+    )
+    assert wallet.json()["balance_points"] == 5
 
 
 async def test_create_task_without_token_returns_401(client: AsyncClient):
@@ -242,6 +363,70 @@ async def test_submit_extra_task_happy_path(client: AsyncClient, mock_mail):
     res = await _submit(client, token, child_id, task["id"])
     assert res.status_code == 201
     assert res.json()["status"] == "pending"
+    assert res.json()["proof_url"].endswith("/proof")
+
+
+async def test_submit_without_proof_returns_422(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+
+    res = await client.post(
+        f"/api/v1/children/{child_id}/tasks/{task['id']}/submit",
+        cookies={"access_token": token},
+    )
+
+    assert res.status_code == 422
+
+
+async def test_submit_rejects_unsupported_proof(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+
+    res = await client.post(
+        f"/api/v1/children/{child_id}/tasks/{task['id']}/submit",
+        files={"proof": ("proof.svg", b"<svg></svg>", "image/svg+xml")},
+        cookies={"access_token": token},
+    )
+
+    assert res.status_code == 415
+
+
+async def test_parent_can_read_submission_proof(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+    submission = (await _submit(client, token, child_id, task["id"])).json()
+
+    res = await client.get(
+        submission["proof_url"],
+        cookies={"access_token": token},
+    )
+
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "image/png"
+    assert res.content == _PROOF_BYTES
+
+
+async def test_approval_deletes_submission_proof(client: AsyncClient, mock_mail):
+    token = await register_and_verify(client, mock_mail)
+    child_id = await _child(client, token)
+    task = await _extra(client, token, child_id)
+    submission = (await _submit(client, token, child_id, task["id"])).json()
+
+    approved = await client.post(
+        f"{_SUBS_URL}/{submission['id']}/approve",
+        cookies={"access_token": token},
+    )
+    proof = await client.get(
+        submission["proof_url"],
+        cookies={"access_token": token},
+    )
+
+    assert approved.status_code == 200
+    assert approved.json()["proof_url"] is None
+    assert proof.status_code == 404
 
 
 async def test_duty_double_submit_returns_409(
@@ -374,6 +559,7 @@ async def test_resubmit_resets_status_to_pending(client: AsyncClient, mock_mail)
 
     res = await client.patch(
         f"/api/v1/children/{child_id}/submissions/{sub['id']}",
+        files=_PROOF_FILE,
         cookies={"access_token": token},
     )
     assert res.status_code == 200
@@ -390,6 +576,7 @@ async def test_resubmit_non_rejected_returns_409(client: AsyncClient, mock_mail)
 
     res = await client.patch(
         f"/api/v1/children/{child_id}/submissions/{sub['id']}",
+        files=_PROOF_FILE,
         cookies={"access_token": token},
     )
     assert res.status_code == 409
@@ -596,7 +783,7 @@ async def test_generate_duty_slots_is_idempotent(
     assert second == 0  # slot already exists — nothing inserted
 
 
-async def test_inactive_duty_gets_no_slot(
+async def test_deleted_duty_gets_no_slot(
     client: AsyncClient, mock_mail, db_session: AsyncSession
 ):
     token = await register_and_verify(client, mock_mail)
@@ -637,6 +824,7 @@ async def test_resubmit_blocked_after_expiry_returns_410(
 
     res = await client.patch(
         f"/api/v1/children/{child_id}/submissions/{sub['id']}",
+        files=_PROOF_FILE,
         cookies={"access_token": token},
     )
     assert res.status_code == 410
@@ -805,6 +993,7 @@ async def test_resubmit_past_day_duty_returns_410(
 
     res = await client.patch(
         f"/api/v1/children/{child_id}/submissions/{sub_id}",
+        files=_PROOF_FILE,
         cookies={"access_token": token},
     )
     assert res.status_code == 410

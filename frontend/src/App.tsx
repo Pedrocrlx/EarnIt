@@ -2,20 +2,25 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
-import { selectedProfileIsParent } from "@/lib/profile-selection";
+import {
+  getSelectedProfileId,
+  parentPinIsUnlocked,
+  selectedProfileIsParent,
+} from "@/lib/profile-selection";
 
-const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const DashboardPage = lazy(() => import("@/pages/dashboard/DashboardPage"));
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
-const ManageProfilesPage = lazy(() => import("@/pages/ManageProfilesPage"));
+const ManageProfilesPage = lazy(() => import("@/pages/profiles/ManageProfilesPage"));
 const LoginPage = lazy(() => import("@/pages/authentication/LoginPage"));
 const ForgotPasswordPage = lazy(() => import("@/pages/authentication/ForgotPasswordPage"));
 const OnboardingStep1Page = lazy(() => import("@/pages/onboarding/Step1Page"));
 const OnboardingStep2Page = lazy(() => import("@/pages/onboarding/Step2Page"));
 const OnboardingStep3Page = lazy(() => import("@/pages/onboarding/Step3Page"));
 const ProfileSelectorPage = lazy(() => import("@/pages/ProfileSelectorPage"));
-const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
-const TasksPage = lazy(() => import("@/pages/TasksPage"));
-const GoalsPage = lazy(() => import("@/pages/GoalsPage"));
+const SettingsPage = lazy(() => import("@/pages/settings/SettingsPage"));
+const TasksPage = lazy(() => import("@/pages/tasks/TasksPage"));
+const SubmissionsPage = lazy(() => import("@/pages/submissions/SubmissionsPage"));
+const GoalsPage = lazy(() => import("@/pages/goals/GoalsPage"));
 const RegistrationPage = lazy(
   () => import("@/pages/authentication/RegistrationPage"),
 );
@@ -28,6 +33,7 @@ const VerifyResetCodePage = lazy(
 const ResetPasswordPage = lazy(
   () => import("@/pages/authentication/ResetPasswordPage"),
 );
+const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
 const PageFallback = () => (
   <main className="flex min-h-screen items-center justify-center bg-[#f8f9fb] px-4">
@@ -47,9 +53,23 @@ const CompletedOnboardingRoute = ({
   <ProtectedRoute requireOnboardingComplete>{children}</ProtectedRoute>
 );
 
+const DashboardRoute = ({ children }: { children: ReactNode }) => {
+  const selectedProfileId = getSelectedProfileId();
+
+  if (!selectedProfileId) {
+    return <Navigate to="/profile" replace />;
+  }
+
+  if (selectedProfileIsParent() && !parentPinIsUnlocked()) {
+    return <Navigate to="/profile" replace />;
+  }
+
+  return <CompletedOnboardingRoute>{children}</CompletedOnboardingRoute>;
+};
+
 const ParentDashboardRoute = ({ children }: { children: ReactNode }) => {
-  if (!selectedProfileIsParent()) {
-    return <Navigate to="/dashboard" replace />;
+  if (!selectedProfileIsParent() || !parentPinIsUnlocked()) {
+    return <Navigate to="/profile" replace />;
   }
 
   return <CompletedOnboardingRoute>{children}</CompletedOnboardingRoute>;
@@ -111,17 +131,17 @@ function App() {
             <Route
               path="/dashboard"
               element={
-                <CompletedOnboardingRoute>
+                <DashboardRoute>
                   <DashboardPage />
-                </CompletedOnboardingRoute>
+                </DashboardRoute>
               }
             />
             <Route
               path="/dashboard/goals"
               element={
-                <CompletedOnboardingRoute>
+                <DashboardRoute>
                   <GoalsPage />
-                </CompletedOnboardingRoute>
+                </DashboardRoute>
               }
             />
             <Route
@@ -141,6 +161,14 @@ function App() {
               }
             />
             <Route
+              path="/dashboard/submissions"
+              element={
+                <ParentDashboardRoute>
+                  <SubmissionsPage />
+                </ParentDashboardRoute>
+              }
+            />
+            <Route
               path="/dashboard/settings"
               element={
                 <ParentDashboardRoute>
@@ -148,6 +176,7 @@ function App() {
                 </ParentDashboardRoute>
               }
             />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>
       </Layout>

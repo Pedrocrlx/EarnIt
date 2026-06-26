@@ -10,7 +10,7 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +24,7 @@ from src.schemas.tasks import (
     WalletBalanceResponse,
     WalletTransactionResponse,
 )
+from src.services.submission_proofs import read_proof_upload
 from src.services.tasks import (
     get_balance,
     get_transaction_history,
@@ -50,7 +51,7 @@ async def list_child_tasks(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[ChildTaskResponse]:
-    """Return all active tasks assigned to the specified child.
+    """Return all tasks assigned to the specified child.
 
     Duties include today's submission slot (status `pending`, `approved`, or
     `rejected`) or `null` if the daily slot has not been generated yet. Extra tasks
@@ -64,9 +65,7 @@ async def list_child_tasks(
     tasks = (
         (
             await session.execute(
-                select(Task)
-                .where(Task.child_id == child_id, Task.is_active.is_(True))
-                .order_by(Task.task_type)
+                select(Task).where(Task.child_id == child_id).order_by(Task.task_type)
             )
         )
         .scalars()
@@ -117,6 +116,7 @@ async def list_child_tasks(
 async def submit_task_endpoint(
     child_id: UUID,
     task_id: UUID,
+    proof: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> SubmissionResponse:
@@ -127,7 +127,15 @@ async def submit_task_endpoint(
     submission in `pending` state; returns 409 if a pending or approved submission
     already exists. The parent can then approve or reject via the submissions endpoints.
     """
-    sub = await submit_task(task_id, child_id, current_user, session)
+    proof_data, proof_suffix = await read_proof_upload(proof)
+    sub = await submit_task(
+        task_id,
+        child_id,
+        proof_data,
+        proof_suffix,
+        current_user,
+        session,
+    )
     return SubmissionResponse.model_validate(sub)
 
 
@@ -140,6 +148,7 @@ async def submit_task_endpoint(
 async def resubmit_task_endpoint(
     child_id: UUID,
     submission_id: UUID,
+    proof: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> SubmissionResponse:
@@ -149,7 +158,15 @@ async def resubmit_task_endpoint(
     Clears the `rejection_note` and `reviewed_at` fields, and updates `submitted_at`
     to now.
     """
-    sub = await resubmit_task(submission_id, child_id, current_user, session)
+    proof_data, proof_suffix = await read_proof_upload(proof)
+    sub = await resubmit_task(
+        submission_id,
+        child_id,
+        proof_data,
+        proof_suffix,
+        current_user,
+        session,
+    )
     return SubmissionResponse.model_validate(sub)
 
 

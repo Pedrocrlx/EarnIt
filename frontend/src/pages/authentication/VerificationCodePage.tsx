@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Mail, ArrowRight, ArrowLeft } from "lucide-react";
+import { ArrowLeftIcon, ArrowRightIcon, EnvelopeClosedIcon } from "@radix-ui/react-icons";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useMutation } from "@tanstack/react-query";
@@ -10,6 +10,7 @@ import {
   VERIFICATION_CODE_LENGTH,
 } from "@/lib/validation";
 import { useAuth } from "@/context/useAuth";
+import { useToast } from "@/context/useToast";
 
 type VerifyCodeRequest = {
   code: string;
@@ -27,11 +28,10 @@ const OTP_LENGTH = VERIFICATION_CODE_LENGTH;
 
 export const VerificationCode = () => {
   const [code, setCode] = useState<string[]>(Array(OTP_LENGTH).fill(""));
-  const [message, setMessage] = useState("");
-  const [messageTone, setMessageTone] = useState<"neutral" | "error">("neutral");
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { showToast } = useToast();
 
   const isComplete = useMemo(() => code.every((digit) => digit !== ""), [code]);
 
@@ -45,7 +45,6 @@ export const VerificationCode = () => {
     const nextCode = [...code];
     nextCode[index] = sanitizedValue;
     setCode(nextCode);
-    setMessage("");
 
     if (sanitizedValue && index < OTP_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
@@ -75,7 +74,6 @@ export const VerificationCode = () => {
       nextCode[index + offset] = digit;
     });
     setCode(nextCode);
-    setMessage("");
 
     const nextFocusIndex = Math.min(
       index + pastedDigits.length,
@@ -94,7 +92,6 @@ export const VerificationCode = () => {
         const nextCode = [...code];
         nextCode[index] = "";
         setCode(nextCode);
-        setMessage("");
         return;
       }
 
@@ -102,21 +99,20 @@ export const VerificationCode = () => {
         const nextCode = [...code];
         nextCode[index - 1] = "";
         setCode(nextCode);
-        setMessage("");
         inputRefs.current[index - 1]?.focus();
         inputRefs.current[index - 1]?.select();
       }
       return;
     }
 
-    if (event.key === "ArrowLeft" && index > 0) {
+    if (event.key === "ArrowLeftIcon" && index > 0) {
       event.preventDefault();
       inputRefs.current[index - 1]?.focus();
       inputRefs.current[index - 1]?.select();
       return;
     }
 
-    if (event.key === "ArrowRight" && index < OTP_LENGTH - 1) {
+    if (event.key === "ArrowRightIcon" && index < OTP_LENGTH - 1) {
       event.preventDefault();
       inputRefs.current[index + 1]?.focus();
       inputRefs.current[index + 1]?.select();
@@ -144,8 +140,7 @@ export const VerificationCode = () => {
       });
     },
     onError: (error: unknown) => {
-      setMessageTone("error");
-      setMessage(getErrorMessage(error, "A verificação falhou"));
+      showToast(getErrorMessage(error, "A verificação falhou"), "error");
     },
   });
 
@@ -154,19 +149,17 @@ export const VerificationCode = () => {
       method: "POST",
     }),
     onSuccess: () => {
-      setMessageTone("neutral");
-      setMessage("Foi enviado um novo código de verificação.");
+      showToast("Foi enviado um novo código de verificação.");
     },
     onError: (error: unknown) => {
       if (error instanceof ApiError && error.status === 429) {
-        setMessageTone("neutral");
-        setMessage(
+        showToast(
           `Já enviámos um código há pouco. Aguarde ${retryWaitMessage(error)} antes de pedir outro.`,
+          "error",
         );
         return;
       }
-      setMessageTone("error");
-      setMessage(getErrorMessage(error, "Não foi possível reenviar o código"));
+      showToast(getErrorMessage(error, "Não foi possível reenviar o código"), "error");
     },
   });
 
@@ -176,12 +169,10 @@ export const VerificationCode = () => {
     const validationError = validateVerificationCode(joinedCode);
 
     if (validationError) {
-      setMessageTone("error");
-      setMessage(validationError);
+      showToast(validationError, "error");
       return;
     }
 
-    setMessage("");
     verifyMutation.mutate({ code: joinedCode });
   };
 
@@ -195,12 +186,12 @@ export const VerificationCode = () => {
           aria-labelledby="email-verification-title"
         >
           <div className="absolute -top-12 -right-12 w-32 h-32 bg-[#deec5a] rounded-full blur-[32px] opacity-20" />
-          
+
           <div className="flex flex-col items-center gap-6 relative z-10">
             <div className="flex w-16 h-16 items-center justify-center bg-[#edeef0] rounded-full shadow-[0px_1px_2px_#0000000d]">
-              <Mail className="w-7 h-6 text-[#003514]" />
+              <EnvelopeClosedIcon className="w-7 h-6 text-[#003514]" />
             </div>
-            
+
             <div className="text-center space-y-2">
               <h1
                 id="email-verification-title"
@@ -214,11 +205,7 @@ export const VerificationCode = () => {
             </div>
 
             <form className="w-full space-y-8" onSubmit={handleSubmit}>
-              <fieldset
-                className="flex justify-center gap-2"
-                aria-invalid={messageTone === "error"}
-                aria-describedby={message ? "verification-message" : undefined}
-              >
+              <fieldset className="flex justify-center gap-2">
                 <legend className="sr-only">
                   Introduza o código de verificação de {OTP_LENGTH} caracteres
                 </legend>
@@ -257,19 +244,6 @@ export const VerificationCode = () => {
                 })}
               </fieldset>
 
-              {message && (
-                <p
-                  id="verification-message"
-                  className={`rounded-lg px-4 py-3 text-center text-sm font-semibold ${
-                    messageTone === "error"
-                      ? "bg-red-50 text-red-700"
-                      : "bg-[#f3f4f6] text-[#003514]"
-                  }`}
-                >
-                  {message}
-                </p>
-              )}
-
               <Button
                 type="submit"
                 disabled={verifyMutation.isPending}
@@ -278,7 +252,7 @@ export const VerificationCode = () => {
                 }`}
               >
                 {verifyMutation.isPending ? "A verificar..." : "Verificar"}
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRightIcon className="w-4 h-4" />
               </Button>
             </form>
 
@@ -304,7 +278,7 @@ export const VerificationCode = () => {
             onClick={() => navigate("/login")}
             className="flex cursor-pointer items-center gap-2 px-4 py-2 text-[#404940] font-semibold text-sm hover:text-[#003514] transition-colors rounded-lg"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeftIcon className="w-4 h-4" />
             Voltar ao login
           </button>
         </div>

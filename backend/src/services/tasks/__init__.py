@@ -8,9 +8,9 @@ ownership checks live in ``_shared``.
 
 from src.services.tasks.crud import (
     create_task,
+    delete_task,
     get_task_or_404,
     list_tasks,
-    soft_delete_task,
     update_task,
 )
 from src.services.tasks.submissions import (
@@ -31,6 +31,7 @@ __all__ = [
     "approve_submission",
     "batch_approve",
     "create_task",
+    "delete_task",
     "fail_overdue_duty_slots",
     "generate_daily_duty_slots",
     "get_balance",
@@ -40,7 +41,6 @@ __all__ = [
     "list_tasks",
     "reject_submission",
     "resubmit_task",
-    "soft_delete_task",
     "start_daily_maintenance",
     "stop_daily_maintenance",
     "submit_task",

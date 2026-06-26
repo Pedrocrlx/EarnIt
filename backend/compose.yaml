@@ -25,6 +25,7 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+      - submission_proofs:/app/uploads/submission-proofs
     environment:
       # .env (mounted into the container) targets local/pytest with
       # POSTGRES_HOST=localhost — override it to the compose service name so
@@ -35,7 +36,7 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
-        
+
   mailpit:
     image: axllent/mailpit:v1.30.1
     container_name: earnIt_mailpit
@@ -46,3 +47,4 @@ services:
 
 volumes:
   postgres_data:
+  submission_proofs:

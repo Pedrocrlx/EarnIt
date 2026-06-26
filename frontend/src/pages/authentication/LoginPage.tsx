@@ -1,11 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/context/useAuth";
+import { useToast } from "@/context/useToast";
 import { ApiError } from "@/lib/api";
 import {
   type FieldErrors,
@@ -48,13 +49,19 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
+  const { showToast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [formError, setFormError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors<LoginField>>({});
   const locationState = location.state as { passwordResetMessage?: string } | null;
   const passwordResetMessage = locationState?.passwordResetMessage ?? "";
+
+  useEffect(() => {
+    if (passwordResetMessage) {
+      showToast(passwordResetMessage);
+    }
+  }, [passwordResetMessage, showToast]);
 
   const validateForm = () => {
     const nextErrors: FieldErrors<LoginField> = {};
@@ -95,15 +102,15 @@ const LoginPage = () => {
         return;
       }
 
-      setFormError(
+      showToast(
         error instanceof Error ? error.message : "Não foi possível iniciar sessão.",
+        "error",
       );
     },
   });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setFormError("");
     const nextErrors = validateForm();
 
     if (Object.keys(nextErrors).length > 0) {
@@ -124,7 +131,6 @@ const LoginPage = () => {
           onChange={(value) => {
             setEmail(value);
             clearFieldError("email");
-            setFormError("");
           }}
         />
         <PasswordField
@@ -135,23 +141,10 @@ const LoginPage = () => {
           onChange={(value) => {
             setPassword(value);
             clearFieldError("password");
-            setFormError("");
           }}
           onVisibilityChange={setShowPassword}
           value={password}
         />
-
-        {formError ? (
-          <p className="rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            {formError}
-          </p>
-        ) : null}
-
-        {passwordResetMessage ? (
-          <p className="rounded-lg bg-[#eef7d1] px-4 py-3 text-sm font-semibold text-[#5f6800]">
-            {passwordResetMessage}
-          </p>
-        ) : null}
 
         <Button
           type="submit"

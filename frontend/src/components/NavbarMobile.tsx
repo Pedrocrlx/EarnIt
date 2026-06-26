@@ -1,22 +1,14 @@
 import type { ReactNode } from "react";
-import {
-  CalendarCheck2,
-  ChevronRight,
-  Home,
-  LogOut,
-  Menu,
-  Settings,
-  Target,
-  UserRound,
-  UsersRound,
-  X,
-} from "lucide-react";
+import { ArchiveIcon, CalendarIcon, ChevronRightIcon, Cross2Icon, GearIcon, HamburgerMenuIcon, HomeIcon, LoopIcon, PersonIcon, TargetIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Logo from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/useAuth";
-import { selectedProfileIsParent } from "@/lib/profile-selection";
+import {
+  lockParentProfile,
+  selectedProfileIsParent,
+} from "@/lib/profile-selection";
 import { cn } from "@/lib/utils";
 
 type DashboardShellProps = {
@@ -24,33 +16,34 @@ type DashboardShellProps = {
 };
 
 const dashboardNavItems = [
-  { name: "Painel", path: "/dashboard", icon: Home },
+  { name: "Painel", path: "/dashboard", icon: HomeIcon },
+  { name: "Tarefas", path: "/dashboard/tasks", icon: CalendarIcon, parentOnly: true },
+  { name: "Submissões", path: "/dashboard/submissions", icon: ArchiveIcon, parentOnly: true },
+  { name: "Objetivos", path: "/dashboard/goals", icon: TargetIcon },
   {
     name: "Perfis",
     path: "/dashboard/profiles",
-    icon: UsersRound,
+    icon: PersonIcon,
     parentOnly: true,
   },
-  { name: "Tarefas", path: "/dashboard/tasks", icon: CalendarCheck2, parentOnly: true },
-  { name: "Objetivos", path: "/dashboard/goals", icon: Target },
-  { name: "Definições", path: "/dashboard/settings", icon: Settings, parentOnly: true },
+  { name: "Definições", path: "/dashboard/settings", icon: GearIcon, parentOnly: true },
 ];
 
 const navItemStyle =
   "flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition-colors";
 
 export const DashboardShell = ({ children }: DashboardShellProps) => {
-  const { familyProfile, logout } = useAuth();
+  const { familyProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuIsOpen, setMobileMenuIsOpen] = useState(false);
   const familyName = familyProfile?.family_name?.trim() || "Família";
   const parentProfileIsSelected = selectedProfileIsParent();
 
-  const handleLogout = async () => {
+  const handleSwitchProfile = () => {
     setMobileMenuIsOpen(false);
-    await logout();
-    navigate("/");
+    lockParentProfile();
+    navigate("/profile");
   };
 
   const sidebar = (
@@ -71,14 +64,14 @@ export const DashboardShell = ({ children }: DashboardShellProps) => {
           aria-label="Fechar menu"
           onClick={() => setMobileMenuIsOpen(false)}
         >
-          <X className="size-5" aria-hidden="true" />
+          <Cross2Icon className="size-5" aria-hidden="true" />
         </Button>
       </div>
 
       <div className="mt-8 rounded-lg border border-[#e1e2e4] bg-[#f8f9fb] p-3">
         <div className="flex items-center gap-3">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#d4e251] text-[#003514]">
-            <UserRound className="size-5" aria-hidden="true" />
+            <PersonIcon className="size-5" aria-hidden="true" />
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-bold">{familyName}</p>
@@ -110,7 +103,7 @@ export const DashboardShell = ({ children }: DashboardShellProps) => {
               <Icon className="size-5 shrink-0" aria-hidden="true" />
               <span className="min-w-0 flex-1 truncate">{item.name}</span>
               {isActive ? (
-                <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
+                <ChevronRightIcon className="size-4 shrink-0" aria-hidden="true" />
               ) : null}
             </>
           );
@@ -135,14 +128,14 @@ export const DashboardShell = ({ children }: DashboardShellProps) => {
       <div className="border-t border-[#e1e2e4] pt-4">
         <button
           type="button"
-          onClick={handleLogout}
+          onClick={handleSwitchProfile}
           className={cn(
             navItemStyle,
-            "w-full cursor-pointer text-[#404940] hover:bg-[#fff4de] hover:text-[#7a4100]",
+            "w-full cursor-pointer text-[#404940] hover:bg-[#f3f4f6] hover:text-[#003514]",
           )}
         >
-          <LogOut className="size-5" aria-hidden="true" />
-          <span>Sair</span>
+          <LoopIcon className="size-5" aria-hidden="true" />
+          <span>Trocar Perfil</span>
         </button>
       </div>
     </div>
@@ -185,7 +178,7 @@ export const DashboardShell = ({ children }: DashboardShellProps) => {
             aria-expanded={mobileMenuIsOpen}
             onClick={() => setMobileMenuIsOpen(true)}
           >
-            <Menu className="size-5" aria-hidden="true" />
+            <HamburgerMenuIcon className="size-5" aria-hidden="true" />
           </Button>
           <Link to="/dashboard" className="flex items-center gap-2">
             <Logo className="h-9" />
