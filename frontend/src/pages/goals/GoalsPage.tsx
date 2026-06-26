@@ -119,7 +119,7 @@ const ChildGoals = () => {
 
   return (
     <ChildShell points={balance} loading={data === null}>
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-4">
       <div>
         <h1 className="font-montserrat text-xl font-bold text-[#003514]">
           Os meus objetivos
@@ -129,7 +129,7 @@ const ChildGoals = () => {
         </p>
       </div>
 
-      <section className="rounded-2xl border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
+      <section className="rounded-2xl border border-[#e1e2e4] bg-white p-4 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
         <h2 className="flex items-center gap-2 text-lg font-bold text-[#003514]">
           <MagicWandIcon className="size-5" aria-hidden="true" /> Fazer um pedido
         </h2>
@@ -140,13 +140,13 @@ const ChildGoals = () => {
             maxLength={120}
             placeholder="O que desejas? (ex.: Ir ao parque)"
             disabled={busy}
-            className="h-12 flex-1 rounded-xl border-[#e1e2e4] bg-[#f8f9fb] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
+            className="h-11 flex-1 rounded-xl border-[#e1e2e4] bg-[#f8f9fb] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
           />
           <Button
             type="button"
             onClick={makeWish}
             disabled={busy || !wish.trim()}
-            className="h-12 rounded-full bg-[#d4e251] px-6 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+            className="h-10 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
           >
             {busy ? (
               <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />
@@ -211,7 +211,7 @@ const ChildGoals = () => {
             })}
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-2 px-5 py-10 text-center text-sm font-semibold text-[#404940]">
+          <div className="flex flex-col items-center gap-2 px-5 py-7 text-center text-sm font-semibold text-[#404940]">
             <MagicWandIcon
               className="size-5 text-[#5f6800]"
               aria-hidden="true"
@@ -382,7 +382,7 @@ const ParentGoals = () => {
               type="button"
               onClick={() => approve(goal)}
               disabled={busyGoalId === goal.id}
-              className="h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+              className="h-10 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
             >
               Aprovar
             </Button>
@@ -393,7 +393,7 @@ const ParentGoals = () => {
                 runGoalAction(goal.id, () => rejectGoal(goal.child_id, goal.id))
               }
               disabled={busyGoalId === goal.id}
-              className="h-11 rounded-full bg-[#f3f4f6] px-5 text-sm font-semibold text-[#7a4100] hover:bg-[#fff4de]"
+              className="h-10 rounded-full bg-[#f3f4f6] px-5 text-sm font-semibold text-[#7a4100] hover:bg-[#fff4de]"
             >
               Recusar
             </Button>
@@ -479,27 +479,27 @@ const ParentGoals = () => {
 
   return (
     <DashboardShell>
-      <main className="flex min-h-screen w-full flex-col items-center gap-10 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
-        <section className="flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10">
+      <main className="flex min-h-screen w-full flex-col items-center gap-7 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
+        <section className="flex w-full max-w-6xl flex-col gap-4 px-4 py-5 sm:px-5 lg:px-7">
           <header>
             <div>
               <p className="text-sm font-semibold uppercase text-[#5f6800]">
                 Gestão familiar
               </p>
-              <h1 className="mt-1 font-montserrat text-2xl font-bold text-[#003514] sm:text-3xl">
+              <h1 className="mt-1 font-montserrat text-xl font-bold text-[#003514] sm:text-2xl">
                 Objetivos
               </h1>
             </div>
           </header>
 
           {children.length === 0 ? (
-            <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
-              <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
+            <section className="rounded-lg border border-[#e1e2e4] bg-white p-4 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
+              <p className="rounded-lg bg-[#f3f4f6] px-4 py-5 text-center text-sm font-semibold text-[#404940]">
                 Ainda não existem perfis de crianças.
               </p>
             </section>
           ) : (
-            <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
+            <section className="rounded-lg border border-[#e1e2e4] bg-white p-4 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-lg font-bold text-[#003514]">
                   Objetivos das crianças
@@ -531,7 +531,7 @@ const ParentGoals = () => {
 
               <div className="mt-5 divide-y divide-[#e1e2e4]">
                 {loading ? (
-                  <p className="py-8 text-center text-sm font-semibold text-[#404940]">
+                  <p className="py-7 text-center text-sm font-semibold text-[#404940]">
                     A carregar objetivos...
                   </p>
                 ) : visibleGoals.length > 0 ? (
@@ -541,7 +541,7 @@ const ParentGoals = () => {
                       ? visibleGoals.map(renderApproved)
                       : visibleGoals.map(renderHistory)
                 ) : (
-                  <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
+                  <p className="rounded-lg bg-[#f3f4f6] px-4 py-5 text-center text-sm font-semibold text-[#404940]">
                     {emptyMessage}
                   </p>
                 )}

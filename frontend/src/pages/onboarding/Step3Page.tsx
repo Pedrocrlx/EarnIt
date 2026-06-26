@@ -138,16 +138,16 @@ const OnboardingStep3Page = () => {
   return (
     <OnboardingLayout step={3}>
       <div className="max-w-[600px] space-y-2 text-center">
-        <h1 className="font-montserrat text-[32px] font-bold leading-10 text-[#003514]">
+        <h1 className="font-montserrat text-2xl font-bold leading-8 text-[#003514]">
           Defina o PIN parental
         </h1>
-        <p className="text-[18px] leading-[26px] text-[#404940]">
+        <p className="text-base leading-6 text-[#404940]">
           Este PIN protege os controlos dos adultos quando alguém muda para o
           Perfil Parental.
         </p>
       </div>
 
-      <section className="w-full rounded-[32px] bg-white p-6 shadow-[0px_10px_40px_-10px_rgba(3,78,34,0.08)] sm:p-8">
+      <section className="w-full rounded-[32px] bg-white p-5 shadow-[0px_10px_40px_-10px_rgba(3,78,34,0.08)] sm:p-6">
         <div className="flex flex-col items-center gap-1 text-center">
           <span
             className={cn(
@@ -199,7 +199,7 @@ const OnboardingStep3Page = () => {
           type="button"
           variant="ghost"
           onClick={() => navigate("/onboarding/step2")}
-          className="h-auto rounded-full bg-white px-10 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.06),0px_4px_6px_-4px_rgba(0,0,0,0.06)] hover:bg-white hover:text-[#003514]"
+          className="h-auto rounded-full bg-white px-7 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.06),0px_4px_6px_-4px_rgba(0,0,0,0.06)] hover:bg-white hover:text-[#003514]"
         >
           <ArrowLeftIcon className="mr-2 size-4" aria-hidden="true" />
           Voltar
@@ -208,7 +208,7 @@ const OnboardingStep3Page = () => {
           type="button"
           onClick={handleSubmit}
           disabled={!isConfirmed || isSubmitting}
-          className="h-auto rounded-full bg-[#d4e251] px-10 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.08),0px_4px_6px_-4px_rgba(0,0,0,0.08)] hover:bg-[#cfdc42] disabled:opacity-60"
+          className="h-auto rounded-full bg-[#d4e251] px-7 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.08),0px_4px_6px_-4px_rgba(0,0,0,0.08)] hover:bg-[#cfdc42] disabled:opacity-60"
         >
           {isSubmitting ? <UpdateIcon className="mr-2 size-4 animate-spin" /> : null}
           Concluir configuração

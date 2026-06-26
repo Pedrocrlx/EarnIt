@@ -188,20 +188,20 @@ const SubmissionsPage = () => {
 
   return (
     <DashboardShell>
-      <main className="flex min-h-screen w-full flex-col items-center gap-10 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
-        <section className="flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10">
+      <main className="flex min-h-screen w-full flex-col items-center gap-7 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
+        <section className="flex w-full max-w-6xl flex-col gap-4 px-4 py-5 sm:px-5 lg:px-7">
           <header>
             <div>
               <p className="text-sm font-semibold uppercase text-[#5f6800]">
                 Gestão de tarefas
               </p>
-              <h1 className="mt-1 font-montserrat text-2xl font-bold text-[#003514] sm:text-3xl">
+              <h1 className="mt-1 font-montserrat text-xl font-bold text-[#003514] sm:text-2xl">
                 Submissões
               </h1>
             </div>
           </header>
 
-          <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
+          <section className="rounded-lg border border-[#e1e2e4] bg-white p-4 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-lg font-bold text-[#003514]">Lista de submissões</h2>
@@ -233,7 +233,7 @@ const SubmissionsPage = () => {
 
             <div className="mt-5 divide-y divide-[#e1e2e4]">
               {loading ? (
-                <p className="py-8 text-center text-sm font-semibold text-[#404940]">
+                <p className="py-7 text-center text-sm font-semibold text-[#404940]">
                   A carregar submissões...
                 </p>
               ) : visibleSubmissions.length > 0 ? (
@@ -362,7 +362,7 @@ const SubmissionsPage = () => {
                             onChange={(event) => setRejectionNote(event.target.value)}
                             disabled={actionIsRunning}
                             placeholder="Nota de rejeição"
-                            className="h-10 rounded-lg border-[#e1e2e4] bg-white"
+                            className="h-11 rounded-lg border-[#e1e2e4] bg-white"
                           />
                           <Button
                             type="submit"
@@ -377,7 +377,7 @@ const SubmissionsPage = () => {
                   );
                 })
               ) : (
-                <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
+                <p className="rounded-lg bg-[#f3f4f6] px-4 py-5 text-center text-sm font-semibold text-[#404940]">
                   {emptyMessage}
                 </p>
               )}

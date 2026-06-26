@@ -44,7 +44,7 @@ const childChipClass = (active: boolean) =>
   }`;
 
 const disclosureButtonClass =
-  "flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#cbd5d0] text-sm font-semibold text-[#003514] transition-colors hover:bg-[#f3f4f6] disabled:opacity-60";
+  "flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#cbd5d0] text-sm font-semibold text-[#003514] transition-colors hover:bg-[#f3f4f6] disabled:opacity-60";
 
 // Build the expiry ISO string from separate date/hour inputs. Missing hour
 // defaults to end of day (23:59); missing date defaults to today.
@@ -209,7 +209,7 @@ const CreateTaskModal = ({
                   }))
                 }
                 disabled={submitting}
-                className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
+                className="h-11 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
               />
             </div>
 
@@ -253,7 +253,7 @@ const CreateTaskModal = ({
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              <label className="flex h-11 cursor-pointer items-center justify-center rounded-full border border-[#e1e2e4] text-sm font-semibold text-[#003514] has-[:checked]:border-[#003514] has-[:checked]:bg-[#003514] has-[:checked]:text-white">
+              <label className="flex h-10 cursor-pointer items-center justify-center rounded-full border border-[#e1e2e4] text-sm font-semibold text-[#003514] has-[:checked]:border-[#003514] has-[:checked]:bg-[#003514] has-[:checked]:text-white">
                 <input
                   type="radio"
                   name="task-type"
@@ -270,7 +270,7 @@ const CreateTaskModal = ({
                 />
                 Rotina
               </label>
-              <label className="flex h-11 cursor-pointer items-center justify-center rounded-full border border-[#e1e2e4] text-sm font-semibold text-[#003514] has-[:checked]:border-[#003514] has-[:checked]:bg-[#003514] has-[:checked]:text-white">
+              <label className="flex h-10 cursor-pointer items-center justify-center rounded-full border border-[#e1e2e4] text-sm font-semibold text-[#003514] has-[:checked]:border-[#003514] has-[:checked]:bg-[#003514] has-[:checked]:text-white">
                 <input
                   type="radio"
                   name="task-type"
@@ -315,7 +315,7 @@ const CreateTaskModal = ({
                         }))
                       }
                       disabled={submitting}
-                      className="h-12 rounded-lg border-[#e1e2e4] bg-white pr-14 text-right text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
+                      className="h-11 rounded-lg border-[#e1e2e4] bg-white pr-14 text-right text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
                     />
                     <span className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#404940]">
                       €
@@ -368,7 +368,7 @@ const CreateTaskModal = ({
                         }));
                       }}
                       disabled={submitting}
-                      className="h-12 rounded-lg border-[#e1e2e4] bg-white pr-16 text-right text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
+                      className="h-11 rounded-lg border-[#e1e2e4] bg-white pr-16 text-right text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
                     />
                     <span className="pointer-events-none absolute right-9 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#404940]">
                       pts
@@ -423,7 +423,7 @@ const CreateTaskModal = ({
                       }))
                     }
                     disabled={submitting}
-                    className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
+                    className="h-11 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
                   />
                   <Input
                     id="task-expires-time"
@@ -437,7 +437,7 @@ const CreateTaskModal = ({
                       }))
                     }
                     disabled={submitting}
-                    className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
+                    className="h-11 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
                   />
                 </div>
               </div>
@@ -460,14 +460,14 @@ const CreateTaskModal = ({
               variant="ghost"
               onClick={onClose}
               disabled={submitting}
-              className="h-11 flex-1 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
+              className="h-10 flex-1 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
             >
               Cancelar
             </Button>
             <Button
               type="submit"
               disabled={submitting || activeChildren.length === 0}
-              className="h-11 flex-1 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+              className="h-10 flex-1 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
             >
               {submitting ? (
                 <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />

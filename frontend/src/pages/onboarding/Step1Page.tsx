@@ -101,17 +101,17 @@ const OnboardingStep1Page = () => {
   return (
     <OnboardingLayout step={1}>
       <div className="max-w-[600px] space-y-2 text-center">
-        <h1 className="font-montserrat text-[32px] font-bold leading-10 text-[#003514]">
+        <h1 className="font-montserrat text-2xl font-bold leading-8 text-[#003514]">
           Bem-vindo à família!
         </h1>
-        <p className="text-[18px] leading-[26px] text-[#404940]">
+        <p className="text-base leading-6 text-[#404940]">
           Vamos começar por configurar o perfil da sua família.
         </p>
       </div>
 
       <form
         onSubmit={handleSubmit}
-        className="w-full rounded-[32px] bg-white p-6 shadow-[0px_10px_40px_-10px_rgba(3,78,34,0.08)] sm:p-8"
+        className="w-full rounded-[32px] bg-white p-5 shadow-[0px_10px_40px_-10px_rgba(3,78,34,0.08)] sm:p-6"
       >
           <div className="space-y-5">
             <div className="space-y-1.5">
@@ -186,7 +186,7 @@ const OnboardingStep1Page = () => {
           <div className="mt-10 flex justify-center">
             <Button
               type="submit"
-              className="h-auto rounded-full bg-[#d4e251] px-10 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.08),0px_4px_6px_-4px_rgba(0,0,0,0.08)] hover:bg-[#cfdc42] disabled:opacity-60"
+              className="h-auto rounded-full bg-[#d4e251] px-7 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.08),0px_4px_6px_-4px_rgba(0,0,0,0.08)] hover:bg-[#cfdc42] disabled:opacity-60"
             >
               Continuar
               <ArrowRightIcon className="ml-2 h-4 w-4" />

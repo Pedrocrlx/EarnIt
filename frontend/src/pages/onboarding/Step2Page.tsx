@@ -227,10 +227,10 @@ const OnboardingStep2Page = () => {
   return (
     <OnboardingLayout step={2}>
       <div className="max-w-[600px] space-y-2 text-center">
-          <h1 className="font-montserrat text-[32px] font-bold leading-10 text-[#003514]">
+          <h1 className="font-montserrat text-2xl font-bold leading-8 text-[#003514]">
             Quem vai juntar-se à equipa?
           </h1>
-          <p className="mx-auto max-w-[500px] text-[16px] leading-6 text-[#404940] sm:text-[18px] sm:leading-[26px]">
+          <p className="mx-auto max-w-[500px] text-[16px] leading-6 text-[#404940] sm:text-base sm:leading-6">
             Adicione as crianças para começar a configurar tarefas e recompensas.
             Pode sempre adicionar mais tarde.
           </p>
@@ -241,7 +241,7 @@ const OnboardingStep2Page = () => {
             {children.map((child, index) => (
               <section
                 key={child.id}
-                className="grid gap-5 rounded-[32px] bg-white p-5 shadow-[0px_10px_40px_-10px_rgba(3,78,34,0.08)] sm:grid-cols-[64px_1fr] sm:p-6"
+                className="grid gap-4 rounded-[32px] bg-white p-5 shadow-[0px_10px_40px_-10px_rgba(3,78,34,0.08)] sm:grid-cols-[64px_1fr] sm:p-6"
                 aria-label={`Criança ${index + 1}`}
               >
                 <div className="flex items-start justify-between sm:block">
@@ -260,7 +260,7 @@ const OnboardingStep2Page = () => {
 
                 <div className="space-y-5">
                   <div className="flex items-center justify-between gap-4">
-                    <h2 className="text-[18px] font-bold leading-6 text-[#003514]">
+                    <h2 className="text-base font-bold leading-6 text-[#003514]">
                       Criança {index + 1}
                     </h2>
                     <button
@@ -380,7 +380,7 @@ const OnboardingStep2Page = () => {
             type="button"
             onClick={addChild}
             disabled={children.length >= ONBOARDING_MAX_CHILDREN}
-            className="flex min-h-20 w-full cursor-pointer items-center justify-center gap-3 rounded-[28px] border-2 border-dashed border-[#c8d0c1] text-[18px] font-semibold text-[#404940] transition-colors hover:border-[#003514] hover:text-[#003514] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex min-h-20 w-full cursor-pointer items-center justify-center gap-3 rounded-[28px] border-2 border-dashed border-[#c8d0c1] text-base font-semibold text-[#404940] transition-colors hover:border-[#003514] hover:text-[#003514] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#edeef0]">
               <PlusIcon className="h-5 w-5" />
@@ -394,7 +394,7 @@ const OnboardingStep2Page = () => {
             type="button"
             variant="ghost"
             onClick={() => navigate("/onboarding/step1")}
-            className="h-auto rounded-full bg-white px-10 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.06),0px_4px_6px_-4px_rgba(0,0,0,0.06)] hover:bg-white hover:text-[#003514]"
+            className="h-auto rounded-full bg-white px-7 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.06),0px_4px_6px_-4px_rgba(0,0,0,0.06)] hover:bg-white hover:text-[#003514]"
           >
             <ArrowLeftIcon className="mr-2 h-4 w-4" />
             Voltar
@@ -402,7 +402,7 @@ const OnboardingStep2Page = () => {
           <Button
             type="button"
             onClick={saveChildren}
-            className="h-auto rounded-full bg-[#d4e251] px-10 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.08),0px_4px_6px_-4px_rgba(0,0,0,0.08)] hover:bg-[#cfdc42] disabled:opacity-60"
+            className="h-auto rounded-full bg-[#d4e251] px-7 py-4 text-sm font-semibold text-[#003514] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.08),0px_4px_6px_-4px_rgba(0,0,0,0.08)] hover:bg-[#cfdc42] disabled:opacity-60"
           >
             Continuar
             <ArrowRightIcon className="ml-2 h-4 w-4" />

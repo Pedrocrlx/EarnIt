@@ -78,7 +78,7 @@ export const ProfileSelectorPage = () => {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[#f1f5e6] to-[#f8f9fb] px-5 py-10 text-[#191c1e] sm:px-8">
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[#f1f5e6] to-[#f8f9fb] px-5 py-7 text-[#191c1e] sm:px-7">
       <section className="flex w-full max-w-3xl flex-col items-center">
         <Logo className="h-35" />
         <div className="mt-8 text-center">
@@ -87,7 +87,7 @@ export const ProfileSelectorPage = () => {
               {familyName}
             </p>
           ) : null}
-          <h1 className="mt-1 font-montserrat text-2xl font-bold text-[#003514] sm:text-3xl">
+          <h1 className="mt-1 font-montserrat text-xl font-bold text-[#003514] sm:text-2xl">
             Quem está a usar?
           </h1>
           <p className="mt-2 text-sm text-[#404940]">
@@ -95,7 +95,7 @@ export const ProfileSelectorPage = () => {
           </p>
         </div>
 
-        <div className="mt-10 grid w-full grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5">
+        <div className="mt-10 grid w-full grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-4">
           {profiles.map((profile) => {
             const isParent = profile.id === PARENT_PROFILE_ID;
             return (
@@ -104,15 +104,15 @@ export const ProfileSelectorPage = () => {
                 type="button"
                 onClick={() => selectProfile(profile.id)}
                 aria-label={`Selecionar perfil de ${profile.name}`}
-                className="group flex flex-col items-center gap-3 rounded-2xl border border-[#e1e2e4] bg-white p-5 text-center shadow-[0px_4px_20px_rgba(3,78,34,0.05)] transition-all hover:-translate-y-1 hover:border-[#d4e251] hover:shadow-[0px_16px_28px_-12px_rgba(3,78,34,0.28)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[#003514]/25"
+                className="group flex flex-col items-center gap-3 rounded-2xl border border-[#e1e2e4] bg-white p-4 text-center shadow-[0px_4px_20px_rgba(3,78,34,0.05)] transition-all hover:-translate-y-1 hover:border-[#d4e251] hover:shadow-[0px_16px_28px_-12px_rgba(3,78,34,0.28)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[#003514]/25"
               >
                 <span className="relative">
                   {isParent ? (
-                    <span className="flex size-20 items-center justify-center rounded-full bg-[#d4e251] text-[#003514] ring-4 ring-[#eef7d1] sm:size-24">
+                    <span className="flex size-18 items-center justify-center rounded-full bg-[#d4e251] text-[#003514] ring-4 ring-[#eef7d1] sm:size-20">
                       <PersonIcon className="size-9 sm:size-10" aria-hidden="true" />
                     </span>
                   ) : (
-                    <span className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-[#003514] text-2xl font-bold uppercase text-white ring-4 ring-[#eef7d1] sm:size-24 sm:text-3xl">
+                    <span className="flex size-18 items-center justify-center overflow-hidden rounded-full bg-[#003514] text-xl font-bold uppercase text-white ring-4 ring-[#eef7d1] sm:size-20 sm:text-2xl">
                       {profile.avatarUrl ? (
                         <img
                           src={profile.avatarUrl}
