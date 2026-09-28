@@ -25,11 +25,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up uv and Python
-        uses: astral-sh/setup-uv@v10
+      - name: Set up Python
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6.0.1
         with:
           version: "0.12.15"
-          python-version: "3.14"
 
       - name: Install dependencies
         run: uv sync --frozen
@@ -97,11 +101,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up uv and Python
-        uses: astral-sh/setup-uv@v10
+      - name: Set up Python
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6.0.1
         with:
           version: "0.12.15"
-          python-version: "3.14"
 
       - name: Install dependencies
         run: uv sync --frozen
