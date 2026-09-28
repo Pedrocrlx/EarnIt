@@ -31,6 +31,14 @@ services:
       # POSTGRES_HOST=localhost — override it to the compose service name so
       # the api container reaches the db container.
       POSTGRES_HOST: db
+      MAIL_SERVER: mailpit
+      MAIL_PORT: 1025
+      MAIL_USERNAME: ""
+      MAIL_PASSWORD: ""
+      MAIL_STARTTLS: "false"
+      MAIL_SSL_TLS: "false"
+      MAIL_USE_CREDENTIALS: "false"
+      MAIL_VALIDATE_CERTS: "true"
     depends_on:
       db:
         condition: service_healthy

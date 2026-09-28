@@ -76,6 +76,19 @@ class Settings:
         self.MAIL_PORT = _int("MAIL_PORT", 1025)
         self.MAIL_USERNAME = _str("MAIL_USERNAME", "")
         self.MAIL_PASSWORD = _str("MAIL_PASSWORD", "")
+        self.MAIL_STARTTLS = _bool("MAIL_STARTTLS", False)
+        self.MAIL_SSL_TLS = _bool("MAIL_SSL_TLS", False)
+        self.MAIL_USE_CREDENTIALS = _bool("MAIL_USE_CREDENTIALS", False)
+        self.MAIL_VALIDATE_CERTS = _bool("MAIL_VALIDATE_CERTS", True)
+        if self.MAIL_STARTTLS and self.MAIL_SSL_TLS:
+            raise ValueError("MAIL_STARTTLS and MAIL_SSL_TLS are mutually exclusive")
+        if self.MAIL_USE_CREDENTIALS and not (
+            self.MAIL_USERNAME and self.MAIL_PASSWORD
+        ):
+            raise ValueError(
+                "MAIL_USERNAME and MAIL_PASSWORD are required when "
+                "MAIL_USE_CREDENTIALS is enabled"
+            )
 
         # Password
         self.PASSWORD_MIN_LENGTH = _int("PASSWORD_MIN_LENGTH", 12)
