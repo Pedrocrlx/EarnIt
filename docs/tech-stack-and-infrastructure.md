@@ -161,8 +161,16 @@ Relevant environment variables:
 | `MAIL_SERVER` | `mailpit` | SMTP host inside Docker; use `localhost` when the API runs directly on the host. |
 | `MAIL_PORT` | `1025` | SMTP port. |
 | `MAIL_FROM` | `noreply@earnit.app` | Sender address. |
-| `MAIL_USERNAME` | Empty | Reserved for a real SMTP provider. |
-| `MAIL_PASSWORD` | Empty | Reserved for a real SMTP provider. |
+| `MAIL_USERNAME` | Empty | SMTP login supplied by Brevo in production. |
+| `MAIL_PASSWORD` | Empty | SMTP key supplied by Brevo in production. |
+| `MAIL_STARTTLS` | `False` | STARTTLS; enabled for Brevo on port 587. |
+| `MAIL_SSL_TLS` | `False` | Implicit TLS; cannot be combined with STARTTLS. |
+| `MAIL_USE_CREDENTIALS` | `False` | SMTP authentication; enabled for Brevo. |
+| `MAIL_VALIDATE_CERTS` | `True` | Validate TLS certificates. |
+
+The [email delivery guide](email-delivery.md) describes the Brevo Compose overlay,
+domain authentication and delivery checks. The overlay removes the API's Mailpit
+dependency and disables Mailpit's default startup and published ports.
 
 ## Persistence and Uploaded Files
 

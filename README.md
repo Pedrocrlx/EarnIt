@@ -111,6 +111,9 @@ make down
 
 ## Mailpit Email Flow
 
+Production email uses Brevo SMTP. See [email delivery setup](docs/email-delivery.md)
+for credentials, DNS, the Compose overlay and delivery checks.
+
 Mailpit is a local development email sink. It does not deliver messages to real
 inboxes. FastAPI sends SMTP messages to the `mailpit` Compose service on port
 `1025`, and developers inspect them in the Mailpit web UI on port `8025`.
@@ -149,6 +152,12 @@ When running FastAPI directly on the host instead of in Docker, set
 `MAIL_SERVER=localhost`.
 
 ## Development Modes
+
+For VPS production deployment, use the standalone
+[`compose.prod.yaml`](compose.prod.yaml) and follow the
+[deployment guide](docs/deployment-vps.md). Production reads a single root `.env`
+(see [`.env.example`](.env.example)) and exposes `earnit-web:80` only on the
+external `vps-proxy` network, behind the VPS's main Nginx.
 
 ### Full stack
 
