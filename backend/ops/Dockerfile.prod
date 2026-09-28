@@ -1,0 +1,27 @@
+FROM python:3.14-slim
+
+COPY --from=ghcr.io/astral-sh/uv:0.12.5 /uv /usr/local/bin/uv
+
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    PATH="/app/.venv/bin:$PATH"
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY main.py alembic.ini ./
+COPY src ./src
+COPY alembic ./alembic
+
+RUN groupadd --gid 10001 earnit \
+    && useradd --uid 10001 --gid earnit --no-create-home earnit \
+    && mkdir -p /app/uploads/avatars /app/uploads/submission-proofs \
+    && chown -R earnit:earnit /app/uploads
+
+USER earnit
+EXPOSE 8000
+
+# One process owns the application's scheduled maintenance loop.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '*'"]

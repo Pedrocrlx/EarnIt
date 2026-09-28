@@ -1,0 +1,72 @@
+# Standalone production stack: do not merge with the development Compose files.
+name: earnit-prod
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  web:
+    build:
+      context: ./frontend
+      dockerfile: ops/Dockerfile.prod
+    restart: unless-stopped
+    networks:
+      default:
+      vps-proxy:
+        aliases:
+          - earnit-web
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: *logging
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: ops/Dockerfile.prod
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    volumes:
+      - avatar_uploads:/app/uploads/avatars
+      - submission_proofs:/app/uploads/submission-proofs
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+    logging: *logging
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+volumes:
+  postgres_data:
+  avatar_uploads:
+  submission_proofs:
+
+networks:
+  vps-proxy:
+    external: true
+    name: vps-proxy
