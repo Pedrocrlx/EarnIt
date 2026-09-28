@@ -154,7 +154,7 @@ const DashboardPage = () => {
     return (
       <Suspense
         fallback={
-          <main className="flex min-h-[60vh] items-center justify-center px-6 text-sm font-semibold text-[#52604f]">
+          <main className="flex min-h-[60vh] items-center justify-center px-5 text-sm font-semibold text-[#52604f]">
             A preparar o teu painel...
           </main>
         }
@@ -238,14 +238,14 @@ const DashboardPage = () => {
 
   return (
     <DashboardShell>
-      <main className="flex min-h-screen w-full flex-col items-center gap-10 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
-        <section className="flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10">
+      <main className="flex min-h-screen w-full flex-col items-center gap-7 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
+        <section className="flex w-full max-w-6xl flex-col gap-4 px-4 py-5 sm:px-5 lg:px-7">
           <header>
             <div>
               <p className="text-sm font-semibold uppercase text-[#5f6800]">
                 Painel parental
               </p>
-              <h1 className="mt-1 font-montserrat text-2xl font-bold text-[#003514] sm:text-3xl">
+              <h1 className="mt-1 font-montserrat text-xl font-bold text-[#003514] sm:text-2xl">
                 {familyName}
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[#404940]">
@@ -255,7 +255,7 @@ const DashboardPage = () => {
           </header>
 
           {/* Submissions to review */}
-          <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
+          <section className="rounded-lg border border-[#e1e2e4] bg-white p-4 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <ArchiveIcon className="size-5 text-[#003514]" aria-hidden="true" />
@@ -278,7 +278,7 @@ const DashboardPage = () => {
 
             <div className="mt-5 divide-y divide-[#e1e2e4]">
               {loading ? (
-                <p className="py-8 text-center text-sm font-semibold text-[#404940]">
+                <p className="py-7 text-center text-sm font-semibold text-[#404940]">
                   A carregar...
                 </p>
               ) : pendingSubmissions.length > 0 ? (
@@ -382,7 +382,7 @@ const DashboardPage = () => {
                             onChange={(event) => setRejectionNote(event.target.value)}
                             disabled={actionIsRunning}
                             placeholder="Nota de rejeição (opcional)"
-                            className="h-10 rounded-lg border-[#e1e2e4] bg-white"
+                            className="h-11 rounded-lg border-[#e1e2e4] bg-white"
                           />
                           <Button
                             type="submit"
@@ -397,7 +397,7 @@ const DashboardPage = () => {
                   );
                 })
               ) : (
-                <div className="flex items-center justify-center gap-2 rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
+                <div className="flex items-center justify-center gap-2 rounded-lg bg-[#f3f4f6] px-4 py-5 text-center text-sm font-semibold text-[#404940]">
                   <CheckCircledIcon
                     className="size-4 text-[#5f6800]"
                     aria-hidden="true"
@@ -409,7 +409,7 @@ const DashboardPage = () => {
           </section>
 
           {/* Goal requests to approve */}
-          <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
+          <section className="rounded-lg border border-[#e1e2e4] bg-white p-4 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <TargetIcon className="size-5 text-[#003514]" aria-hidden="true" />
@@ -430,7 +430,7 @@ const DashboardPage = () => {
 
             <div className="mt-5 divide-y divide-[#e1e2e4]">
               {loading ? (
-                <p className="py-8 text-center text-sm font-semibold text-[#404940]">
+                <p className="py-7 text-center text-sm font-semibold text-[#404940]">
                   A carregar...
                 </p>
               ) : requestedGoals.length > 0 ? (
@@ -477,7 +477,7 @@ const DashboardPage = () => {
                             type="button"
                             onClick={() => approveWish(goal)}
                             disabled={busyAction === `goal-${goal.id}`}
-                            className="h-11 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+                            className="h-10 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
                           >
                             {busyAction === `goal-${goal.id}` ? (
                               <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />
@@ -491,7 +491,7 @@ const DashboardPage = () => {
                               runGoalAction(goal.id, () => rejectGoal(goal.child_id, goal.id))
                             }
                             disabled={busyAction === `goal-${goal.id}`}
-                            className="h-11 rounded-full bg-[#f3f4f6] px-5 text-sm font-semibold text-[#7a4100] hover:bg-[#fff4de]"
+                            className="h-10 rounded-full bg-[#f3f4f6] px-5 text-sm font-semibold text-[#7a4100] hover:bg-[#fff4de]"
                           >
                             Recusar
                           </Button>
@@ -501,7 +501,7 @@ const DashboardPage = () => {
                   );
                 })
               ) : (
-                <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
+                <p className="rounded-lg bg-[#f3f4f6] px-4 py-5 text-center text-sm font-semibold text-[#404940]">
                   Sem pedidos pendentes.
                 </p>
               )}
@@ -509,7 +509,7 @@ const DashboardPage = () => {
           </section>
 
           {/* Active tasks at a glance */}
-          <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
+          <section className="rounded-lg border border-[#e1e2e4] bg-white p-4 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <CalendarIcon className="size-5 text-[#003514]" aria-hidden="true" />
@@ -530,7 +530,7 @@ const DashboardPage = () => {
 
             <div className="mt-5 divide-y divide-[#e1e2e4]">
               {loading ? (
-                <p className="py-8 text-center text-sm font-semibold text-[#404940]">
+                <p className="py-7 text-center text-sm font-semibold text-[#404940]">
                   A carregar...
                 </p>
               ) : activeExtraTasks.length > 0 ? (
@@ -554,7 +554,7 @@ const DashboardPage = () => {
                   </article>
                 ))
               ) : (
-                <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
+                <p className="rounded-lg bg-[#f3f4f6] px-4 py-5 text-center text-sm font-semibold text-[#404940]">
                   Sem tarefas extra ativas.
                 </p>
               )}

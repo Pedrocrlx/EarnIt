@@ -42,9 +42,11 @@ quote-style = "double"
 
 [dependency-groups]
 dev = [
+    "aiosmtpd>=1.4.6",
     "httpx>=0.28.1",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.16",
+    "trustme>=1.2.1",
 ]

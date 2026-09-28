@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 
 const NotFoundPage = () => (
   <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[#f1f5e6] to-[#f8f9fb] px-5 py-12 text-[#191c1e]">
-    <section className="flex w-full max-w-2xl flex-col items-center rounded-[32px] border border-[#e1e2e4] bg-white px-6 py-10 text-center shadow-[0px_16px_50px_-24px_rgba(3,78,34,0.28)] sm:px-10">
-      <Logo className="h-11" />
+    <section className="flex w-full max-w-2xl flex-col items-center rounded-[32px] border border-[#e1e2e4] bg-white px-5 py-7 text-center shadow-[0px_16px_50px_-24px_rgba(3,78,34,0.28)] sm:px-7">
+      <Logo className="h-10" />
 
       <div className="mt-8 flex items-end justify-center gap-3">
         <img
@@ -24,7 +24,7 @@ const NotFoundPage = () => (
       <p className="mt-7 text-sm font-bold uppercase tracking-[0.14em] text-[#5f6800]">
         Erro 404
       </p>
-      <h1 className="mt-2 font-montserrat text-3xl font-bold text-[#003514] sm:text-4xl">
+      <h1 className="mt-2 font-montserrat text-2xl font-bold text-[#003514] sm:text-3xl">
         Esta página não existe
       </h1>
       <p className="mt-3 max-w-md text-sm leading-6 text-[#404940] sm:text-base">
@@ -36,7 +36,7 @@ const NotFoundPage = () => (
         <Button
           asChild
           variant="ghost"
-          className="h-12 flex-1 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed]"
+          className="h-10 flex-1 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed]"
         >
           <Link to="/profile">
             <ArrowLeftIcon className="mr-2 size-4" aria-hidden="true" />
@@ -45,7 +45,7 @@ const NotFoundPage = () => (
         </Button>
         <Button
           asChild
-          className="h-12 flex-1 rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42]"
+          className="h-10 flex-1 rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42]"
         >
           <Link to="/">
             <HomeIcon className="mr-2 size-4" aria-hidden="true" />

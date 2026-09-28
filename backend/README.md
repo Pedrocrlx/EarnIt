@@ -90,6 +90,8 @@ uv run pytest -q     # requires the db + mailpit containers to be running
 - **ORM:** SQLModel
 - **Migrations:** Alembic
 - **Mail:** fastapi-mail (SMTP, dev via Mailpit)
+
+For Brevo production SMTP, see the [email delivery guide](../docs/email-delivery.md).
 - **Background work:** one daily maintenance loop (duty-slot generation + limbo-account purge sweep)
 - **Package Manager:** [uv](https://github.com/astral-sh/uv)
 
@@ -151,6 +153,10 @@ _Optional_ (default shown; override via env var or `.env`):
 | `MAIL_FROM` | `noreply@earnit.app` | Sender address on outgoing mail |
 | `MAIL_USERNAME` | _(empty)_ | SMTP username (Mailpit needs none) |
 | `MAIL_PASSWORD` | _(empty)_ | SMTP password (Mailpit needs none) |
+| `MAIL_STARTTLS` | `False` | Upgrade the SMTP connection to TLS (Brevo on port 587) |
+| `MAIL_SSL_TLS` | `False` | Implicit TLS; mutually exclusive with STARTTLS |
+| `MAIL_USE_CREDENTIALS` | `False` | Authenticate with the SMTP username and password |
+| `MAIL_VALIDATE_CERTS` | `True` | Validate the SMTP server's TLS certificate |
 | `PASSWORD_MIN_LENGTH` | `12` | Minimum password length enforced at registration |
 | `PASSWORD_SPECIAL_CHARS` | _(symbol set)_ | Characters that satisfy the "special character" password rule |
 | `VERIFICATION_CODE_CHARSET` | `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` | Alphabet for emailed codes (omits look-alikes `0/O`, `1/I`) |

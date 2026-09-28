@@ -1,3 +1,4 @@
+import logoBlack from "@/assets/earnit_icon_black.webp";
 import { cn } from "@/lib/utils";
 
 type LogoProps = {
@@ -7,10 +8,10 @@ type LogoProps = {
 export const Logo = ({ className }: LogoProps) => {
   return (
     <img
-      src="/earnit_icon_black.webp"
+      src={logoBlack}
       alt="Logótipo EarnIt"
-      width={160}
-      height={90}
+      width={4001}
+      height={2251}
       className={cn("h-36 w-auto object-contain", className)}
     />
   );

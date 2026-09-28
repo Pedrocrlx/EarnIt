@@ -97,7 +97,7 @@ const CreateChildModal = ({ onClose, onCreated }: CreateChildModalProps) => {
               value={name}
               onChange={(event) => setName(event.target.value)}
               disabled={submitting}
-              className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
+              className="h-11 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
             />
           </div>
           <div className="space-y-2">
@@ -111,7 +111,7 @@ const CreateChildModal = ({ onClose, onCreated }: CreateChildModalProps) => {
               value={birthDate}
               onChange={(event) => setBirthDate(event.target.value)}
               disabled={submitting}
-              className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
+              className="h-11 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
             />
           </div>
           <div className="space-y-2">
@@ -124,7 +124,7 @@ const CreateChildModal = ({ onClose, onCreated }: CreateChildModalProps) => {
               accept={AVATAR_ACCEPT}
               onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)}
               disabled={submitting}
-              className="h-12 cursor-pointer rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] file:mr-3 file:border-0 file:bg-transparent file:text-sm file:font-semibold file:text-[#003514] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
+              className="h-11 cursor-pointer rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] file:mr-3 file:border-0 file:bg-transparent file:text-sm file:font-semibold file:text-[#003514] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
             />
             <p className="flex items-center gap-1.5 text-xs text-[#59625a]">
               <ImageIcon className="size-3.5" aria-hidden="true" />
@@ -139,14 +139,14 @@ const CreateChildModal = ({ onClose, onCreated }: CreateChildModalProps) => {
             variant="ghost"
             onClick={onClose}
             disabled={submitting}
-            className="h-11 flex-1 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
+            className="h-10 flex-1 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
           >
             Cancelar
           </Button>
           <Button
             type="submit"
             disabled={submitting}
-            className="h-11 flex-1 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+            className="h-10 flex-1 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
           >
             {submitting ? (
               <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />

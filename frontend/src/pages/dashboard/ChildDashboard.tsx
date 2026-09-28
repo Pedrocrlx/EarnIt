@@ -209,7 +209,7 @@ const ChildDashboard = () => {
   return (
     <ChildShell points={wallet?.balance_points ?? 0} loading={loading}>
       {!selectedChild ? (
-        <section className="flex flex-col gap-4 rounded-2xl border border-[#e1e2e4] bg-white p-5 text-center">
+        <section className="flex flex-col gap-4 rounded-2xl border border-[#e1e2e4] bg-white p-4 text-center">
           <h1 className="font-montserrat text-xl font-bold text-[#003514]">
             Escolhe um perfil
           </h1>
@@ -218,13 +218,13 @@ const ChildDashboard = () => {
           </p>
           <Button
             asChild
-            className="h-11 rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42]"
+            className="h-10 rounded-full bg-[#d4e251] text-sm font-semibold text-[#003514] hover:bg-[#cfdc42]"
           >
             <Link to="/profile">Escolher perfil</Link>
           </Button>
         </section>
       ) : (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4">
           {proofTask ? (
             <TaskProofDialog
               taskTitle={proofTask.task.title}
@@ -241,7 +241,7 @@ const ChildDashboard = () => {
             />
           ) : null}
           {/* Progress hero */}
-          <section className="rounded-2xl border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
+          <section className="rounded-2xl border border-[#e1e2e4] bg-white p-4 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
             <div className="flex items-end justify-between gap-3">
               <div>
                 <h1 className="font-montserrat text-xl font-bold text-[#003514]">
@@ -251,7 +251,7 @@ const ChildDashboard = () => {
                   {completedCount} de {tasks.length} concluídas
                 </p>
               </div>
-              <span className="text-2xl font-bold text-[#5f6800]">{progress}%</span>
+              <span className="text-xl font-bold text-[#5f6800]">{progress}%</span>
             </div>
             <div className="mt-3 h-3 overflow-hidden rounded-full bg-[#edeef0]">
               <div
@@ -277,7 +277,7 @@ const ChildDashboard = () => {
 
           {/* Task list */}
           {loading ? (
-            <p className="rounded-2xl bg-[#f3f4f6] px-4 py-8 text-center text-sm font-semibold text-[#404940]">
+            <p className="rounded-2xl bg-[#f3f4f6] px-4 py-7 text-center text-sm font-semibold text-[#404940]">
               A carregar tarefas...
             </p>
           ) : tasks.length > 0 ? (
@@ -354,7 +354,7 @@ const ChildDashboard = () => {
                           })
                         }
                         disabled={actionIsRunning}
-                        className="mt-auto h-12 w-full rounded-full bg-[#d4e251] text-sm font-bold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+                        className="mt-auto h-10 w-full rounded-full bg-[#d4e251] text-sm font-bold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
                       >
                         {isBusy ? (
                           <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />
@@ -367,7 +367,7 @@ const ChildDashboard = () => {
                       </Button>
                     ) : (
                       <div className="mt-auto flex flex-col gap-1">
-                        <span className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[#f3f4f6] text-sm font-bold text-[#404940]">
+                        <span className="inline-flex h-10 w-full items-center justify-center rounded-full bg-[#f3f4f6] text-sm font-bold text-[#404940]">
                           <CheckCircledIcon className="mr-2 size-4" aria-hidden="true" />
                           {action.label}
                         </span>
@@ -383,7 +383,7 @@ const ChildDashboard = () => {
               })}
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-2 rounded-2xl bg-[#f3f4f6] px-4 py-10 text-center text-sm font-semibold text-[#404940]">
+            <div className="flex flex-col items-center gap-2 rounded-2xl bg-[#f3f4f6] px-4 py-7 text-center text-sm font-semibold text-[#404940]">
               <StarIcon className="size-5 text-[#5f6800]" aria-hidden="true" />
               <p>Ainda não tens tarefas.</p>
             </div>

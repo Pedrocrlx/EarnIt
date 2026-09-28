@@ -37,6 +37,18 @@ async def create_task(
         expires_at=body.expires_at,
     )
     session.add(task)
+    now = datetime.now(UTC)
+    if task.task_type == "duty" and (
+        task.expires_at is None or task.expires_at > now
+    ):
+        session.add(
+            TaskSubmission(
+                task_id=task.id,
+                child_id=task.child_id,
+                scheduled_date=now.date(),
+                status="open",
+            )
+        )
     await session.commit()
     logger.info(
         "Task created: task_id=%s user_id=%s type=%s", task.id, user.id, task.task_type

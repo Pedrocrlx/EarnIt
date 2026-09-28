@@ -136,14 +136,14 @@ const ManageProfilesPage = () => {
 
   return (
     <DashboardShell>
-      <main className="flex min-h-screen w-full flex-col items-center gap-10 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
-        <section className="flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10">
+      <main className="flex min-h-screen w-full flex-col items-center gap-7 bg-[#f8f9fb] p-0 text-[#191c1e] lg:min-h-[1024px] lg:w-[1024px] lg:grow">
+        <section className="flex w-full max-w-6xl flex-col gap-4 px-4 py-5 sm:px-5 lg:px-7">
           <header>
             <div>
               <p className="text-sm font-semibold uppercase text-[#5f6800]">
                 Gestão familiar
               </p>
-              <h1 className="mt-1 font-montserrat text-2xl font-bold text-[#003514] sm:text-3xl">
+              <h1 className="mt-1 font-montserrat text-xl font-bold text-[#003514] sm:text-2xl">
                 Perfis
               </h1>
             </div>
@@ -156,7 +156,7 @@ const ManageProfilesPage = () => {
             />
           ) : null}
 
-          <section className="rounded-lg border border-[#e1e2e4] bg-white p-5 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
+          <section className="rounded-lg border border-[#e1e2e4] bg-white p-4 shadow-[0px_4px_20px_rgba(3,78,34,0.05)]">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-lg font-bold text-[#003514]">
@@ -230,7 +230,7 @@ const ManageProfilesPage = () => {
                               }
                             }}
                             disabled={actionIsRunning}
-                            className="h-10 cursor-pointer rounded-lg border-[#e1e2e4] bg-white text-xs file:mr-2 file:border-0 file:bg-transparent file:text-xs file:font-semibold file:text-[#003514]"
+                            className="h-11 cursor-pointer rounded-lg border-[#e1e2e4] bg-white text-xs file:mr-2 file:border-0 file:bg-transparent file:text-xs file:font-semibold file:text-[#003514]"
                           />
                           <Button
                             type="button"
@@ -271,7 +271,7 @@ const ManageProfilesPage = () => {
                               setEditingBirthDate(event.target.value);
                             }}
                             disabled={updatingChildId === child.id}
-                            className="h-10 rounded-lg border-[#e1e2e4] bg-white"
+                            className="h-11 rounded-lg border-[#e1e2e4] bg-white"
                           />
                           <div className="flex gap-2">
                             <Button
@@ -318,7 +318,7 @@ const ManageProfilesPage = () => {
                   </article>
                 ))
               ) : (
-                <p className="rounded-lg bg-[#f3f4f6] px-4 py-6 text-center text-sm font-semibold text-[#404940]">
+                <p className="rounded-lg bg-[#f3f4f6] px-4 py-5 text-center text-sm font-semibold text-[#404940]">
                   Ainda não existem perfis de crianças.
                 </p>
               )}

@@ -12,25 +12,28 @@ from fastapi_mail import (
     FastMail,
 )
 
-from src.config import settings
+from src.config import Settings, settings
 
 # HTML templates live in src/email/ and are rendered by Jinja2 inside fastapi-mail.
 _TEMPLATE_FOLDER = Path(__file__).parent / "email"
 
-# Shared FastMail instance used by all email-sending code paths.
-# Mailpit (dev) acts as a no-auth SMTP sink on port 1025; production would
-# swap in real SMTP credentials via environment variables.
-_config = ConnectionConfig(
-    MAIL_FROM=settings.MAIL_FROM,
-    MAIL_SERVER=settings.MAIL_SERVER,
-    MAIL_PORT=settings.MAIL_PORT,
-    MAIL_USERNAME=settings.MAIL_USERNAME,
-    MAIL_PASSWORD=settings.MAIL_PASSWORD,
-    MAIL_STARTTLS=False,
-    MAIL_SSL_TLS=False,
-    USE_CREDENTIALS=False,
-    VALIDATE_CERTS=False,
-    TEMPLATE_FOLDER=_TEMPLATE_FOLDER,
-)
 
-mail = FastMail(_config)
+def create_mail_client(config: Settings) -> FastMail:
+    """Build the shared SMTP transport for Mailpit or an authenticated relay."""
+    return FastMail(
+        ConnectionConfig(
+            MAIL_FROM=config.MAIL_FROM,
+            MAIL_SERVER=config.MAIL_SERVER,
+            MAIL_PORT=config.MAIL_PORT,
+            MAIL_USERNAME=config.MAIL_USERNAME,
+            MAIL_PASSWORD=config.MAIL_PASSWORD,
+            MAIL_STARTTLS=config.MAIL_STARTTLS,
+            MAIL_SSL_TLS=config.MAIL_SSL_TLS,
+            USE_CREDENTIALS=config.MAIL_USE_CREDENTIALS,
+            VALIDATE_CERTS=config.MAIL_VALIDATE_CERTS,
+            TEMPLATE_FOLDER=_TEMPLATE_FOLDER,
+        )
+    )
+
+
+mail = create_mail_client(settings)

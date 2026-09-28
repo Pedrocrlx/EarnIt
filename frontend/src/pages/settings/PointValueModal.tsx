@@ -82,7 +82,7 @@ const PointValueModal = ({ initialPointValue, onClose, onSaved }: PointValueModa
             value={pointValueInput}
             onChange={(event) => setPointValueInput(event.target.value)}
             disabled={submitting}
-            className="h-12 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
+            className="h-11 rounded-lg border-[#e1e2e4] bg-white text-[#191c1e] focus-visible:border-[#003514] focus-visible:ring-[#003514]/15"
           />
           <p className="text-sm text-[#59625a]">Pré-visualização: 100 pontos = {previewEuros} €.</p>
         </div>
@@ -93,14 +93,14 @@ const PointValueModal = ({ initialPointValue, onClose, onSaved }: PointValueModa
             variant="ghost"
             onClick={onClose}
             disabled={submitting}
-            className="h-11 flex-1 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
+            className="h-10 flex-1 rounded-full bg-[#f3f4f6] text-sm font-semibold text-[#003514] hover:bg-[#e8eaed] hover:text-[#003514]"
           >
             Cancelar
           </Button>
           <Button
             type="submit"
             disabled={submitting}
-            className="h-11 flex-1 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
+            className="h-10 flex-1 rounded-full bg-[#d4e251] px-5 text-sm font-semibold text-[#003514] hover:bg-[#cfdc42] disabled:opacity-60"
           >
             {submitting ? (
               <UpdateIcon className="mr-2 size-4 animate-spin" aria-hidden="true" />

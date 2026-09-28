@@ -1,0 +1,21 @@
+# SMTP production overlay; requires Docker Compose 2.24.4+.
+# See docs/email-delivery.md. This configures email, not the full VPS deployment.
+services:
+  mailpit:
+    profiles: [development-mail]
+    ports: !reset []
+
+  api:
+    environment:
+      MAIL_SERVER: smtp-relay.brevo.com
+      MAIL_PORT: 587
+      MAIL_FROM: ${MAIL_FROM:?Set MAIL_FROM to your verified Brevo sender}
+      MAIL_USERNAME: ${MAIL_USERNAME:?Set MAIL_USERNAME to your Brevo SMTP login}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:?Set MAIL_PASSWORD to your Brevo SMTP key}
+      MAIL_STARTTLS: "true"
+      MAIL_SSL_TLS: "false"
+      MAIL_USE_CREDENTIALS: "true"
+      MAIL_VALIDATE_CERTS: "true"
+    depends_on: !override
+      db:
+        condition: service_healthy
